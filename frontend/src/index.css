@@ -1,0 +1,127 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Dark mode is wired but unused for now — add a `.dark { ... }` token block later. */
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================================
+   WELLSPRING — the design language. This block is the single source of truth.
+   Swap these values (or add a second [data-theme] block) to re-skin the entire
+   app; components never reference raw colors, only the semantic tokens below.
+   ============================================================================ */
+:root {
+  --radius: 0.7rem; /* ~11px */
+
+  /* surfaces */
+  --background: #f3f1ea; /* warm sand canvas */
+  --foreground: #122019; /* deep ink */
+  --card: #ffffff;
+  --card-foreground: #122019;
+  --popover: #ffffff;
+  --popover-foreground: #122019;
+
+  /* brand — deep emerald / teal */
+  --primary: #0b5d4e;
+  --primary-foreground: #f2fbf7;
+
+  /* neutrals */
+  --secondary: #eae6da; /* sand button */
+  --secondary-foreground: #122019;
+  --muted: #f0ece0;
+  --muted-foreground: #6b7a71;
+  --accent: #dcefe8; /* emerald-weak (hover/selected) */
+  --accent-foreground: #0b5d4e;
+
+  /* status */
+  --destructive: #b4422e;
+  --destructive-foreground: #fcf3f0;
+  --success: #2c8c5a;
+  --success-foreground: #ffffff;
+  --warning: #b8762a;
+  --warning-foreground: #ffffff;
+
+  /* lines + focus */
+  --border: #e5e1d5;
+  --input: #e5e1d5;
+  --ring: #0e7c66;
+
+  /* sidebar — the dark emerald rail */
+  --sidebar: #07312b;
+  --sidebar-foreground: #8fb6ac;
+  --sidebar-active: #0c453b;
+  --sidebar-active-foreground: #ebf7f1;
+  --sidebar-hover: #0a3b33;
+  --sidebar-border: #0d433a;
+
+  /* fit-score gradient */
+  --score-from: #0e7c66;
+  --score-to: #43b68f;
+
+  /* type */
+  --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", "Hanken Grotesk", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* Map the tokens above to Tailwind utilities (bg-*, text-*, border-*, rounded-*,
+   font-*). `inline` keeps them as live var() refs so runtime swaps re-theme. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --color-score-from: var(--score-from);
+  --color-score-to: var(--score-to);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+  }
+}

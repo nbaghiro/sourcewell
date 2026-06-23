@@ -1,0 +1,80 @@
+"""Application settings (env-driven; defaults match docker-compose on the 89xx band)."""
+
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    app_name: str = "sourcewell"
+    environment: str = "local"
+    database_url: str = "postgresql+asyncpg://sourcewell:sourcewell@localhost:8902/sourcewell"
+    test_database_url: str = (
+        "postgresql+asyncpg://sourcewell:sourcewell@localhost:8902/sourcewell_test"
+    )
+    smtp_host: str = "localhost"
+    smtp_port: int = 8905
+    default_from_email: str = "recruiter@sourcewell.dev"
+
+    # Where the React app is served — used for CORS + post-auth redirects.
+    frontend_url: str = "http://localhost:8900"
+
+    # --- WorkOS AuthKit ---
+    workos_api_key: str = ""
+    workos_client_id: str = ""
+    workos_redirect_uri: str = "http://localhost:8901/auth/callback"
+    # Fernet key used to seal the session cookie. Generate with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    session_cookie_password: str = ""
+    # Previous key kept during rotation so existing sealed secrets/cookies still decrypt.
+    session_cookie_password_previous: str = ""
+    session_cookie_name: str = "sw_session"
+    cookie_secure: bool = False  # set True behind HTTPS
+
+    # --- AI (Anthropic Claude) ---
+    # Blank = deterministic fallback everywhere; set to enable real generation/scoring.
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-6"
+
+    # --- People-data providers (Rail B: licensed search/enrich APIs) ---
+    # Platform-key mode. Leave blank to fall back to the synthetic demo provider.
+    pdl_api_key: str = ""
+    apollo_api_key: str = ""
+    hunter_api_key: str = ""
+    people_providers_demo: bool = True  # include the synthetic demo provider as a fallback
+
+    # --- LinkedIn / multichannel send (Unipile) ---
+    # Blank = LinkedIn sends are a no-op (dry-run), so multichannel sequences still complete in QA.
+    unipile_api_key: str = ""
+    unipile_dsn: str = ""  # e.g. https://apiXX.unipile.com:14XXX
+    unipile_account_id: str = ""  # the connected LinkedIn account in Unipile
+
+    # --- Signing + public links ---
+    # HMAC key for unsubscribe links + inbound webhook verification (falls back to the cookie key).
+    signing_secret: str = ""
+    # Absolute base URL of this API (used to build unsubscribe links in outbound email).
+    api_base_url: str = "http://localhost:8901"
+    # Shared secret a provider HMAC-signs inbound webhook bodies with (blank disables the check).
+    inbound_webhook_secret: str = ""
+
+    # --- Dev login (auth bypass for design/QA; ignored once WorkOS is configured) ---
+    dev_session_cookie_name: str = "sw_dev_user"
+    demo_admin_email: str = "demo@sourcewell.ai"
+    demo_password: str = "pass"
+
+    @property
+    def auth_enabled(self) -> bool:
+        """True only when WorkOS is fully configured; otherwise dev-header auth is used."""
+        return bool(self.workos_api_key and self.workos_client_id and self.session_cookie_password)
+
+    @property
+    def dev_login_enabled(self) -> bool:
+        """One-click demo sign-in is available only when WorkOS is NOT configured."""
+        return not self.auth_enabled
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

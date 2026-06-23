@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --ink:#0f2740; --muted:#7a8694; --line:#e4e9ee; --bg:#fbfcfd;
+    --teal:#1f8a8a; --violet:#6d5ae0; --amber:#c9760a; --green:#2e9e6b;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ font-family:-apple-system,"Helvetica Neue","Segoe UI",Arial,sans-serif;
+        background:linear-gradient(160deg,#eef2f6,#e6edf2); padding:30px;
+        color:var(--ink); -webkit-font-smoothing:antialiased; }
+  .app{ width:1000px; margin:0 auto; background:#fff; border-radius:16px;
+        box-shadow:0 24px 60px rgba(15,39,64,.16); overflow:hidden; }
+
+  /* top bar */
+  .top{ display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid var(--line); }
+  .mark{ font-weight:800; letter-spacing:.2px; font-size:15px; }
+  .mark span{ color:var(--teal); }
+  .sep{ width:1px; height:20px; background:var(--line); }
+  .ctx{ color:var(--muted); font-size:13px; }
+  .ctx b{ color:var(--ink); font-weight:600; }
+  .pill{ margin-left:auto; font-size:11.5px; font-weight:600; color:var(--green);
+         background:#e9f6ef; border:1px solid #cdeadd; padding:3px 10px; border-radius:20px; }
+  .pill::before{ content:"●"; margin-right:5px; font-size:8px; vertical-align:1px; }
+
+  /* body */
+  .body{ display:flex; }
+  .rail{ width:206px; border-right:1px solid var(--line); padding:16px 14px; }
+  .rail .h{ font-size:10px; letter-spacing:1.5px; color:var(--muted); font-weight:700; margin-bottom:12px; }
+  .tm{ display:flex; align-items:center; gap:10px; margin:13px 0; }
+  .av{ width:31px; height:31px; border-radius:50%; color:#fff; font-weight:700; font-size:12px;
+       display:flex; align-items:center; justify-content:center; flex:0 0 31px; position:relative;
+       box-shadow:0 2px 5px rgba(15,39,64,.18); }
+  .av .dot{ position:absolute; right:-1px; bottom:-1px; width:9px; height:9px; border-radius:50%;
+            background:var(--green); border:2px solid #fff; }
+  .tm .nm{ font-size:12.5px; font-weight:700; line-height:1.1; }
+  .tm .rl{ font-size:11px; color:var(--muted); }
+
+  /* chat */
+  .chat{ flex:1; background:var(--bg); padding:18px 26px 8px; }
+  .msg{ display:flex; gap:11px; margin:15px 0; }
+  .head{ display:flex; align-items:baseline; gap:7px; margin-bottom:4px; }
+  .who{ font-size:12.5px; font-weight:800; }
+  .role{ font-size:11px; color:var(--muted); font-weight:500; }
+  .time{ font-size:10.5px; color:#aab4bf; }
+  .bub{ background:#fff; border:1px solid var(--line); border-radius:4px 12px 12px 12px;
+        padding:10px 14px; font-size:13.5px; line-height:1.55; max-width:660px; box-shadow:0 1px 3px rgba(15,39,64,.05); }
+  .bub b{ color:var(--ink); }
+
+  .c-ops{color:var(--ink)} .c-scout{color:var(--teal)} .c-vera{color:var(--violet)}
+  .c-quill{color:var(--amber)} .c-echo{color:var(--green)}
+
+  /* @mentions */
+  .tag{ display:inline-block; padding:0 5px; border-radius:5px; font-weight:700; font-size:12.5px; }
+  .t-ops{ color:#26425e; background:#e8ecf1;} .t-scout{ color:var(--teal); background:#e6f3f3;}
+  .t-vera{ color:var(--violet); background:#eeebfb;} .t-quill{ color:var(--amber); background:#f8eede;}
+  .t-echo{ color:var(--green); background:#e7f5ed;} .t-you{ color:#3a4a5c; background:#eaeef2;}
+
+  /* user message */
+  .me{ justify-content:flex-end; }
+  .me .col{ align-items:flex-end; display:flex; flex-direction:column; }
+  .me .lbl{ font-size:10.5px; color:#aab4bf; margin:0 4px 4px 0; }
+  .me .bub{ background:var(--ink); color:#fff; border:none; border-radius:12px 4px 12px 12px; max-width:560px; }
+  .me .bub .tag{ background:rgba(255,255,255,.16); color:#cfe6e6; }
+
+  /* action chip */
+  .act{ font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:11px; color:var(--ink);
+        background:#f2f6f8; border-left:3px solid var(--teal); border-radius:3px;
+        padding:5px 9px; margin:7px 0 2px; }
+  .act .arw{ color:var(--muted); } .act .g{ opacity:.5; margin-right:5px; }
+
+  /* reaction */
+  .react{ margin-top:9px; display:inline-flex; align-items:center; gap:5px; font-size:11.5px;
+          color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:14px; padding:2px 9px; }
+
+  /* confirm */
+  .confirm{ margin-top:10px; display:flex; gap:8px; }
+  .btn{ font-size:12px; font-weight:700; border-radius:8px; padding:7px 14px; border:1px solid var(--teal); }
+  .btn.fill{ background:var(--teal); color:#fff; box-shadow:0 2px 6px rgba(31,138,138,.3); }
+  .btn.ghost{ background:#fff; color:var(--muted); border-color:var(--line); }
+
+  .now{ text-align:center; font-size:10.5px; color:#aab4bf; margin:20px 0 6px; position:relative; }
+  .now::before{ content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:var(--line); z-index:0; }
+  .now span{ background:var(--bg); padding:0 12px; position:relative; z-index:1; }
+
+  /* live working indicator */
+  .working{ display:flex; align-items:center; gap:8px; color:var(--muted); font-size:11.5px;
+            font-style:italic; padding:10px 0 4px 42px; }
+  .working .wd{ width:7px; height:7px; border-radius:50%; background:var(--teal); box-shadow:0 0 0 3px #d8eded; }
+
+  /* composer */
+  .comp{ display:flex; align-items:center; gap:10px; padding:14px 20px; border-top:1px solid var(--line); background:#fff; }
+  .input{ flex:1; background:#f4f7f9; border:1px solid var(--line); border-radius:22px; padding:11px 16px;
+          color:var(--muted); font-size:13px; }
+  .send{ width:38px; height:38px; border-radius:50%; background:var(--teal); color:#fff;
+         display:flex; align-items:center; justify-content:center; font-size:16px; box-shadow:0 3px 8px rgba(31,138,138,.3); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="top">
+    <div class="mark">source<span>well</span></div>
+    <div class="sep"></div>
+    <div class="ctx"><b>Acme Bank</b> · Senior Backend Engineer</div>
+    <div class="pill">Search active</div>
+  </div>
+
+  <div class="body">
+    <div class="rail">
+      <div class="h">YOUR TEAM</div>
+      <div class="tm"><div class="av" style="background:var(--ink)">O<span class="dot"></span></div><div><div class="nm">Ops</div><div class="rl">Manager</div></div></div>
+      <div class="tm"><div class="av" style="background:var(--teal)">S<span class="dot"></span></div><div><div class="nm">Scout</div><div class="rl">Sourcing</div></div></div>
+      <div class="tm"><div class="av" style="background:var(--violet)">V<span class="dot"></span></div><div><div class="nm">Vera</div><div class="rl">Vetting</div></div></div>
+      <div class="tm"><div class="av" style="background:var(--amber)">Q<span class="dot"></span></div><div><div class="nm">Quill</div><div class="rl">Outreach</div></div></div>
+      <div class="tm"><div class="av" style="background:var(--green)">E<span class="dot"></span></div><div><div class="nm">Echo</div><div class="rl">Replies</div></div></div>
+    </div>
+
+    <div class="chat">
+
+      <div class="msg me"><div class="col">
+        <div class="lbl">You · 2:03 PM</div>
+        <div class="bub">Hey team — are we actually going to fill this one in time? Give it to me straight, and if we're behind, what's the plan?</div>
+      </div></div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--ink)">O</div>
+        <div>
+          <div class="head"><span class="who c-ops">Ops</span><span class="role">Manager</span><span class="time">2:03 PM</span></div>
+          <div class="bub">Straight answer: behind at the current pace — but it's fixable. Let me get a read. <span class="tag t-scout">@Scout</span> <span class="tag t-vera">@Vera</span> <span class="tag t-quill">@Quill</span>, where do we stand?
+            <div class="act"><span class="g">⚙</span>convene · Scout, Vera, Quill</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--teal)">S</div>
+        <div>
+          <div class="head"><span class="who c-scout">Scout</span><span class="role">Sourcing</span><span class="time">2:03 PM</span></div>
+          <div class="bub"><span class="tag t-ops">@Ops</span> volume's fine — <b>86 in the pipe</b>, ~40 fresh a week. Honestly I could double that tomorrow if we loosen the filters.
+            <div class="act"><span class="g">⚙</span>sourcing_status <span class="arw">→ 86 sourced · pool healthy</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--violet)">V</div>
+        <div>
+          <div class="head"><span class="who c-vera">Vera</span><span class="role">Vetting</span><span class="time">2:04 PM</span></div>
+          <div class="bub">…which is exactly the catch 😅 — only <b>19 of those clear 80 fit</b>. The fintech + distributed-systems combo is just rare. ~5 genuinely strong a week.
+            <div class="act"><span class="g">⚙</span>score_distribution <span class="arw">→ 19 / 86 ≥ 80</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--amber)">Q</div>
+        <div>
+          <div class="head"><span class="who c-quill">Quill</span><span class="role">Outreach</span><span class="time">2:04 PM</span></div>
+          <div class="bub">Same story on outreach: 11% reply rate → ~1.6 interested/week. That's a <b>3–4 week fill</b>, and <span class="tag t-you">@You</span> the deadline's 3 — so we're about a week short.
+            <div class="act"><span class="g">⚙</span>template_performance <span class="arw">→ 11% reply</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--ink)">O</div>
+        <div>
+          <div class="head"><span class="who c-ops">Ops</span><span class="role">Manager</span><span class="time">2:05 PM</span></div>
+          <div class="bub">So it's a <b>quality-supply</b> problem, not volume or messaging. <span class="tag t-scout">@Scout</span> — if we add Staff-level and make fintech a strong preference instead of a hard must, how much does that move you?</div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--teal)">S</div>
+        <div>
+          <div class="head"><span class="who c-scout">Scout</span><span class="role">Sourcing</span><span class="time">2:05 PM</span></div>
+          <div class="bub">A lot — <b>~5 → ~12 strong a week.</b></div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--violet)">V</div>
+        <div>
+          <div class="head"><span class="who c-vera">Vera</span><span class="role">Vetting</span><span class="time">2:05 PM</span></div>
+          <div class="bub">One flag before we pull the trigger: dropping the hard fintech req brings in great generalists, but my projected on-site pass-rate slips <b>~70% → 55%</b>. Fine for this role IMO — just want it on the record.
+            <div class="react">👍 Ops, You</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--ink)">O</div>
+        <div>
+          <div class="head"><span class="who c-ops">Ops</span><span class="role">Manager</span><span class="time">2:06 PM</span></div>
+          <div class="bub">Noted and agreed — worth it to hit the date. <span class="tag t-you">@You</span> here's my rec: add Staff, fintech → weighted preference. Gets you ~3 interested/week → <b>fill in ~2 weeks</b>. Want me to run it?</div>
+        </div>
+      </div>
+
+      <div class="msg me"><div class="col">
+        <div class="lbl">You · 2:06 PM</div>
+        <div class="bub">Yep, do it — but tag the fintech folks so I can still prioritize them.</div>
+      </div></div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--ink)">O</div>
+        <div>
+          <div class="head"><span class="who c-ops">Ops</span><span class="role">Manager</span><span class="time">2:06 PM</span></div>
+          <div class="bub">On it. 🎯
+            <div class="act"><span class="g">⚙</span>adjust_criteria · fintech→preferred, +Staff <span class="arw">→ re-sourcing queued</span></div>
+            <div class="act"><span class="g">⚙</span>add_tag · "fintech-preferred" <span class="arw">→ floats to top of queue</span></div>
+            <span class="tag t-scout">@Scout</span> you're re-sourcing, <span class="tag t-vera">@Vera</span> re-scoring — fintech-preferred will float to the top of <span class="tag t-you">@You</span>'s queue. I'll circle back with fresh numbers in 48h.</div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--teal)">S</div>
+        <div>
+          <div class="head"><span class="who c-scout">Scout</span><span class="role">Sourcing</span><span class="time">2:06 PM</span></div>
+          <div class="bub">Already on it 👍</div>
+        </div>
+      </div>
+
+      <div class="now"><span>just now</span></div>
+
+      <div class="msg">
+        <div class="av" style="background:var(--green)">E</div>
+        <div>
+          <div class="head"><span class="who c-echo">Echo</span><span class="role">Replies</span><span class="time">just now</span></div>
+          <div class="bub">Sorry to cut in, but this one's hot 🔥 — <span class="tag t-you">@You</span> <b>Priya Nair</b> (Daniel Cho's referral) just replied <i>"open to it."</i> She's a <b>91 fit</b>. Want me to fast-track her past the cold sequence?
+            <div class="confirm"><div class="btn fill">Fast-track Priya</div><div class="btn ghost">Not now</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="working"><span class="wd"></span>Scout is sourcing · Vera is re-scoring…</div>
+
+    </div>
+  </div>
+
+  <div class="comp">
+    <div class="input">Message your team…</div>
+    <div class="send">↑</div>
+  </div>
+
+</div>
+</body>
+</html>

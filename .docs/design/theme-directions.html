@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sourcewell — Design Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: #0d1014;
+    color: #e7e9ec;
+    font-family: "Geist", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 40px clamp(16px, 4vw, 56px) 80px;
+  }
+  .page-head { max-width: 1400px; margin: 0 auto 36px; }
+  .page-head .kicker {
+    font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: .18em;
+    text-transform: uppercase; color: #8a93a0; margin: 0 0 10px;
+  }
+  .page-head h1 { font-size: clamp(28px, 4vw, 44px); font-weight: 600; margin: 0 0 12px; letter-spacing: -.02em; }
+  .page-head p { color: #9aa3af; font-size: 16px; line-height: 1.6; max-width: 760px; margin: 0; }
+  .page-head .hint { margin-top: 14px; font-size: 13.5px; color: #6f7884; }
+  .page-head .hint b { color: #aeb6c1; font-weight: 600; }
+
+  .grid {
+    max-width: 1400px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px;
+  }
+  @media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } }
+
+  /* ---- a theme tile: the wrapper carries ALL the tokens ---- */
+  .theme {
+    border-radius: 16px; overflow: hidden; border: 1px solid #20262e;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-ui);
+  }
+  .theme-label {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+    padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .theme-label .name { font-size: 15px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+  .theme-label .name .ltr { color: var(--accent); }
+  .theme-label .persona { font-size: 12.5px; color: var(--muted); }
+  .theme-fonts { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .02em; text-align: right; }
+
+  .swatches { display: flex; gap: 7px; padding: 14px 22px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .swatches i { width: 26px; height: 26px; border-radius: 6px; display: block; border: 1px solid rgba(0,0,0,.08); }
+
+  /* ---- the SAME product panel, restyled only by tokens ---- */
+  .stage { padding: 26px 22px 28px; background: var(--bg); }
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 22px 16px; }
+  .eyebrow {
+    font-family: var(--font-eyebrow); font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 7px; font-weight: 600;
+  }
+  .panel-head h2 { font-family: var(--font-display); font-size: var(--h2-size); font-weight: var(--h2-weight); margin: 0; letter-spacing: var(--h2-tracking); color: var(--ink); line-height: 1.15; }
+  .panel-head .meta { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; white-space: nowrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+    padding: 4px 10px; border-radius: calc(var(--radius) * .7);
+    background: var(--accent-weak); color: var(--accent-strong); border: 1px solid var(--accent-line);
+    font-family: var(--font-eyebrow);
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+  .autonomy { font-size: 11.5px; color: var(--muted); font-family: var(--font-mono); }
+
+  table.cand { width: 100%; border-collapse: collapse; }
+  table.cand thead th {
+    text-align: left; font-family: var(--font-eyebrow); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; padding: 10px 22px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    background: var(--head-bg);
+  }
+  table.cand tbody td { padding: 13px 22px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+  table.cand tbody tr:last-child td { border-bottom: none; }
+  .who { display: flex; align-items: center; gap: 11px; }
+  .avatar { width: 30px; height: 30px; border-radius: var(--avatar-radius); background: var(--accent-weak); color: var(--accent-strong);
+    display: grid; place-items: center; font-size: 12px; font-weight: 600; font-family: var(--font-eyebrow); flex: none; }
+  .who .nm { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .who .co { font-size: 11.5px; color: var(--muted); }
+  .title-cell { font-size: 13px; color: var(--ink-soft); }
+  .fit { display: flex; align-items: center; gap: 10px; }
+  .bar { width: 92px; height: 7px; border-radius: 99px; background: var(--track); overflow: hidden; }
+  .bar > span { display: block; height: 100%; border-radius: 99px; background: var(--fill); }
+  .score { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--ink); min-width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+  .score.lo { color: var(--muted); }
+
+  .row-act { text-align: right; }
+  .btn {
+    font-family: var(--font-ui); font-weight: 600; cursor: pointer; border: 1px solid transparent;
+    border-radius: calc(var(--radius) * .85); transition: filter .12s ease;
+  }
+  .btn:hover { filter: brightness(.97); }
+  .btn-sm { font-size: 12px; padding: 6px 12px; }
+  .btn-ghost { background: var(--ghost-bg); color: var(--ink); border-color: var(--border); }
+  .btn-primary { background: var(--primary); color: var(--primary-ink); }
+  .panel-foot { display: flex; gap: 10px; padding: 16px 22px 18px; border-top: 1px solid var(--border); }
+  .btn-lg { font-size: 13.5px; padding: 9px 16px; }
+
+  /* ================= DIRECTION A — SLATE & SIGNAL ================= */
+  .theme--slate {
+    --font-ui: "Geist", sans-serif; --font-display: "Geist", sans-serif;
+    --font-eyebrow: "Geist", sans-serif; --font-mono: "Geist Mono", monospace;
+    --bg: #F5F6F8; --surface: #FFFFFF; --head-bg: #FAFBFC;
+    --ink: #0C1220; --ink-soft: #3A4252; --muted: #66707F;
+    --border: #E5E8EE; --border-soft: #EEF1F5; --track: #EAEDF2;
+    --primary: #20307A; --primary-ink: #FFFFFF; --ghost-bg: #FFFFFF;
+    --accent: #2C44C9; --accent-strong: #20307A; --accent-weak: #EBEEFC; --accent-line: #D7DDF8;
+    --success: #16A06A; --fill: #2C44C9;
+    --radius: 7px; --shadow: 0 1px 2px rgba(16,24,40,.05); --avatar-radius: 7px;
+    --h2-size: 21px; --h2-weight: 600; --h2-tracking: -.015em;
+  }
+
+  /* ================= DIRECTION B — GRAPHITE EDITORIAL ================= */
+  .theme--editorial {
+    --font-ui: "Hanken Grotesk", sans-serif; --font-display: "Fraunces", serif;
+    --font-eyebrow: "Hanken Grotesk", sans-serif; --font-mono: "Hanken Grotesk", sans-serif;
+    --bg: #FAF7F2; --surface: #FFFFFF; --head-bg: #FBF8F3;
+    --ink: #17120D; --ink-soft: #463E34; --muted: #7A6F60;
+    --border: #E9E2D6; --border-soft: #F2ECE1; --track: #EDE6D9;
+    --primary: #1A140E; --primary-ink: #FBF6EE; --ghost-bg: #FFFFFF;
+    --accent: #CC4322; --accent-strong: #A8351A; --accent-weak: #F8E7DF; --accent-line: #EDD2C7;
+    --success: #2E7D4F; --fill: #CC4322;
+    --radius: 3px; --shadow: none; --avatar-radius: 2px;
+    --h2-size: 27px; --h2-weight: 600; --h2-tracking: -.01em;
+  }
+  .theme--editorial .panel { border-width: 1.5px; }
+  .theme--editorial table.cand thead th { letter-spacing: .14em; }
+
+  /* ================= DIRECTION C — CALM CANVAS ================= */
+  .theme--calm {
+    --font-ui: "Figtree", sans-serif; --font-display: "Figtree", sans-serif;
+    --font-eyebrow: "Figtree", sans-serif; --font-mono: "Figtree", sans-serif;
+    --bg: #F6F5F1; --surface: #FFFFFF; --head-bg: #FBFAF8;
+    --ink: #1E2420; --ink-soft: #444B45; --muted: #717771;
+    --border: #EAE8E2; --border-soft: #F1F0EB; --track: #ECEAE4;
+    --primary: #0E8E7C; --primary-ink: #FFFFFF; --ghost-bg: #F7F6F3;
+    --accent: #0E8E7C; --accent-strong: #0B7567; --accent-weak: #DDF1ED; --accent-line: #C5E7E0;
+    --success: #2FA36B; --fill: #0E8E7C;
+    --radius: 16px; --shadow: 0 4px 18px rgba(20,40,35,.06); --avatar-radius: 50%;
+    --h2-size: 22px; --h2-weight: 600; --h2-tracking: -.01em;
+  }
+  .theme--calm .panel-foot, .theme--calm table.cand thead th { border-color: var(--border); }
+
+  /* ================= DIRECTION D — PRECISION MONO ================= */
+  .theme--mono {
+    --font-ui: "IBM Plex Sans", sans-serif; --font-display: "IBM Plex Sans", sans-serif;
+    --font-eyebrow: "IBM Plex Mono", monospace; --font-mono: "IBM Plex Mono", monospace;
+    --bg: #F3F4F6; --surface: #FFFFFF; --head-bg: #F7F8FA;
+    --ink: #12161B; --ink-soft: #3C434C; --muted: #69707A;
+    --border: #DEE2E7; --border-soft: #E9ECF0; --track: #E6E9ED;
+    --primary: #14181D; --primary-ink: #F4F8FF; --ghost-bg: #FFFFFF;
+    --accent: #1366FF; --accent-strong: #0B4FD6; --accent-weak: #E4EDFF; --accent-line: #CBDBFB;
+    --success: #0E8A5F; --fill: #1366FF;
+    --radius: 4px; --shadow: none; --avatar-radius: 4px;
+    --h2-size: 20px; --h2-weight: 600; --h2-tracking: -.005em;
+  }
+  .theme--mono .eyebrow, .theme--mono .autonomy, .theme--mono table.cand thead th { letter-spacing: .14em; }
+  .theme--mono .panel { box-shadow: none; }
+  .theme--mono .stage { background-image: linear-gradient(var(--border-soft) 1px, transparent 1px), linear-gradient(90deg, var(--border-soft) 1px, transparent 1px); background-size: 22px 22px; }
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <p class="kicker">Sourcewell · Design Direction</p>
+    <h1>Four design languages, one set of components</h1>
+    <p>Every tile below renders the <em>identical</em> campaign panel markup. The only thing that
+       changes is one token block — fonts, color roles, radius, density. That block is exactly what
+       becomes the Tailwind theme, so switching direction (now or later) touches one file, never a
+       component.</p>
+    <p class="hint">Light mode only for now, built fully swappable. &nbsp;·&nbsp; Pick a direction by its letter: <b>A Slate &amp; Signal</b> · <b>B Graphite Editorial</b> · <b>C Calm Canvas</b> · <b>D Precision Mono</b>.</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- ========== A ========== -->
+    <section class="theme theme--slate">
+      <div class="theme-label">
+        <div>
+          <div class="name"><span class="ltr">A.</span> Slate &amp; Signal</div>
+          <div class="persona">Refined enterprise · dense, data-forward, one confident accent</div>
+        </div>
+        <div class="theme-fonts">Geist<br>Geist Mono</div>
+      </div>
+      <div class="swatches"><i style="background:#0C1220"></i><i style="background:#66707F"></i><i style="background:#2C44C9"></i><i style="background:#16A06A"></i><i style="background:#E5E8EE"></i><i style="background:#FFFFFF"></i></div>
+      <div class="stage"><div class="panel" id="tpl-a"></div></div>
+    </section>
+
+    <!-- ========== B ========== -->
+    <section class="theme theme--editorial">
+      <div class="theme-label">
+        <div>
+          <div class="name"><span class="ltr">B.</span> Graphite Editorial</div>
+          <div class="persona">Bold serif headlines · sharp rules · magazine hierarchy</div>
+        </div>
+        <div class="theme-fonts">Fraunces<br>Hanken Grotesk</div>
+      </div>
+      <div class="swatches"><i style="background:#17120D"></i><i style="background:#7A6F60"></i><i style="background:#CC4322"></i><i style="background:#2E7D4F"></i><i style="background:#E9E2D6"></i><i style="background:#FAF7F2"></i></div>
+      <div class="stage"><div class="panel" id="tpl-b"></div></div>
+    </section>
+
+    <!-- ========== C ========== -->
+    <section class="theme theme--calm">
+      <div class="theme-label">
+        <div>
+          <div class="name"><span class="ltr">C.</span> Calm Canvas</div>
+          <div class="persona">Friendly &amp; spacious · rounded cards · soft teal, gentle shadow</div>
+        </div>
+        <div class="theme-fonts">Figtree</div>
+      </div>
+      <div class="swatches"><i style="background:#1E2420"></i><i style="background:#717771"></i><i style="background:#0E8E7C"></i><i style="background:#2FA36B"></i><i style="background:#EAE8E2"></i><i style="background:#FFFFFF"></i></div>
+      <div class="stage"><div class="panel" id="tpl-c"></div></div>
+    </section>
+
+    <!-- ========== D ========== -->
+    <section class="theme theme--mono">
+      <div class="theme-label">
+        <div>
+          <div class="name"><span class="ltr">D.</span> Precision Mono</div>
+          <div class="persona">Technical / fintech-terminal · mono labels, gridlines, electric blue</div>
+        </div>
+        <div class="theme-fonts">IBM Plex Sans<br>IBM Plex Mono</div>
+      </div>
+      <div class="swatches"><i style="background:#12161B"></i><i style="background:#69707A"></i><i style="background:#1366FF"></i><i style="background:#0E8A5F"></i><i style="background:#DEE2E7"></i><i style="background:#FFFFFF"></i></div>
+      <div class="stage"><div class="panel" id="tpl-d"></div></div>
+    </section>
+
+  </div>
+
+<script>
+  // One template, rendered into every theme. Proves: same components, theme = tokens only.
+  const rows = [
+    { initials: "JD", name: "Jane Doe",     co: "Acme",    title: "Senior Backend Engineer", score: 96 },
+    { initials: "ML", name: "Marcus Lee",   co: "Globex",  title: "Staff Software Engineer", score: 88 },
+    { initials: "PN", name: "Priya Nair",   co: "Umbrella",title: "Platform Engineer",       score: 81 },
+    { initials: "DS", name: "Diego Santos", co: "Initech", title: "Backend Engineer",        score: 64 },
+  ];
+  function panel() {
+    const body = rows.map(r => {
+      const lo = r.score < 70 ? " lo" : "";
+      return `<tr>
+        <td><div class="who"><div class="avatar">${r.initials}</div><div><div class="nm">${r.name}</div><div class="co">${r.co}</div></div></div></td>
+        <td class="title-cell">${r.title}</td>
+        <td><div class="fit"><div class="bar"><span style="width:${r.score}%"></span></div><div class="score${lo}">${r.score}</div></div></td>
+        <td class="row-act"><button class="btn btn-ghost btn-sm">Approve</button></td>
+      </tr>`;
+    }).join("");
+    return `
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Campaign</p>
+          <h2>Senior Backend Engineer</h2>
+          <div class="meta">5 sourced · 2 awaiting approval · 1 replied</div>
+        </div>
+        <div class="head-right">
+          <span class="badge"><span class="dot"></span> Active</span>
+          <span class="autonomy">Approve each</span>
+        </div>
+      </div>
+      <table class="cand">
+        <thead><tr><th>Candidate</th><th>Title</th><th>Fit</th><th></th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+      <div class="panel-foot">
+        <button class="btn btn-primary btn-lg">Approve top 3</button>
+        <button class="btn btn-ghost btn-lg">Review all</button>
+      </div>`;
+  }
+  ["a","b","c","d"].forEach(k => document.getElementById("tpl-"+k).innerHTML = panel());
+</script>
+</body>
+</html>

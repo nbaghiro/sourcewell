@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sourcewell — App Flow (Wellspring)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Hanken+Grotesk:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F1EA;--surface:#fff;--surface-2:#FAF8F1;--head:#F8F5EC;
+    --ink:#122019;--ink-soft:#3C4A42;--muted:#6B7A71;--border:#E5E1D5;--border-soft:#F0ECE0;
+    --primary:#0B5D4E;--primary-ink:#F2FBF7;--accent:#DCEFE8;--accent-strong:#0B5D4E;--accent-line:#C2E2D7;
+    --success:#2C8C5A;--warn:#B8762A;--danger:#B4422E;
+    --side:#07312B;--side-ink:#8FB6AC;--side-ink-on:#EBF7F1;--side-active:#0C453B;--side-hover:#0a3b33;--side-border:#0d433a;
+    --from:#0E7C66;--to:#43B68F;--radius:11px;
+    --f-ui:"Hanken Grotesk",sans-serif;--f-display:"Bricolage Grotesque",sans-serif;--f-mono:"Geist Mono",monospace;
+  }
+  *{box-sizing:border-box}html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);-webkit-font-smoothing:antialiased}
+  h1,h2,h3,h4{font-family:var(--f-display);margin:0}
+  svg.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+  /* ---- switcher chrome ---- */
+  .chrome{position:sticky;top:0;z-index:60;background:#0b0e13;border-bottom:1px solid #1c222c;display:flex;align-items:center;gap:14px;padding:10px 18px;flex-wrap:wrap}
+  .chrome .lead{color:#e8eaee;font-family:var(--f-display);font-weight:700;font-size:14px;margin-right:6px}
+  .grp{display:flex;align-items:center;gap:6px}
+  .grp .gl{font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5f6772;margin-right:2px}
+  .tab{font-family:var(--f-ui);font-size:12px;color:#aab2be;background:#151a22;border:1px solid #232a35;padding:6px 10px;border-radius:7px;cursor:pointer;white-space:nowrap}
+  .tab:hover{border-color:#3a4250}
+  .tab.on{background:#EBF7F1;color:#07312B;border-color:#EBF7F1;font-weight:600}
+  .sep{width:1px;height:20px;background:#232a35;margin:0 2px}
+
+  /* ---- screens ---- */
+  .screen{display:none}.screen.on{display:block}
+
+  /* ============ AUTH ============ */
+  .authwrap{display:grid;grid-template-columns:1.05fr 1fr;min-height:calc(100vh - 46px)}
+  @media(max-width:880px){.authwrap{grid-template-columns:1fr}.authbrand{display:none}}
+  .authbrand{position:relative;background:linear-gradient(150deg,#07312B,#0C453B 60%,#0E7C66);color:#EBF7F1;padding:54px 56px;display:flex;flex-direction:column}
+  .authbrand .b{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:22px}
+  .authbrand .b .mk{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(140deg,#0E7C66,#43B68F);font-size:15px}
+  .authbrand h1{font-size:40px;line-height:1.08;letter-spacing:-.02em;margin-top:auto;max-width:11ch}
+  .authbrand p{color:#A9D4C8;font-size:15.5px;line-height:1.6;margin-top:18px;max-width:42ch}
+  .authbrand .feat{margin-top:28px;display:flex;flex-direction:column;gap:12px}
+  .authbrand .feat div{display:flex;align-items:center;gap:11px;font-size:14px;color:#CDE8DF}
+  .authbrand .feat .d{width:20px;height:20px;border-radius:6px;background:#0E7C66;display:grid;place-items:center;color:#EBF7F1}
+  .authpanel{display:grid;place-items:center;padding:40px}
+  .authcard{width:100%;max-width:380px}
+  .authcard .ttl{font-family:var(--f-display);font-size:24px;font-weight:700;letter-spacing:-.01em}
+  .authcard .sub{color:var(--muted);font-size:14px;margin:8px 0 26px}
+  .oauth{display:flex;flex-direction:column;gap:10px}
+  .oauthbtn{display:flex;align-items:center;justify-content:center;gap:10px;height:44px;border:1px solid var(--border);background:var(--surface);border-radius:10px;font-weight:600;font-size:14px;color:var(--ink);cursor:pointer}
+  .oauthbtn:hover{background:var(--surface-2)}
+  .oauthbtn.prim{background:var(--primary);color:var(--primary-ink);border-color:transparent}
+  .oauthbtn .g{width:18px;height:18px;border-radius:4px;display:grid;place-items:center;font-size:11px;font-weight:700}
+  .divider{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;margin:18px 0}
+  .divider::before,.divider::after{content:"";height:1px;background:var(--border);flex:1}
+  .field-lbl{font-size:13px;font-weight:600;margin-bottom:6px;display:block}
+  .input{width:100%;height:44px;border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:0 13px;font-family:var(--f-ui);font-size:14px;color:var(--ink)}
+  .input::placeholder{color:var(--muted)}
+  .authfoot{margin-top:22px;display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}
+  .wos{font-family:var(--f-mono);font-size:11px;color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:2px 7px}
+
+  /* workspace picker */
+  .pick{min-height:calc(100vh - 46px);display:grid;place-items:center;padding:40px}
+  .pickbox{width:100%;max-width:440px}
+  .pickbox .b{display:flex;align-items:center;gap:9px;font-family:var(--f-display);font-weight:700;font-size:18px;justify-content:center;margin-bottom:6px}
+  .pickbox .b .mk{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(140deg,#0E7C66,#43B68F);color:#fff;font-size:13px}
+  .pickbox h2{text-align:center;font-size:22px;letter-spacing:-.01em;margin-bottom:4px}
+  .pickbox .sub{text-align:center;color:var(--muted);font-size:14px;margin-bottom:24px}
+  .wcard{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px 16px;margin-bottom:10px;cursor:pointer;transition:border-color .12s}
+  .wcard:hover{border-color:var(--accent-line);background:var(--surface)}
+  .wcard .wi{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;color:#fff;flex:none}
+  .wcard .wn{font-weight:600;font-size:14.5px}
+  .wcard .wm{font-size:12.5px;color:var(--muted)}
+  .wcard .role{margin-left:auto;font-family:var(--f-mono);font-size:11px;color:var(--accent-strong);background:var(--accent);border:1px solid var(--accent-line);border-radius:99px;padding:3px 9px}
+  .wnew{display:flex;align-items:center;justify-content:center;gap:8px;border:1px dashed var(--border);border-radius:12px;padding:14px;color:var(--muted);font-weight:600;font-size:13.5px;cursor:pointer;margin-top:4px}
+
+  /* ============ APP SHELL ============ */
+  .app{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 46px)}
+  .side{background:var(--side);padding:16px 13px;display:flex;flex-direction:column;gap:18px}
+  .brand{display:flex;align-items:center;gap:9px;padding:4px 7px;color:var(--side-ink-on);font-family:var(--f-display);font-weight:700;font-size:18px}
+  .brand .mk{width:25px;height:25px;border-radius:7px;display:grid;place-items:center;background:linear-gradient(140deg,#0E7C66,#43B68F);font-size:13px;color:#fff}
+  .ws{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--side-hover);border:1px solid var(--side-border);border-radius:9px;padding:9px 11px;font-size:12.5px;font-weight:500;color:var(--side-ink);cursor:pointer}
+  .ws .dim{opacity:.7}
+  nav{display:flex;flex-direction:column;gap:2px}
+  .nav{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;color:var(--side-ink);font-size:13.5px;font-weight:500;cursor:pointer}
+  .nav:hover{background:var(--side-hover)}
+  .nav.active{background:var(--side-active);color:var(--side-ink-on);font-weight:600}
+  .nav .ct{margin-left:auto;font-family:var(--f-mono);font-size:11px;font-weight:600;background:var(--side-active);color:var(--side-ink-on);border-radius:99px;padding:1px 7px}
+  .side-foot{margin-top:auto;display:flex;align-items:center;gap:10px;border-top:1px solid var(--side-border);padding-top:14px}
+  .side-foot .av{width:30px;height:30px;border-radius:8px;background:var(--side-active);color:var(--side-ink-on);display:grid;place-items:center;font-size:11px;font-weight:600}
+  .side-foot .nm{font-size:12px;font-weight:600;color:var(--side-ink-on)}
+  .side-foot .rl{font-size:10.5px;color:var(--side-ink);opacity:.85}
+
+  .main{display:flex;flex-direction:column;min-width:0}
+  .top{position:sticky;top:46px;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 26px;background:rgba(255,255,255,.82);backdrop-filter:blur(6px);border-bottom:1px solid var(--border)}
+  .top .eyebrow{font-family:var(--f-mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .top h1{font-size:21px;letter-spacing:-.015em;margin-top:2px}
+  .top-r{display:flex;align-items:center;gap:11px}
+  .search{display:flex;align-items:center;gap:9px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted);border-radius:9px;padding:8px 12px;font-size:13px;min-width:240px}
+  .iconbtn{display:grid;place-items:center;width:36px;height:36px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);cursor:pointer}
+  .me{width:33px;height:33px;border-radius:9px;background:var(--primary);color:var(--primary-ink);display:grid;place-items:center;font-size:12px;font-weight:600}
+  .canvas{padding:24px 26px 48px;flex:1}
+  .ascreen{display:none}.ascreen.on{display:block}
+
+  /* shared bits */
+  .eyebrow{font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .ph{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:22px}
+  .ph h2{font-size:24px;letter-spacing:-.02em}
+  .ph .d{color:var(--muted);font-size:13.5px;margin-top:5px;max-width:60ch}
+  .row{display:flex;align-items:center;gap:8px}
+  .btn{display:inline-flex;align-items:center;gap:7px;font-family:var(--f-ui);font-weight:600;font-size:13px;border-radius:9px;border:1px solid transparent;padding:8px 13px;cursor:pointer}
+  .btn .ic{width:15px;height:15px;stroke-width:2}
+  .btn-primary{background:var(--primary);color:var(--primary-ink)}
+  .btn-outline{background:var(--surface);color:var(--ink);border-color:var(--border)}
+  .btn-ghost{background:transparent;color:var(--ink)}
+  .btn-sm{padding:6px 10px;font-size:12px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 2px 12px rgba(18,40,30,.05)}
+  .card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;border-bottom:1px solid var(--border)}
+  .card-h h3{font-size:15px}
+  .card-h .s{font-size:12px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse}
+  thead th{text-align:left;font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:10px 18px;background:var(--head);border-bottom:1px solid var(--border)}
+  th.num,td.num{text-align:right}
+  tbody td{padding:12px 18px;border-bottom:1px solid var(--border-soft);font-size:13px;color:var(--ink-soft)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover td{background:var(--surface-2)}
+  .cn{font-weight:600;color:var(--ink);font-size:13.5px}
+  .num{font-family:var(--f-mono);color:var(--ink)}
+  .auton{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+  .who{display:flex;align-items:center;gap:10px}
+  .who .av{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-strong);display:grid;place-items:center;font-size:11px;font-weight:600;flex:none}
+  .who .nm{font-weight:600;color:var(--ink);font-size:13px}
+  .who .sb{font-size:11px;color:var(--muted)}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:7px;border:1px solid transparent;white-space:nowrap}
+  .b-accent{background:var(--accent);color:var(--accent-strong);border-color:var(--accent-line)}
+  .b-success{background:#E1F1E8;color:var(--success)}
+  .b-warn{background:#F6EAD8;color:var(--warn)}
+  .b-muted{background:var(--surface-2);color:var(--muted);border-color:var(--border)}
+  .b-danger{background:#F6E3DE;color:var(--danger)}
+  .b-out{background:transparent;color:var(--muted);border-color:var(--border)}
+  .dot{width:6px;height:6px;border-radius:50%}
+  .bar{width:96px;height:6px;border-radius:99px;background:var(--border-soft);overflow:hidden;display:inline-block;vertical-align:middle}
+  .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--from),var(--to))}
+  .score{font-family:var(--f-mono);font-weight:600;font-size:13px;color:var(--ink);margin-left:9px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--border);border-radius:99px;padding:4px 10px}
+  .chip .x{color:var(--muted);cursor:pointer}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 2px 12px rgba(18,40,30,.05);padding:16px 18px}
+  .stat .l{font-size:12.5px;color:var(--muted);font-weight:500}
+  .stat .v{font-family:var(--f-display);font-size:30px;font-weight:700;letter-spacing:-.02em;margin:6px 0 3px}
+  .stat .t{font-family:var(--f-mono);font-size:11px;font-weight:600;color:var(--success)}
+  .stat .t.flat{color:var(--muted)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px}
+  .cols{display:grid;grid-template-columns:1.5fr 1fr;gap:16px}
+  @media(max-width:1080px){.cols{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+  .field{margin-bottom:16px}
+  .label{font-size:13px;font-weight:600;margin-bottom:6px;display:block}
+  .hint{font-size:12px;color:var(--muted);margin-top:5px}
+  .inp{width:100%;height:38px;border:1px solid var(--border);background:var(--surface);border-radius:9px;padding:0 12px;font-family:var(--f-ui);font-size:13.5px;color:var(--ink)}
+  textarea.inp{height:auto;padding:10px 12px;resize:vertical;line-height:1.5}
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:3px}
+  .seg button{border:none;background:transparent;font-family:var(--f-ui);font-weight:600;font-size:12.5px;color:var(--muted);padding:6px 13px;border-radius:7px;cursor:pointer}
+  .seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+
+  /* master-detail */
+  .md{display:grid;grid-template-columns:340px 1fr;gap:16px;height:calc(100vh - 46px - 70px - 72px)}
+  @media(max-width:1080px){.md{grid-template-columns:1fr}}
+  .mdlist{overflow:auto}
+  .li{display:flex;gap:11px;padding:13px 14px;border:1px solid var(--border);border-radius:11px;background:var(--surface);margin-bottom:9px;cursor:pointer}
+  .li.sel{border-color:var(--accent-line);box-shadow:0 0 0 1px var(--accent-line)}
+  .li .av{width:32px;height:32px;border-radius:8px;background:var(--accent);color:var(--accent-strong);display:grid;place-items:center;font-size:11px;font-weight:600;flex:none}
+  .li .nm{font-weight:600;font-size:13px}
+  .li .pre{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+
+  /* thread */
+  .thread{display:flex;flex-direction:column}
+  .thbody{flex:1;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:78%;padding:12px 14px;border-radius:13px;font-size:13.5px;line-height:1.55}
+  .msg .mh{font-family:var(--f-mono);font-size:10px;color:var(--muted);margin-bottom:5px}
+  .msg.out{align-self:flex-end;background:var(--accent);border:1px solid var(--accent-line);color:var(--ink)}
+  .msg.in{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border)}
+  .composer{border-top:1px solid var(--border);padding:12px 16px;display:flex;gap:10px;align-items:center}
+
+  /* pipeline board */
+  .board{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px}
+  .col{flex:0 0 248px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:11px;display:flex;flex-direction:column;gap:9px}
+  .col .ch{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;color:var(--ink-soft);padding:2px 4px}
+  .col .ch .n{font-family:var(--f-mono);color:var(--muted)}
+  .ccard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 12px}
+  .ccard .nm{font-weight:600;font-size:13px}
+  .ccard .ti{font-size:11.5px;color:var(--muted);margin:2px 0 8px}
+
+  /* settings */
+  .conn{display:flex;align-items:center;gap:14px;padding:15px 0;border-bottom:1px solid var(--border-soft)}
+  .conn:last-child{border-bottom:none}
+  .conn .ci{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--border);flex:none}
+  .conn .cn{font-weight:600;font-size:14px}
+  .conn .cd{font-size:12.5px;color:var(--muted)}
+  .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
+  @media(max-width:1080px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-contacts" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 3-4.6 5.5-4.6S13.9 16 14.5 19"/><path d="M16 5.2a3 3 0 0 1 0 5.6"/><path d="M16.6 14.7c2 .5 3.4 1.9 3.9 4.3"/></symbol>
+    <symbol id="i-camp" viewBox="0 0 24 24"><path d="M21 3 10.5 13.5"/><path d="M21 3 14 21l-3.5-7.6L3 10z"/></symbol>
+    <symbol id="i-appr" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.4 2.5 4.6-5"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 2.5h5L21 13"/><path d="M3 13 5.6 5h12.8L21 13v6H3z"/></symbol>
+    <symbol id="i-pipe" viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="11" rx="1"/><rect x="16" y="4" width="5" height="14" rx="1"/></symbol>
+    <symbol id="i-set" viewBox="0 0 24 24"><path d="M4 7h9"/><circle cx="16.5" cy="7" r="2.3"/><path d="M20 17h-9"/><circle cx="7.5" cy="17" r="2.3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 6-2.4 8-2.4 8h16.8S18 14 18 8"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10.5 13.5"/><path d="M21 3 14 21l-3.5-7.6L3 10z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V6M6 12l6-6 6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 10v7M7 7v.01M11 17v-4a2 2 0 0 1 4 0v4M11 13v4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  </defs></svg>
+
+  <div class="chrome">
+    <div class="lead">✦ Sourcewell · App Flow</div>
+    <div class="grp"><span class="gl">Auth</span>
+      <button class="tab" data-s="signin">Sign in</button>
+      <button class="tab" data-s="workspace">Workspace</button>
+    </div>
+    <div class="sep"></div>
+    <div class="grp"><span class="gl">App</span>
+      <button class="tab" data-s="dashboard">Dashboard</button>
+      <button class="tab" data-s="contacts">Contacts</button>
+      <button class="tab" data-s="campaigns">Campaigns</button>
+      <button class="tab" data-s="new-campaign">New campaign</button>
+      <button class="tab" data-s="campaign">Campaign detail</button>
+      <button class="tab" data-s="approvals">Approvals</button>
+      <button class="tab" data-s="inbox">Inbox</button>
+      <button class="tab" data-s="pipeline">Pipeline</button>
+      <button class="tab" data-s="settings">Settings</button>
+    </div>
+  </div>
+
+  <!-- ============ AUTH: SIGN IN ============ -->
+  <div class="screen" id="sc-signin">
+    <div class="authwrap">
+      <div class="authbrand">
+        <div class="b"><span class="mk">✦</span> Sourcewell</div>
+        <h1>Source the people you can't find.</h1>
+        <p>AI agents that find, rank, and reach candidates across email and LinkedIn — every message waits for your approval.</p>
+        <div class="feat">
+          <div><span class="d"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg></span> SSO &amp; SCIM for your whole org</div>
+          <div><span class="d"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg></span> Per-workspace access for each client team</div>
+          <div><span class="d"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg></span> Human-in-the-loop on every send</div>
+        </div>
+      </div>
+      <div class="authpanel">
+        <div class="authcard">
+          <div class="ttl">Sign in to Sourcewell</div>
+          <div class="sub">Use your company account to continue.</div>
+          <div class="oauth">
+            <button class="oauthbtn prim"><svg class="ic" style="width:16px;height:16px"><use href="#i-shield"/></svg> Continue with SSO</button>
+            <button class="oauthbtn"><span class="g" style="background:#fff;border:1px solid var(--border);color:#4285F4">G</span> Continue with Google</button>
+            <button class="oauthbtn"><span class="g" style="background:#fff;border:1px solid var(--border);color:#00A4EF">⊞</span> Continue with Microsoft</button>
+          </div>
+          <div class="divider">or</div>
+          <label class="field-lbl">Work email</label>
+          <input class="input" placeholder="you@company.com" />
+          <button class="oauthbtn prim" style="margin-top:12px">Continue with email</button>
+          <div class="authfoot"><span class="wos">Secured by WorkOS AuthKit</span> · SSO, MFA &amp; audit logs</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ AUTH: WORKSPACE PICKER ============ -->
+  <div class="screen" id="sc-workspace">
+    <div class="pick">
+      <div class="pickbox">
+        <div class="b"><span class="mk">✦</span> Sourcewell</div>
+        <h2>Choose a workspace</h2>
+        <div class="sub">Signed in as avery@acme.com · WorkOS org “Acme Talent”.</div>
+        <div class="wcard"><div class="wi" style="background:linear-gradient(140deg,#0E7C66,#43B68F)">BH</div><div><div class="wn">Backend Hiring</div><div class="wm">Acme · 1,284 contacts · 4 campaigns</div></div><span class="role">Admin</span></div>
+        <div class="wcard"><div class="wi" style="background:linear-gradient(140deg,#2C6F8C,#54A7C4)">DH</div><div><div class="wn">Design Hiring</div><div class="wm">Acme · 312 contacts · 1 campaign</div></div><span class="role">Member</span></div>
+        <div class="wcard"><div class="wi" style="background:linear-gradient(140deg,#7A5AA8,#A98BD6)">EU</div><div><div class="wn">EU Engineering</div><div class="wm">Acme · 540 contacts · 2 campaigns</div></div><span class="role">Member</span></div>
+        <div class="wnew"><svg class="ic" style="width:15px;height:15px;stroke-width:2"><use href="#i-plus"/></svg> Create a workspace</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ APP SHELL ============ -->
+  <div class="screen" id="sc-app">
+    <div class="app">
+      <aside class="side">
+        <div class="brand"><span class="mk">✦</span> Sourcewell</div>
+        <div class="ws"><span>Acme · <span class="dim">Backend Hiring</span></span><svg class="ic" style="width:14px;height:14px"><use href="#i-chev"/></svg></div>
+        <nav id="nav">
+          <a class="nav" data-nav="dashboard"><svg class="ic"><use href="#i-dash"/></svg> Dashboard</a>
+          <a class="nav" data-nav="contacts"><svg class="ic"><use href="#i-contacts"/></svg> Contacts</a>
+          <a class="nav" data-nav="campaigns"><svg class="ic"><use href="#i-camp"/></svg> Campaigns</a>
+          <a class="nav" data-nav="approvals"><svg class="ic"><use href="#i-appr"/></svg> Approvals <span class="ct">12</span></a>
+          <a class="nav" data-nav="inbox"><svg class="ic"><use href="#i-inbox"/></svg> Inbox <span class="ct">3</span></a>
+          <a class="nav" data-nav="pipeline"><svg class="ic"><use href="#i-pipe"/></svg> Pipeline</a>
+          <a class="nav" data-nav="settings"><svg class="ic"><use href="#i-set"/></svg> Settings</a>
+        </nav>
+        <div class="side-foot"><div class="av">AB</div><div><div class="nm">Avery Brooks</div><div class="rl">Recruiting lead</div></div></div>
+      </aside>
+      <div class="main">
+        <header class="top">
+          <div><div class="eyebrow" id="tb-eyebrow">Workspace overview</div><h1 id="tb-title">Dashboard</h1></div>
+          <div class="top-r"><div class="search"><svg class="ic" style="width:15px;height:15px"><use href="#i-search"/></svg> Search…</div><div class="iconbtn"><svg class="ic"><use href="#i-bell"/></svg></div><div class="me">AB</div></div>
+        </header>
+        <div class="canvas">
+
+          <!-- DASHBOARD -->
+          <div class="ascreen" id="s-dashboard">
+            <div class="stats">
+              <div class="stat"><div class="l">Active campaigns</div><div class="v">4</div><div class="t"><svg class="ic" style="width:11px;height:11px;display:inline;stroke-width:2.5"><use href="#i-up"/></svg> 1 launched</div></div>
+              <div class="stat"><div class="l">Contacts sourced</div><div class="v">1,284</div><div class="t">96 this week</div></div>
+              <div class="stat"><div class="l">Awaiting approval</div><div class="v">12</div><div class="t flat">needs review</div></div>
+              <div class="stat"><div class="l">Replies · 7d</div><div class="v">7</div><div class="t">3 interested</div></div>
+            </div>
+            <div class="cols">
+              <section class="card">
+                <div class="card-h"><h3>Campaigns</h3><button class="btn btn-primary btn-sm"><svg class="ic"><use href="#i-plus"/></svg> New campaign</button></div>
+                <table><thead><tr><th>Campaign</th><th>Status</th><th class="num">Sourced</th><th class="num">Await</th><th class="num">Replies</th></tr></thead><tbody>
+                  <tr><td class="cn">Senior Backend Engineer</td><td><span class="badge b-accent"><span class="dot" style="background:var(--success)"></span>Active</span></td><td class="num">142</td><td class="num">12</td><td class="num">3</td></tr>
+                  <tr><td class="cn">Data Platform Lead</td><td><span class="badge b-accent"><span class="dot" style="background:var(--success)"></span>Active</span></td><td class="num">86</td><td class="num">4</td><td class="num">1</td></tr>
+                  <tr><td class="cn">ML Research Scientist</td><td><span class="badge b-warn"><span class="dot" style="background:var(--warn)"></span>Paused</span></td><td class="num">210</td><td class="num">0</td><td class="num">5</td></tr>
+                  <tr><td class="cn">Site Reliability (EU)</td><td><span class="badge b-out">Draft</span></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+                </tbody></table>
+              </section>
+              <div style="display:flex;flex-direction:column;gap:16px">
+                <section class="card">
+                  <div class="card-h"><h3>Approvals</h3><span class="s">12 waiting</span></div>
+                  <div style="padding:14px 18px;border-bottom:1px solid var(--border-soft)"><div class="who" style="margin-bottom:7px"><div class="av">JD</div><div><div class="nm">Jane Doe</div><div class="sb">Senior Backend Engineer</div></div><span class="score" style="margin-left:auto">96</span></div><div style="font-size:12.5px;color:var(--muted)">“Saw your work on Acme's payments platform — open to a chat?”</div></div>
+                  <div style="padding:14px 18px"><div class="who" style="margin-bottom:7px"><div class="av">ML</div><div><div class="nm">Marcus Lee</div><div class="sb">Staff Engineer</div></div><span class="score" style="margin-left:auto">88</span></div><div style="font-size:12.5px;color:var(--muted)">“Your distributed-systems background lines up well…”</div></div>
+                </section>
+                <section class="card">
+                  <div class="card-h"><h3>Recent replies</h3><span class="s">last 24h</span></div>
+                  <div style="padding:12px 18px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:10px"><div class="who"><div class="av">PN</div><div><div class="nm">Priya Nair</div><div class="sb">“let's find time next week”</div></div></div><span class="badge b-success" style="margin-left:auto">Interested</span></div>
+                  <div style="padding:12px 18px;display:flex;align-items:center;gap:10px"><div class="who"><div class="av">TB</div><div><div class="nm">Tom Becker</div><div class="sb">“not looking right now”</div></div></div><span class="badge b-muted" style="margin-left:auto">Opted out</span></div>
+                </section>
+              </div>
+            </div>
+          </div>
+
+          <!-- CONTACTS -->
+          <div class="ascreen" id="s-contacts">
+            <div class="ph"><div><h2>Contacts</h2><div class="d">People sourced into this workspace. Import a list or generate a sample set, then rank them into a campaign.</div></div>
+              <div class="row"><button class="btn btn-outline btn-sm">Generate sample</button><button class="btn btn-primary btn-sm"><svg class="ic"><use href="#i-plus"/></svg> Import contacts</button></div></div>
+            <div class="row" style="margin-bottom:14px;gap:10px"><div class="search" style="min-width:260px"><svg class="ic" style="width:15px;height:15px"><use href="#i-search"/></svg> Search by name, company, skill…</div><span class="chip">Skill: python <span class="x">✕</span></span><span class="chip">Source: LinkedIn <span class="x">✕</span></span></div>
+            <section class="card"><table><thead><tr><th>Name</th><th>Title</th><th>Company</th><th>Skills</th><th>Source</th></tr></thead><tbody>
+              <tr><td><div class="who"><div class="av">JD</div><div><div class="nm">Jane Doe</div><div class="sb">jane@example.com</div></div></div></td><td>Senior Backend Engineer</td><td>Acme</td><td><span class="chip">python</span> <span class="chip">postgres</span></td><td class="auton">linkedin</td></tr>
+              <tr><td><div class="who"><div class="av">ML</div><div><div class="nm">Marcus Lee</div><div class="sb">marcus@example.com</div></div></div></td><td>Staff Software Engineer</td><td>Globex</td><td><span class="chip">kafka</span> <span class="chip">go</span></td><td class="auton">github</td></tr>
+              <tr><td><div class="who"><div class="av">PN</div><div><div class="nm">Priya Nair</div><div class="sb">priya@example.com</div></div></div></td><td>Platform Engineer</td><td>Umbrella</td><td><span class="chip">python</span> <span class="chip">k8s</span></td><td class="auton">linkedin</td></tr>
+              <tr><td><div class="who"><div class="av">DS</div><div><div class="nm">Diego Santos</div><div class="sb">diego@example.com</div></div></div></td><td>Backend Engineer</td><td>Initech</td><td><span class="chip">node</span> <span class="chip">aws</span></td><td class="auton">manual</td></tr>
+            </tbody></table></section>
+          </div>
+
+          <!-- CAMPAIGNS -->
+          <div class="ascreen" id="s-campaigns">
+            <div class="ph"><div><h2>Campaigns</h2><div class="d">Each campaign defines who to reach (criteria) and how (a multi-touch sequence).</div></div>
+              <button class="btn btn-primary"><svg class="ic"><use href="#i-plus"/></svg> New campaign</button></div>
+            <section class="card"><table><thead><tr><th>Campaign</th><th>Status</th><th class="num">Sourced</th><th class="num">Await</th><th class="num">Replies</th><th>Autonomy</th><th>Owner</th></tr></thead><tbody>
+              <tr><td class="cn">Senior Backend Engineer</td><td><span class="badge b-accent"><span class="dot" style="background:var(--success)"></span>Active</span></td><td class="num">142</td><td class="num">12</td><td class="num">3</td><td class="auton">Approve each</td><td>AB</td></tr>
+              <tr><td class="cn">Data Platform Lead</td><td><span class="badge b-accent"><span class="dot" style="background:var(--success)"></span>Active</span></td><td class="num">86</td><td class="num">4</td><td class="num">1</td><td class="auton">Auto</td><td>AB</td></tr>
+              <tr><td class="cn">ML Research Scientist</td><td><span class="badge b-warn"><span class="dot" style="background:var(--warn)"></span>Paused</span></td><td class="num">210</td><td class="num">0</td><td class="num">5</td><td class="auton">Approve each</td><td>RT</td></tr>
+              <tr><td class="cn">Site Reliability (EU)</td><td><span class="badge b-out">Draft</span></td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="auton">—</td><td>AB</td></tr>
+            </tbody></table></section>
+          </div>
+
+          <!-- NEW CAMPAIGN -->
+          <div class="ascreen" id="s-new-campaign">
+            <div class="ph"><div><h2>Create a campaign</h2><div class="d">Define the role, who fits, and the outreach sequence. You can rank candidates as soon as it's saved.</div></div>
+              <div class="row"><button class="btn btn-ghost btn-sm">Cancel</button><button class="btn btn-primary btn-sm">Save campaign</button></div></div>
+            <div class="grid2">
+              <div>
+                <section class="card" style="margin-bottom:16px"><div class="card-h"><h3>Basics</h3></div><div style="padding:18px">
+                  <div class="field"><label class="label">Campaign name</label><input class="inp" value="Senior Backend Engineer" /></div>
+                  <div class="field"><label class="label">Autonomy</label><div class="seg"><button class="on">Approve each message</button><button>Auto-send</button></div><div class="hint">Approve-each holds every drafted message for your review before it sends.</div></div>
+                  <div class="field"><label class="label">From email</label><input class="inp" value="recruiter@acme.com" /></div>
+                </div></section>
+                <section class="card" style="margin-bottom:16px"><div class="card-h"><h3>Who fits</h3><span class="s">criteria</span></div><div style="padding:18px">
+                  <div class="field"><label class="label">Titles</label><div class="row" style="flex-wrap:wrap;gap:7px"><span class="chip">Senior Backend Engineer <span class="x">✕</span></span><span class="chip">Staff Engineer <span class="x">✕</span></span><span class="chip" style="color:var(--muted)">+ add</span></div></div>
+                  <div class="field"><label class="label">Skills</label><div class="row" style="flex-wrap:wrap;gap:7px"><span class="chip">python <span class="x">✕</span></span><span class="chip">go <span class="x">✕</span></span><span class="chip">distributed systems <span class="x">✕</span></span><span class="chip" style="color:var(--muted)">+ add</span></div></div>
+                  <div class="field" style="margin-bottom:0"><label class="label">Locations</label><div class="row" style="flex-wrap:wrap;gap:7px"><span class="chip">EU <span class="x">✕</span></span><span class="chip">Remote <span class="x">✕</span></span><span class="chip" style="color:var(--muted)">+ add</span></div></div>
+                </div></section>
+                <section class="card"><div class="card-h"><h3>Sequence</h3><button class="btn btn-outline btn-sm"><svg class="ic"><use href="#i-plus"/></svg> Add touch</button></div><div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px"><div class="row" style="justify-content:space-between;margin-bottom:10px"><div class="row"><span class="badge b-accent">Touch 1</span><span class="badge b-muted"><svg class="ic" style="width:12px;height:12px"><use href="#i-mail"/></svg> Email</span><span class="auton">Day 0</span></div><span class="x" style="color:var(--muted);cursor:pointer">✕</span></div>
+                    <input class="inp" style="margin-bottom:8px" value="Subject — Hi {first_name}" /><textarea class="inp" rows="2">Saw your work on {company}'s platform — open to a chat about a {title} role?</textarea></div>
+                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px"><div class="row" style="justify-content:space-between;margin-bottom:10px"><div class="row"><span class="badge b-accent">Touch 2</span><span class="badge b-muted"><svg class="ic" style="width:12px;height:12px"><use href="#i-mail"/></svg> Email</span><span class="auton">Day 3</span></div><span class="x" style="color:var(--muted);cursor:pointer">✕</span></div>
+                    <input class="inp" style="margin-bottom:8px" value="Subject — Following up, {first_name}" /><textarea class="inp" rows="2">Still keen to compare notes? Happy to work around your schedule.</textarea></div>
+                </div></section>
+              </div>
+              <div>
+                <section class="card" style="position:sticky;top:130px"><div class="card-h"><h3>Preview</h3><span class="s">Touch 1 · Jane Doe</span></div><div style="padding:18px">
+                  <div class="auton" style="margin-bottom:4px">To: jane@example.com</div>
+                  <div style="font-weight:600;font-size:14px;margin-bottom:10px">Hi Jane</div>
+                  <div style="font-size:13.5px;color:var(--ink-soft);line-height:1.6">Saw your work on Acme's platform — open to a chat about a Senior Backend Engineer role?</div>
+                  <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted)">2 touches · email · approve-each · ~140 matching contacts in this workspace</div>
+                </div></section>
+              </div>
+            </div>
+          </div>
+
+          <!-- CAMPAIGN DETAIL -->
+          <div class="ascreen" id="s-campaign">
+            <div class="ph"><div><div class="row" style="gap:9px"><h2>Senior Backend Engineer</h2><span class="badge b-accent"><span class="dot" style="background:var(--success)"></span>Active</span></div><div class="d">142 sourced · 12 awaiting approval · 3 replies · approve-each</div></div>
+              <div class="row"><button class="btn btn-outline btn-sm">Edit</button><button class="btn btn-outline btn-sm">Pause</button><button class="btn btn-primary btn-sm"><svg class="ic"><use href="#i-camp"/></svg> Rank contacts</button></div></div>
+            <div class="seg" style="margin-bottom:16px"><button class="on">Proposed · 18</button><button>Active · 34</button><button>Awaiting reply · 21</button><button>Handed off · 3</button></div>
+            <section class="card"><div class="card-h"><h3>Proposed candidates</h3><div class="row"><span class="s">ranked by fit</span><button class="btn btn-primary btn-sm">Approve selected · 3</button></div></div>
+              <table><thead><tr><th style="width:30px"></th><th>Candidate</th><th>Fit</th><th>Why</th><th></th></tr></thead><tbody>
+                <tr><td><input type="checkbox" checked /></td><td><div class="who"><div class="av">JD</div><div><div class="nm">Jane Doe</div><div class="sb">Senior Backend Engineer · Acme</div></div></div></td><td><span class="bar"><span style="width:96%"></span></span><span class="score">96</span></td><td style="font-size:12.5px;color:var(--muted)">matches python, go · title fits · EU</td><td><button class="btn btn-outline btn-sm">Approve</button></td></tr>
+                <tr><td><input type="checkbox" checked /></td><td><div class="who"><div class="av">ML</div><div><div class="nm">Marcus Lee</div><div class="sb">Staff Engineer · Globex</div></div></div></td><td><span class="bar"><span style="width:88%"></span></span><span class="score">88</span></td><td style="font-size:12.5px;color:var(--muted)">distributed systems · fintech</td><td><button class="btn btn-outline btn-sm">Approve</button></td></tr>
+                <tr><td><input type="checkbox" checked /></td><td><div class="who"><div class="av">PN</div><div><div class="nm">Priya Nair</div><div class="sb">Platform Engineer · Umbrella</div></div></div></td><td><span class="bar"><span style="width:81%"></span></span><span class="score">81</span></td><td style="font-size:12.5px;color:var(--muted)">python, k8s · ex-bank · Berlin</td><td><button class="btn btn-outline btn-sm">Approve</button></td></tr>
+                <tr><td><input type="checkbox" /></td><td><div class="who"><div class="av">DS</div><div><div class="nm">Diego Santos</div><div class="sb">Backend Engineer · Initech</div></div></div></td><td><span class="bar"><span style="width:64%"></span></span><span class="score">64</span></td><td style="font-size:12.5px;color:var(--muted)">limited overlap · no EU signal</td><td><button class="btn btn-outline btn-sm">Approve</button></td></tr>
+              </tbody></table>
+            </section>
+          </div>
+
+          <!-- APPROVALS -->
+          <div class="ascreen" id="s-approvals">
+            <div class="ph"><div><h2>Approvals</h2><div class="d">Every drafted message waits here until you approve it. The agent sends on your go.</div></div>
+              <div class="seg"><button class="on">All campaigns</button><button>Senior Backend Eng</button></div></div>
+            <div class="md">
+              <div class="mdlist">
+                <div class="li sel"><div class="av">JD</div><div><div class="nm">Jane Doe <span class="score" style="font-size:11px">96</span></div><div class="pre">Hi Jane · Senior Backend Engineer</div></div></div>
+                <div class="li"><div class="av">ML</div><div><div class="nm">Marcus Lee <span class="score" style="font-size:11px">88</span></div><div class="pre">Quick question, Marcus</div></div></div>
+                <div class="li"><div class="av">PN</div><div><div class="nm">Priya Nair <span class="score" style="font-size:11px">81</span></div><div class="pre">Hi Priya · Platform role</div></div></div>
+                <div class="li"><div class="av">RK</div><div><div class="nm">Raj Kumar <span class="score" style="font-size:11px">79</span></div><div class="pre">Following up, Raj</div></div></div>
+              </div>
+              <div class="card" style="display:flex;flex-direction:column">
+                <div class="card-h"><div class="who"><div class="av">JD</div><div><div class="nm">Jane Doe</div><div class="sb">Senior Backend Engineer · Acme · jane@example.com</div></div></div><span class="badge b-warn">Awaiting approval</span></div>
+                <div style="padding:22px;flex:1">
+                  <div class="auton" style="margin-bottom:4px">Campaign · Senior Backend Engineer · Touch 1 of 2</div>
+                  <input class="inp" style="font-weight:600;margin-bottom:12px" value="Hi Jane" />
+                  <textarea class="inp" rows="7">Hi Jane,
+
+Saw your work on Acme's payments platform — the move to event-sourced ledgers is exactly the kind of problem our team is taking on. Would you be open to a short chat this week about a senior backend role?
+
+— Avery</textarea>
+                  <div class="hint">Edit inline before approving. Edits are saved with the message.</div>
+                </div>
+                <div class="composer" style="justify-content:flex-end"><button class="btn btn-ghost btn-sm">Skip</button><button class="btn btn-outline btn-sm">Save draft</button><button class="btn btn-primary btn-sm"><svg class="ic"><use href="#i-send"/></svg> Approve &amp; send</button></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- INBOX -->
+          <div class="ascreen" id="s-inbox">
+            <div class="ph"><div><h2>Inbox</h2><div class="d">Replies land here. Hand interested candidates off to your team in a click.</div></div></div>
+            <div class="md">
+              <div class="mdlist">
+                <div class="li sel"><div class="av">PN</div><div style="flex:1"><div class="row" style="justify-content:space-between"><div class="nm">Priya Nair</div><span class="badge b-success" style="font-size:9px;padding:2px 6px">Interested</span></div><div class="pre">“let's find time next week”</div></div></div>
+                <div class="li"><div class="av">LK</div><div style="flex:1"><div class="row" style="justify-content:space-between"><div class="nm">Lena Park</div><span class="badge b-muted" style="font-size:9px;padding:2px 6px">Replied</span></div><div class="pre">“what's the comp range?”</div></div></div>
+                <div class="li"><div class="av">TB</div><div style="flex:1"><div class="row" style="justify-content:space-between"><div class="nm">Tom Becker</div><span class="badge b-danger" style="font-size:9px;padding:2px 6px">Opted out</span></div><div class="pre">“not looking right now”</div></div></div>
+              </div>
+              <div class="card thread">
+                <div class="card-h"><div class="who"><div class="av">PN</div><div><div class="nm">Priya Nair</div><div class="sb">Platform Engineer · Umbrella · Berlin</div></div></div><div class="row"><span class="badge b-success">Interested</span><button class="btn btn-primary btn-sm">Hand off</button></div></div>
+                <div class="thbody">
+                  <div class="msg out"><div class="mh">Sent · Mon 9:14 · Touch 1</div>Hi Priya, saw your platform work at Umbrella — open to a chat about a senior backend role at Acme?</div>
+                  <div class="msg in"><div class="mh">Priya · Tue 8:40</div>Interested — let's find time next week. What does the team look like?</div>
+                  <div class="msg out"><div class="mh">Draft · suggested by agent</div>Great! The team is 8 engineers under Dana… would Thursday 3pm CET work for a 30-min intro?</div>
+                </div>
+                <div class="composer"><input class="inp" placeholder="Write a reply…" style="flex:1" /><button class="btn btn-outline btn-sm">Use suggestion</button><button class="btn btn-primary btn-sm"><svg class="ic"><use href="#i-send"/></svg> Send</button></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PIPELINE -->
+          <div class="ascreen" id="s-pipeline">
+            <div class="ph"><div><h2>Pipeline</h2><div class="d">Every enrolled candidate by state. The worker advances them automatically; you act where a person is needed.</div></div>
+              <div class="seg"><button class="on">Senior Backend Eng</button><button>All campaigns</button></div></div>
+            <div class="board">
+              <div class="col"><div class="ch"><span>Proposed</span><span class="n">18</span></div>
+                <div class="ccard"><div class="nm">Jane Doe</div><div class="ti">Senior Backend · Acme</div><span class="bar"><span style="width:96%"></span></span><span class="score">96</span></div>
+                <div class="ccard"><div class="nm">Marcus Lee</div><div class="ti">Staff Eng · Globex</div><span class="bar"><span style="width:88%"></span></span><span class="score">88</span></div></div>
+              <div class="col"><div class="ch"><span>Awaiting approval</span><span class="n">12</span></div>
+                <div class="ccard"><div class="nm">Raj Kumar</div><div class="ti">Backend · Hooli</div><span class="badge b-warn" style="margin-top:4px">Touch 1 draft</span></div></div>
+              <div class="col"><div class="ch"><span>Scheduled</span><span class="n">6</span></div>
+                <div class="ccard"><div class="nm">Ana Ruiz</div><div class="ti">SRE · Globex</div><span class="badge b-accent" style="margin-top:4px">Sends 2pm</span></div></div>
+              <div class="col"><div class="ch"><span>Awaiting reply</span><span class="n">21</span></div>
+                <div class="ccard"><div class="nm">Lena Park</div><div class="ti">Data Eng · Hooli</div><span class="auton" style="display:block;margin-top:5px">Touch 2 · day 3</span></div></div>
+              <div class="col"><div class="ch"><span>Handed off</span><span class="n">3</span></div>
+                <div class="ccard"><div class="nm">Priya Nair</div><div class="ti">Platform · Umbrella</div><span class="badge b-success" style="margin-top:4px">Interested</span></div></div>
+            </div>
+          </div>
+
+          <!-- SETTINGS -->
+          <div class="ascreen" id="s-settings">
+            <div class="ph"><div><h2>Settings</h2><div class="d">Workspace connections, members, and how autonomously the agent operates.</div></div></div>
+            <div class="seg" style="margin-bottom:18px"><button class="on">Connections</button><button>Members</button><button>Autonomy</button><button>Workspace</button></div>
+            <div class="grid2">
+              <section class="card"><div class="card-h"><h3>Connections</h3></div><div style="padding:6px 18px 12px">
+                <div class="conn"><div class="ci" style="color:var(--accent-strong)"><svg class="ic"><use href="#i-shield"/></svg></div><div style="flex:1"><div class="cn">Identity · WorkOS SSO</div><div class="cd">Acme Talent · SAML · SCIM provisioning on</div></div><span class="badge b-success"><span class="dot" style="background:var(--success)"></span>Connected</span></div>
+                <div class="conn"><div class="ci" style="color:#C5402F"><svg class="ic"><use href="#i-mail"/></svg></div><div style="flex:1"><div class="cn">Email · Gmail</div><div class="cd">recruiter@acme.com · sending enabled</div></div><span class="badge b-success"><span class="dot" style="background:var(--success)"></span>Connected</span></div>
+                <div class="conn"><div class="ci" style="color:#0A66C2"><svg class="ic"><use href="#i-link"/></svg></div><div style="flex:1"><div class="cn">LinkedIn · per-recruiter</div><div class="cd">Connect via Unipile to send from your own account (~150/day)</div></div><button class="btn btn-outline btn-sm">Connect</button></div>
+              </div></section>
+              <section class="card"><div class="card-h"><h3>Sending controls</h3></div><div style="padding:18px">
+                <div class="field"><label class="label">Default autonomy</label><div class="seg"><button class="on">Approve each</button><button>Auto-send</button></div></div>
+                <div class="field"><label class="label">Business hours window</label><input class="inp" value="Mon–Fri · 08:00–18:00 · recipient local" /></div>
+                <div class="field" style="margin-bottom:0"><label class="label">Daily send cap (per recruiter)</label><input class="inp" value="120 email · 80 LinkedIn" /></div>
+              </div></section>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const CFG = {
+    signin:{type:"auth"}, workspace:{type:"auth"},
+    dashboard:{nav:"dashboard",eyebrow:"Workspace overview",title:"Good morning, Avery"},
+    contacts:{nav:"contacts",eyebrow:"Acme · Backend Hiring",title:"Contacts"},
+    campaigns:{nav:"campaigns",eyebrow:"Acme · Backend Hiring",title:"Campaigns"},
+    "new-campaign":{nav:"campaigns",eyebrow:"New campaign",title:"Create a campaign"},
+    campaign:{nav:"campaigns",eyebrow:"Campaign",title:"Senior Backend Engineer"},
+    approvals:{nav:"approvals",eyebrow:"Review queue",title:"Approvals"},
+    inbox:{nav:"inbox",eyebrow:"Conversations",title:"Inbox"},
+    pipeline:{nav:"pipeline",eyebrow:"Senior Backend Engineer",title:"Pipeline"},
+    settings:{nav:"settings",eyebrow:"Workspace",title:"Settings"},
+  };
+  const tabs = document.querySelectorAll(".tab");
+  function show(id, on){ const el=document.getElementById(id); if(el) el.classList.toggle("on", on); }
+  function set(key){
+    const cfg = CFG[key];
+    tabs.forEach(t => t.classList.toggle("on", t.dataset.s === key));
+    show("sc-signin", key==="signin"); show("sc-workspace", key==="workspace");
+    const app = cfg.type !== "auth"; show("sc-app", app);
+    if(app){
+      document.querySelectorAll(".ascreen").forEach(s => s.classList.toggle("on", s.id === "s-"+key));
+      document.getElementById("tb-eyebrow").textContent = cfg.eyebrow;
+      document.getElementById("tb-title").textContent = cfg.title;
+      document.querySelectorAll("#nav .nav").forEach(n => n.classList.toggle("active", n.dataset.nav === cfg.nav));
+    }
+  }
+  tabs.forEach(t => t.addEventListener("click", () => set(t.dataset.s)));
+  set("signin");
+</script>
+</body>
+</html>

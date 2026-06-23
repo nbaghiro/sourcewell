@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (strict, app + tests)
+        entry: bash -c 'cd backend && uv run mypy app tests'
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: no-explicit-any
+        name: no explicit Any
+        entry: bash -c 'cd backend && uv run pytest tests/test_no_any.py -q'
+        language: system
+        types: [python]
+        pass_filenames: false

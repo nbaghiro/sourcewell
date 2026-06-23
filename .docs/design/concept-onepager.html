@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --ink:#0a1820; --ink2:#0f2531; --panel:#102a36;
+    --paper:#e7e1d4; --bright:#f7f3ea; --muted:#86a0a8;
+    --teal:#5cc0b6; --brass:#cda86b; --hair:rgba(255,255,255,.10);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{ background:var(--ink); }
+  body{
+    width:1080px; margin:0 auto; position:relative; overflow:hidden;
+    color:var(--paper);
+    font-family:"Avenir Next","Helvetica Neue",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(1100px 600px at 12% -8%, rgba(92,192,182,.16), transparent 60%),
+      radial-gradient(900px 600px at 108% 18%, rgba(205,168,107,.10), transparent 55%),
+      radial-gradient(1200px 900px at 50% 120%, rgba(92,192,182,.07), transparent 60%),
+      var(--ink);
+  }
+  /* grain */
+  .grain{ position:absolute; inset:0; pointer-events:none; opacity:.05; z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  .wrap{ position:relative; z-index:1; padding:64px 80px 56px; }
+
+  /* brand line */
+  .brand{ display:flex; align-items:center; justify-content:space-between; padding-bottom:30px; border-bottom:1px solid var(--hair); }
+  .mark{ font-weight:700; font-size:18px; letter-spacing:.3px; color:var(--bright); }
+  .mark span{ color:var(--teal); }
+  .eyebrow{ font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); }
+
+  /* hero */
+  .hero{ padding:62px 0 54px; }
+  .kick{ font-size:11.5px; letter-spacing:4px; text-transform:uppercase; color:var(--teal); margin-bottom:26px; }
+  h1{ font-family:"Didot","Hoefler Text",Georgia,serif; font-weight:400; color:var(--bright);
+      font-size:82px; line-height:.98; letter-spacing:-.5px; }
+  h1 em{ font-style:italic; color:var(--brass); }
+  .sub{ margin-top:28px; max-width:600px; font-size:19px; line-height:1.6; color:var(--paper); opacity:.92; }
+  .sub b{ color:var(--bright); font-weight:600; }
+
+  /* section label */
+  .sl{ display:flex; align-items:baseline; gap:14px; margin:0 0 22px; }
+  .sl .n{ font-family:"SF Mono",Menlo,monospace; font-size:12px; color:var(--brass); letter-spacing:1px; }
+  .sl .t{ font-size:12px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); }
+  .sl::after{ content:""; flex:1; height:1px; background:var(--hair); margin-left:6px; }
+
+  section{ padding:30px 0; }
+
+  /* team masthead */
+  .team .row{ display:grid; grid-template-columns:34px 200px 1fr; align-items:center; gap:20px;
+              padding:16px 0; border-top:1px solid var(--hair); }
+  .team .row:last-child{ border-bottom:1px solid var(--hair); }
+  .team .ix{ font-family:"Didot","Hoefler Text",serif; font-size:18px; color:var(--teal); }
+  .team .nm{ font-family:"Didot","Hoefler Text",Georgia,serif; font-size:23px; color:var(--bright); }
+  .team .rl{ font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--brass); margin-top:3px; }
+  .team .dz{ font-size:15px; line-height:1.5; color:var(--paper); opacity:.85; }
+
+  /* moment / transcript */
+  .moment{ display:grid; grid-template-columns:1fr 290px; gap:40px; align-items:start; }
+  .panel{ background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01));
+          border:1px solid var(--hair); border-radius:14px; padding:26px 28px;
+          box-shadow:0 30px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05); }
+  .line{ display:grid; grid-template-columns:74px 1fr; gap:14px; padding:9px 0; font-size:15.5px; line-height:1.55; }
+  .line .sp{ font-size:11px; letter-spacing:1.5px; text-transform:uppercase; padding-top:3px; }
+  .sp.you{ color:var(--brass); } .sp.ops{ color:var(--bright); }
+  .sp.scout,.sp.quill{ color:var(--teal); }
+  .line .tx{ color:var(--paper); }
+  .line .tx b{ color:var(--bright); }
+  .act{ font-family:"SF Mono",Menlo,monospace; font-size:12px; color:var(--paper); opacity:.85;
+        padding:5px 0 5px 14px; border-left:2px solid var(--brass); margin:3px 0; }
+  .act .d{ color:var(--muted); }
+  .annote .a{ padding:14px 0; border-bottom:1px solid var(--hair); }
+  .annote .a:last-child{ border-bottom:none; }
+  .annote h4{ font-family:"Didot","Hoefler Text",serif; font-weight:400; font-size:19px; color:var(--bright); margin-bottom:7px; }
+  .annote p{ font-size:14px; line-height:1.6; color:var(--paper); opacity:.82; }
+
+  /* value props */
+  .vals{ display:grid; grid-template-columns:repeat(3,1fr); gap:36px; }
+  .val .vn{ font-family:"SF Mono",Menlo,monospace; font-size:12px; color:var(--brass); }
+  .val h3{ font-family:"Didot","Hoefler Text",Georgia,serif; font-weight:400; font-size:25px; color:var(--bright); margin:10px 0 10px; }
+  .val p{ font-size:14.5px; line-height:1.6; color:var(--paper); opacity:.84; }
+
+  /* how it works */
+  .how{ display:flex; align-items:center; gap:28px; padding:26px 30px; border:1px solid var(--hair); border-radius:14px;
+        background:rgba(255,255,255,.02); }
+  .flow{ display:flex; align-items:center; gap:12px; font-family:"SF Mono",Menlo,monospace; font-size:13px; color:var(--teal); white-space:nowrap; }
+  .flow .ar{ color:var(--muted); }
+  .flow .e{ color:var(--brass); }
+  .how p{ font-size:14.5px; line-height:1.6; color:var(--paper); opacity:.85; }
+  .how p b{ color:var(--bright); }
+
+  footer{ margin-top:48px; padding-top:24px; border-top:1px solid var(--hair);
+          display:flex; justify-content:space-between; align-items:center; font-size:11px; letter-spacing:2px;
+          text-transform:uppercase; color:var(--muted); }
+  footer .mark{ font-size:14px; letter-spacing:.3px; text-transform:none; }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="wrap">
+
+  <div class="brand">
+    <div class="mark">source<span>well</span></div>
+    <div class="eyebrow">Product Concept · Confidential</div>
+  </div>
+
+  <!-- hero -->
+  <div class="hero">
+    <div class="kick">The recruiting copilot, reimagined</div>
+    <h1>Run a team,<br>not a <em>tool</em>.</h1>
+    <p class="sub">Every recruiter gets a team of AI specialists that <b>source, vet, write, and follow up</b> around the clock. You don't operate software and stare at dashboards — you talk to your team, and they do the work.</p>
+  </div>
+
+  <!-- team -->
+  <section class="team">
+    <div class="sl"><span class="n">01</span><span class="t">The team</span></div>
+    <div class="row"><div class="ix">i</div><div><div class="nm">Ops</div><div class="rl">Manager</div></div><div class="dz">Sets direction, weighs the tradeoffs, keeps the plan on track, and reports back.</div></div>
+    <div class="row"><div class="ix">ii</div><div><div class="nm">Scout</div><div class="rl">Sourcing</div></div><div class="dz">Finds matching people across every source and keeps the pipeline full.</div></div>
+    <div class="row"><div class="ix">iii</div><div><div class="nm">Vera</div><div class="rl">Vetting</div></div><div class="dz">Scores fit against the role and surfaces the quality tradeoffs you should know.</div></div>
+    <div class="row"><div class="ix">iv</div><div><div class="nm">Quill</div><div class="rl">Outreach</div></div><div class="dz">Writes every message in your voice and follows up on its own schedule.</div></div>
+    <div class="row"><div class="ix">v</div><div><div class="nm">Echo</div><div class="rl">Replies</div></div><div class="dz">Watches the inbox, reads intent, and surfaces the conversations that matter.</div></div>
+  </section>
+
+  <!-- moment -->
+  <section>
+    <div class="sl"><span class="n">02</span><span class="t">You just ask</span></div>
+    <div class="moment">
+      <div class="panel">
+        <div class="line"><div class="sp you">You</div><div class="tx">Are we going to fill the Acme backend role in time?</div></div>
+        <div class="line"><div class="sp scout">Scout</div><div class="tx">Volume isn't the issue — <b>86 in the pipeline</b>, refilling weekly. Quality is: only <b>19 clear the bar</b>.</div></div>
+        <div class="line"><div class="sp quill">Quill</div><div class="tx">At our reply rate that's a <b>3–4 week fill</b>. The deadline is 3.</div></div>
+        <div class="line"><div class="sp ops">Ops</div><div class="tx">Bottleneck is quality supply. Relax fintech to a preference and add Staff-level → <b>~2-week fill</b>, small quality tradeoff. Run it?</div></div>
+        <div class="line"><div class="sp you">You</div><div class="tx">Do it — and tag the fintech ones.</div></div>
+        <div class="line"><div class="sp ops">Ops</div><div class="tx">Done.
+          <div class="act">adjust_criteria <span class="d">— fintech → preferred, +Staff · re-sourcing</span></div>
+          <div class="act">tag <span class="d">— "fintech-preferred" · prioritized in your queue</span></div>
+        </div></div>
+      </div>
+      <div class="annote">
+        <div class="a"><h4>Plain language in.</h4><p>No filters, no forms. Ask the way you'd ask a colleague.</p></div>
+        <div class="a"><h4>Grounded answers out.</h4><p>Every figure is pulled live from the system — never guessed.</p></div>
+        <div class="a"><h4>And it acts.</h4><p>Say the word and it's done — through the same governed, fully-audited engine as the app.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- why -->
+  <section>
+    <div class="sl"><span class="n">03</span><span class="t">Why it matters</span></div>
+    <div class="vals">
+      <div class="val"><div class="vn">→</div><h3>Always on</h3><p>The team works in the background — sourcing, following up, watching replies — so your pipeline moves whether or not you're online.</p></div>
+      <div class="val"><div class="vn">→</div><h3>Understand in seconds</h3><p>Ask "where are we?" and get the real picture — bottlenecks, tradeoffs, what needs you — not a dashboard to decode.</p></div>
+      <div class="val"><div class="vn">→</div><h3>Governed by design</h3><p>Every action runs the same services as the app: human approval, full audit trail, account safety. Built for regulated teams.</p></div>
+    </div>
+  </section>
+
+  <!-- how -->
+  <section>
+    <div class="sl"><span class="n">04</span><span class="t">How it works</span></div>
+    <div class="how">
+      <div class="flow">You <span class="ar">⇄</span> Team <span class="ar">⇄</span> Engine <span class="ar">→</span> <span class="e">State · Audit</span></div>
+      <p>A conversational team over an autonomous engine. The chat has <b>no special powers</b> — it calls the same governed services as the rest of the product. Recruiting today; the <b>same engine</b> runs sales, fundraising, and beyond.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="mark">source<span>well</span></div>
+    <div>Product Concept · 2026</div>
+  </footer>
+
+</div>
+</body>
+</html>

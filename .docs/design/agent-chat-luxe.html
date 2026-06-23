@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --ink:#0a1820; --paper:#e7e1d4; --bright:#f7f3ea; --muted:#86a0a8;
+    --teal:#5cc0b6; --brass:#cda86b; --hair:rgba(255,255,255,.10);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{ background:var(--ink); }
+  body{ width:1080px; margin:0 auto; position:relative; overflow:hidden; color:var(--paper);
+    font-family:"Avenir Next","Helvetica Neue",sans-serif; -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(1000px 560px at 10% -6%, rgba(92,192,182,.15), transparent 60%),
+      radial-gradient(820px 560px at 110% 16%, rgba(205,168,107,.10), transparent 55%),
+      radial-gradient(1100px 800px at 50% 118%, rgba(92,192,182,.06), transparent 60%),
+      var(--ink); }
+  .grain{ position:absolute; inset:0; pointer-events:none; opacity:.045; z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .z{ position:relative; z-index:1; }
+
+  /* top bar */
+  .top{ display:flex; align-items:center; gap:16px; padding:22px 36px; border-bottom:1px solid var(--hair); }
+  .mark{ font-weight:700; font-size:17px; color:var(--bright); letter-spacing:.2px; }
+  .mark span{ color:var(--teal); }
+  .bar{ width:1px; height:18px; background:var(--hair); }
+  .ctx{ font-size:13.5px; color:var(--muted); } .ctx b{ color:var(--paper); font-weight:600; }
+  .live{ margin-left:auto; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--teal); display:flex; align-items:center; gap:8px; }
+  .live i{ width:7px; height:7px; border-radius:50%; background:var(--teal); box-shadow:0 0 0 4px rgba(92,192,182,.18); }
+
+  /* body */
+  .body{ display:flex; }
+  .rail{ width:230px; border-right:1px solid var(--hair); padding:26px 24px; }
+  .rail .h{ font-size:10.5px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:18px; }
+  .tm{ display:flex; align-items:center; gap:12px; padding:11px 0; }
+  .av{ width:32px; height:32px; border-radius:50%; border:1.5px solid var(--pc, var(--teal));
+       color:var(--pc, var(--teal)); display:flex; align-items:center; justify-content:center;
+       font-family:"Didot","Hoefler Text",serif; font-size:14px; position:relative; flex:0 0 32px; }
+  .av i{ position:absolute; right:-1px; bottom:-1px; width:8px; height:8px; border-radius:50%;
+         background:var(--teal); border:2px solid var(--ink); }
+  .tm .nm{ font-family:"Didot","Hoefler Text",Georgia,serif; font-size:17px; color:var(--bright); line-height:1; }
+  .tm .rl{ font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--brass); margin-top:4px; }
+
+  /* thread */
+  .thread{ flex:1; padding:26px 40px 12px; }
+  .msg{ display:flex; gap:14px; margin:20px 0; }
+  .msg .head{ display:flex; align-items:baseline; gap:9px; margin-bottom:6px; }
+  .msg .who{ font-family:"Didot","Hoefler Text",Georgia,serif; font-size:17px; color:var(--pc); }
+  .msg .role{ font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--brass); }
+  .msg .time{ font-size:10.5px; color:var(--muted); }
+  .bub{ background:rgba(255,255,255,.022); border:1px solid var(--hair); border-left:2px solid var(--pc);
+        border-radius:3px 12px 12px 12px; padding:12px 16px; font-size:14.5px; line-height:1.6; max-width:640px; color:var(--paper); }
+  .bub b{ color:var(--bright); font-weight:600; } .bub i{ color:var(--bright); }
+
+  .act{ font-family:"SF Mono",Menlo,monospace; font-size:11.5px; color:var(--paper); opacity:.9;
+        padding:5px 0 5px 13px; border-left:2px solid var(--brass); margin:8px 0 2px; }
+  .act .d{ color:var(--muted); }
+
+  /* mentions */
+  .tag{ display:inline-block; padding:0 5px; border-radius:5px; font-weight:600; font-size:13.5px; }
+  .t-ops{ color:#c6d0d6; background:rgba(198,208,214,.13);} .t-scout{ color:var(--teal); background:rgba(92,192,182,.14);}
+  .t-vera{ color:#b4a7e8; background:rgba(180,167,232,.16);} .t-quill{ color:var(--brass); background:rgba(205,168,107,.15);}
+  .t-echo{ color:#8fcfac; background:rgba(143,207,172,.15);} .t-you{ color:var(--brass); background:rgba(205,168,107,.13);}
+
+  /* user message */
+  .me{ justify-content:flex-end; }
+  .me .col{ display:flex; flex-direction:column; align-items:flex-end; }
+  .me .lbl{ font-size:10.5px; letter-spacing:1.5px; text-transform:uppercase; color:var(--brass); margin:0 2px 6px 0; }
+  .me .bub{ background:rgba(205,168,107,.07); border:1px solid rgba(205,168,107,.22); border-left:none;
+            border-right:2px solid var(--brass); border-radius:12px 3px 12px 12px; color:var(--bright); max-width:520px; }
+
+  .react{ margin-top:10px; display:inline-flex; align-items:center; gap:7px; font-size:11px; letter-spacing:1px;
+          text-transform:uppercase; color:var(--muted); }
+  .react .d{ width:5px; height:5px; border-radius:50%; background:var(--brass); }
+
+  .confirm{ margin-top:13px; display:flex; gap:10px; }
+  .btn{ font-size:12px; font-weight:700; letter-spacing:.3px; border-radius:9px; padding:8px 16px; }
+  .btn.fill{ background:var(--teal); color:#06222b; }
+  .btn.ghost{ background:transparent; color:var(--muted); border:1px solid var(--hair); }
+
+  .now{ text-align:center; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin:26px 0 8px; position:relative; }
+  .now::before{ content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:var(--hair); }
+  .now span{ position:relative; background:var(--ink); padding:0 14px; }
+
+  .working{ display:flex; align-items:center; gap:9px; font-style:italic; font-size:12px; color:var(--muted); padding:14px 0 6px 46px; }
+  .working i{ width:7px; height:7px; border-radius:50%; background:var(--teal); box-shadow:0 0 0 4px rgba(92,192,182,.16); }
+
+  /* composer */
+  .comp{ display:flex; align-items:center; gap:14px; padding:20px 36px; border-top:1px solid var(--hair); }
+  .input{ flex:1; background:rgba(255,255,255,.03); border:1px solid var(--hair); border-radius:24px;
+          padding:13px 20px; color:var(--muted); font-size:13.5px; }
+  .send{ width:42px; height:42px; border-radius:50%; border:1px solid var(--teal); color:var(--teal);
+         display:flex; align-items:center; justify-content:center; font-size:17px; }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="z">
+
+  <div class="top">
+    <div class="mark">source<span>well</span></div>
+    <div class="bar"></div>
+    <div class="ctx"><b>Acme Bank</b> · Senior Backend Engineer</div>
+    <div class="live"><i></i>Search active</div>
+  </div>
+
+  <div class="body">
+    <!-- team rail -->
+    <div class="rail">
+      <div class="h">Your team</div>
+      <div class="tm" style="--pc:#c6d0d6"><div class="av">O<i></i></div><div><div class="nm">Ops</div><div class="rl">Manager</div></div></div>
+      <div class="tm" style="--pc:#5cc0b6"><div class="av">S<i></i></div><div><div class="nm">Scout</div><div class="rl">Sourcing</div></div></div>
+      <div class="tm" style="--pc:#b4a7e8"><div class="av">V<i></i></div><div><div class="nm">Vera</div><div class="rl">Vetting</div></div></div>
+      <div class="tm" style="--pc:#cda86b"><div class="av">Q<i></i></div><div><div class="nm">Quill</div><div class="rl">Outreach</div></div></div>
+      <div class="tm" style="--pc:#8fcfac"><div class="av">E<i></i></div><div><div class="nm">Echo</div><div class="rl">Replies</div></div></div>
+    </div>
+
+    <!-- thread -->
+    <div class="thread">
+
+      <div class="msg me"><div class="col">
+        <div class="lbl">You · 2:03</div>
+        <div class="bub">Quick gut check — are we on track to fill the Acme backend role by the 28th?</div>
+      </div></div>
+
+      <div class="msg" style="--pc:#c6d0d6">
+        <div class="av">O<i></i></div>
+        <div><div class="head"><span class="who">Ops</span><span class="role">Manager</span><span class="time">2:03</span></div>
+          <div class="bub">Short version: not at the current pace, but it's recoverable. Let me pull the team. <span class="tag t-scout">@Scout</span> <span class="tag t-vera">@Vera</span> <span class="tag t-quill">@Quill</span> — where do we stand?
+            <div class="act">convene <span class="d">· Scout, Vera, Quill</span></div>
+          </div></div>
+      </div>
+
+      <div class="msg" style="--pc:#5cc0b6">
+        <div class="av">S<i></i></div>
+        <div><div class="head"><span class="who">Scout</span><span class="role">Sourcing</span><span class="time">2:03</span></div>
+          <div class="bub"><span class="tag t-ops">@Ops</span> sourcing is healthy — <b>86 in the pipeline</b>, ~40 fresh a week. We aren't supply-constrained on volume.
+            <div class="act">sourcing_status <span class="d">· 86 in pipeline · refilling</span></div>
+          </div></div>
+      </div>
+
+      <div class="msg" style="--pc:#b4a7e8">
+        <div class="av">V<i></i></div>
+        <div><div class="head"><span class="who">Vera</span><span class="role">Vetting</span><span class="time">2:04</span></div>
+          <div class="bub">Volume, no. Quality, yes — only <b>19 of the 86 clear the bar</b>. The fintech-plus-distributed-systems requirement is narrow; genuinely strong supply is ~5 a week.
+            <div class="act">score_distribution <span class="d">· 19 / 86 ≥ 80</span></div>
+          </div></div>
+      </div>
+
+      <div class="msg" style="--pc:#cda86b">
+        <div class="av">Q<i></i></div>
+        <div><div class="head"><span class="who">Quill</span><span class="role">Outreach</span><span class="time">2:04</span></div>
+          <div class="bub">And outreach converts at 11%, so ~1.6 interested a week. That's a three-to-four week fill against a three-week deadline — <span class="tag t-you">@You</span> we're roughly a week light.
+            <div class="act">template_performance <span class="d">· 11% reply</span></div>
+          </div></div>
+      </div>
+
+      <div class="msg" style="--pc:#c6d0d6">
+        <div class="av">O<i></i></div>
+        <div><div class="head"><span class="who">Ops</span><span class="role">Manager</span><span class="time">2:05</span></div>
+          <div class="bub">So the constraint is <b>quality supply</b> — not volume, not messaging. <span class="tag t-scout">@Scout</span> if we make fintech a strong preference rather than a hard requirement, and open to Staff level — how much does that buy us?</div></div>
+      </div>
+
+      <div class="msg" style="--pc:#5cc0b6">
+        <div class="av">S<i></i></div>
+        <div><div class="head"><span class="who">Scout</span><span class="role">Sourcing</span><span class="time">2:05</span></div>
+          <div class="bub">Materially. Strong-per-week goes from <b>~5 to ~12</b>.</div></div>
+      </div>
+
+      <div class="msg" style="--pc:#b4a7e8">
+        <div class="av">V<i></i></div>
+        <div><div class="head"><span class="who">Vera</span><span class="role">Vetting</span><span class="time">2:05</span></div>
+          <div class="bub">Worth saying out loud: relaxing fintech brings in excellent generalists, but my projected on-site pass rate softens from <b>~70% to ~55%</b>. For this role I'd take the trade — flagging it for the record.
+            <div class="react"><span class="d"></span>Ops and You agreed</div>
+          </div></div>
+      </div>
+
+      <div class="msg" style="--pc:#c6d0d6">
+        <div class="av">O<i></i></div>
+        <div><div class="head"><span class="who">Ops</span><span class="role">Manager</span><span class="time">2:06</span></div>
+          <div class="bub">Agreed — the timeline justifies it. <span class="tag t-you">@You</span> recommendation: add Staff, fintech to weighted preference. Lands you ~3 interested a week — a <b>two-week fill</b> — with a modest quality trade. Want me to run it?</div></div>
+      </div>
+
+      <div class="msg me"><div class="col">
+        <div class="lbl">You · 2:06</div>
+        <div class="bub">Do it. But keep the fintech folks tagged so I can still prioritize them.</div>
+      </div></div>
+
+      <div class="msg" style="--pc:#c6d0d6">
+        <div class="av">O<i></i></div>
+        <div><div class="head"><span class="who">Ops</span><span class="role">Manager</span><span class="time">2:06</span></div>
+          <div class="bub">Done.
+            <div class="act">adjust_criteria <span class="d">· fintech → preferred, +Staff · re-sourcing</span></div>
+            <div class="act">tag <span class="d">· "fintech-preferred" · prioritized in your queue</span></div>
+            <span class="tag t-scout">@Scout</span> is re-sourcing and <span class="tag t-vera">@Vera</span> is re-scoring now. I'll bring you fresh throughput numbers in 48 hours.</div></div>
+      </div>
+
+      <div class="now"><span>just now</span></div>
+
+      <div class="msg" style="--pc:#8fcfac">
+        <div class="av">E<i></i></div>
+        <div><div class="head"><span class="who">Echo</span><span class="role">Replies</span><span class="time">just now</span></div>
+          <div class="bub">One worth interrupting for — <span class="tag t-you">@You</span> <b>Priya Nair</b>, a referral from Daniel Cho, just replied: <i>"open to a conversation."</i> She scores <b>91</b>, and a warm referral is the highest-intent lead in the pipeline. Send the personalized note now, or hold for your review?
+            <div class="confirm"><div class="btn fill">Send now</div><div class="btn ghost">Review first</div></div>
+          </div></div>
+      </div>
+
+      <div class="working"><i></i>Scout is re-sourcing · Vera is re-scoring…</div>
+
+    </div>
+  </div>
+
+  <div class="comp">
+    <div class="input">Message your team…</div>
+    <div class="send">↑</div>
+  </div>
+
+</div>
+</body>
+</html>
