@@ -11,9 +11,9 @@ from pydantic import BaseModel, Field
 
 from app.core import llm
 from app.deps import ContextDep, SessionDep, require_workspace
-from app.people.sourcing import people, usage
-from app.people.sourcing.adapters.base import PersonHit
-from app.people.sourcing.adapters.registry import build_providers_for_org
+from app.services.sourcing import people, usage
+from app.services.sourcing.adapters.base import PersonHit
+from app.services.sourcing.adapters.registry import build_providers_for_org
 from app.targeting import Targeting
 
 router = APIRouter(prefix="/people", tags=["people"])

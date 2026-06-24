@@ -28,7 +28,7 @@ from app.models import (
     UserStatus,
     Workspace,
 )
-from app.people.sourcing.adapters.registry import PROVIDER_CATALOG, ProviderSpec, build_one
+from app.services.sourcing.adapters.registry import PROVIDER_CATALOG, ProviderSpec, build_one
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

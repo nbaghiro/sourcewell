@@ -8,7 +8,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.types import JsonObject
-from app.people.sourcing.adapters.base import (
+from app.services.sourcing.adapters.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,

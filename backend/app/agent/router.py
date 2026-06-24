@@ -25,8 +25,8 @@ from app.models import (
     Workspace,
 )
 from app.people import suppression
-from app.people.sourcing import people
-from app.people.sourcing.adapters.registry import build_providers_for_org
+from app.services.sourcing import people
+from app.services.sourcing.adapters.registry import build_providers_for_org
 from app.targeting import Targeting
 
 router = APIRouter(prefix="/agent", tags=["agent"])

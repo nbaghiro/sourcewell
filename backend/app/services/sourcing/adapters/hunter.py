@@ -2,7 +2,7 @@
 
 import httpx
 
-from app.people.sourcing.adapters.base import (
+from app.services.sourcing.adapters.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,

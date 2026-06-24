@@ -5,7 +5,7 @@ score sensibly through `evaluate()`. This is the fallback the registry uses when
 key is configured, so the discovery flow is fully exercisable end-to-end without credentials.
 """
 
-from app.people.sourcing.adapters.base import (
+from app.services.sourcing.adapters.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,

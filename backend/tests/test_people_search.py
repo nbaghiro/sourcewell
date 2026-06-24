@@ -10,9 +10,9 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
-from app.people.sourcing import people, usage
-from app.people.sourcing.adapters.demo import DemoProvider
-from app.people.sourcing.adapters.registry import (
+from app.services.sourcing import people, usage
+from app.services.sourcing.adapters.demo import DemoProvider
+from app.services.sourcing.adapters.registry import (
     PROVIDER_CATALOG,
     build_providers,
     build_providers_for_org,

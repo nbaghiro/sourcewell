@@ -1,13 +1,13 @@
 """AI agents fall back to deterministic behavior when no Claude key is configured (the test env)."""
 
 from app.models import Contact
-from app.people.sourcing.agents import evaluate_llm
 from app.services.outreach.messaging import (
     classify_reply_intent,
     draft_message,
     draft_reply_text,
     summarize_thread,
 )
+from app.services.sourcing.agents import evaluate_llm
 
 
 def _contact() -> Contact:
