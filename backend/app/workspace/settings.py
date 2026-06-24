@@ -95,13 +95,17 @@ def _dump_connection(c: Connection, email: str) -> ConnectionOut:
 @router.get("/members", response_model=list[MemberOut])
 async def members(ctx: ContextDep, session: SessionDep) -> list[MemberOut]:
     rows = (
-        await session.execute(
-            select(Membership, User)
-            .join(User, Membership.user_id == User.id)
-            .where(Membership.organization_id == ctx.org_id)
-            .order_by(User.created_at)
+        (
+            await session.execute(
+                select(Membership, User)
+                .join(User, Membership.user_id == User.id)
+                .where(Membership.organization_id == ctx.org_id)
+                .order_by(User.created_at)
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     return [
         MemberOut(
             id=u.id,
@@ -117,12 +121,16 @@ async def members(ctx: ContextDep, session: SessionDep) -> list[MemberOut]:
 @router.get("/connections", response_model=list[ConnectionOut])
 async def connections(ctx: ContextDep, session: SessionDep) -> list[ConnectionOut]:
     rows = (
-        await session.execute(
-            select(Connection, User)
-            .join(User, Connection.user_id == User.id)
-            .where(Connection.organization_id == ctx.org_id)
+        (
+            await session.execute(
+                select(Connection, User)
+                .join(User, Connection.user_id == User.id)
+                .where(Connection.organization_id == ctx.org_id)
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     return [_dump_connection(c, u.email) for c, u in rows]
 
 

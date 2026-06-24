@@ -110,7 +110,9 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
                 )
                 .group_by(Message.channel)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     repl_by_ch: dict[Channel, int] = {
         ch: cnt
@@ -120,7 +122,9 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
                 .where(Message.workspace_id == ws, Message.direction == MessageDirection.inbound)
                 .group_by(Message.channel)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     channels = [
         ChannelStatOut(
@@ -140,7 +144,9 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
                 .where(Enrollment.workspace_id == ws)
                 .group_by(Enrollment.campaign_id)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     replied_by_c: dict[str, int] = {
         cid: cnt
@@ -152,7 +158,9 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
                 .where(Message.workspace_id == ws, Message.direction == MessageDirection.inbound)
                 .group_by(Enrollment.campaign_id)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     handed_by_c: dict[str, int] = {
         cid: cnt
@@ -164,7 +172,9 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
                 )
                 .group_by(Enrollment.campaign_id)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     campaign_rows = (
         (
@@ -189,16 +199,20 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
     ]
 
     msg_rows = (
-        await session.execute(
-            select(Message, Contact, Campaign)
-            .join(Enrollment, Message.enrollment_id == Enrollment.id)
-            .join(Contact, Enrollment.contact_id == Contact.id)
-            .join(Campaign, Enrollment.campaign_id == Campaign.id)
-            .where(Message.workspace_id == ws, Message.status != MessageStatus.draft)
-            .order_by(Message.created_at.desc())
-            .limit(24)
+        (
+            await session.execute(
+                select(Message, Contact, Campaign)
+                .join(Enrollment, Message.enrollment_id == Enrollment.id)
+                .join(Contact, Enrollment.contact_id == Contact.id)
+                .join(Campaign, Enrollment.campaign_id == Campaign.id)
+                .where(Message.workspace_id == ws, Message.status != MessageStatus.draft)
+                .order_by(Message.created_at.desc())
+                .limit(24)
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     activity = [
         ActivityOut(
             id=m.id,

@@ -87,7 +87,7 @@ async def list_for_campaign(
     if state is not None:
         stmt = stmt.where(Enrollment.state == state)
     stmt = stmt.order_by(Enrollment.score.desc())
-    return list((await session.execute(stmt)).scalars().all())
+    return list[Enrollment]((await session.execute(stmt)).scalars().all())
 
 
 async def tick(session: AsyncSession, *, enrollment: Enrollment, now: datetime) -> None:

@@ -360,7 +360,7 @@ async def list_enrollments(
     )
     if state is not None:
         stmt = stmt.where(Enrollment.state == state)
-    rows = (await session.execute(stmt)).all()
+    rows = (await session.execute(stmt)).tuples().all()
     return [
         EnrollmentRowOut(
             **dump_enrollment(e).model_dump(),

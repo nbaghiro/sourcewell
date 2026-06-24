@@ -113,16 +113,20 @@ async def activity(ctx: ContextDep, session: SessionDep, limit: int = 40) -> lis
 
     # Messages → drafted / scheduled / sent / reply
     msg_rows = (
-        await session.execute(
-            select(Message, Contact, Campaign)
-            .join(Enrollment, Message.enrollment_id == Enrollment.id)
-            .join(Contact, Enrollment.contact_id == Contact.id)
-            .join(Campaign, Enrollment.campaign_id == Campaign.id)
-            .where(Message.workspace_id == ws)
-            .order_by(Message.created_at.desc())
-            .limit(limit * 2)
+        (
+            await session.execute(
+                select(Message, Contact, Campaign)
+                .join(Enrollment, Message.enrollment_id == Enrollment.id)
+                .join(Contact, Enrollment.contact_id == Contact.id)
+                .join(Campaign, Enrollment.campaign_id == Campaign.id)
+                .where(Message.workspace_id == ws)
+                .order_by(Message.created_at.desc())
+                .limit(limit * 2)
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     for m, ct, cam in msg_rows:
         ref_c, ref_cam = _contact_ref(ct), Ref(id=cam.id, name=cam.name)
         if m.direction == MessageDirection.inbound:
@@ -192,15 +196,19 @@ async def activity(ctx: ContextDep, session: SessionDep, limit: int = 40) -> lis
 
     # Enrollments → sourced (proposed) + terminal lifecycle
     enr_rows = (
-        await session.execute(
-            select(Enrollment, Contact, Campaign)
-            .join(Contact, Enrollment.contact_id == Contact.id)
-            .join(Campaign, Enrollment.campaign_id == Campaign.id)
-            .where(Enrollment.workspace_id == ws)
-            .order_by(Enrollment.updated_at.desc())
-            .limit(limit * 2)
+        (
+            await session.execute(
+                select(Enrollment, Contact, Campaign)
+                .join(Contact, Enrollment.contact_id == Contact.id)
+                .join(Campaign, Enrollment.campaign_id == Campaign.id)
+                .where(Enrollment.workspace_id == ws)
+                .order_by(Enrollment.updated_at.desc())
+                .limit(limit * 2)
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     terminal = {
         EnrollmentState.handed_off: ("handed_off", "Handed {n} to you — positive reply"),
         EnrollmentState.opted_out: ("opted_out", "{n} opted out — stopped"),
@@ -266,7 +274,9 @@ async def state(ctx: ContextDep, session: SessionDep) -> AgentState:
                 .where(Enrollment.workspace_id == ws)
                 .group_by(Enrollment.state)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     counts = {s.value: int(by_state.get(s.value, 0)) for s in EnrollmentState}
 
@@ -341,7 +351,9 @@ async def state(ctx: ContextDep, session: SessionDep) -> AgentState:
                 .where(Enrollment.workspace_id == ws, Enrollment.state.in_(_IN_SEQUENCE))
                 .group_by(Enrollment.campaign_id)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     campaigns = [
         AgentCampaign(

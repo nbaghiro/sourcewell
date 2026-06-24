@@ -55,14 +55,18 @@ async def audit_log(
     limit: Annotated[int, Query(le=200)] = 50,
 ) -> list[AuditEventOut]:
     rows = (
-        await session.execute(
-            select(AuditEvent, User)
-            .outerjoin(User, AuditEvent.actor_user_id == User.id)
-            .where(AuditEvent.organization_id == ctx.org_id)
-            .order_by(AuditEvent.created_at.desc())
-            .limit(limit)
+        (
+            await session.execute(
+                select(AuditEvent, User)
+                .outerjoin(User, AuditEvent.actor_user_id == User.id)
+                .where(AuditEvent.organization_id == ctx.org_id)
+                .order_by(AuditEvent.created_at.desc())
+                .limit(limit)
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     return [
         AuditEventOut(
             id=e.id,

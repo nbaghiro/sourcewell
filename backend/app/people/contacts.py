@@ -337,13 +337,17 @@ async def get_contact(contact_id: str, ctx: ContextDep, session: SessionDep) -> 
     if contact is None or contact.workspace_id != ws:
         raise HTTPException(status_code=404, detail="contact not found")
     rows = (
-        await session.execute(
-            select(Enrollment, Campaign)
-            .join(Campaign, Enrollment.campaign_id == Campaign.id)
-            .where(Enrollment.contact_id == contact_id)
-            .order_by(Enrollment.created_at.desc())
+        (
+            await session.execute(
+                select(Enrollment, Campaign)
+                .join(Campaign, Enrollment.campaign_id == Campaign.id)
+                .where(Enrollment.contact_id == contact_id)
+                .order_by(Enrollment.created_at.desc())
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     enrollments = [
         ContactEnrollmentOut(
             id=e.id,
@@ -358,18 +362,22 @@ async def get_contact(contact_id: str, ctx: ContextDep, session: SessionDep) -> 
 
     # Activity timeline: every real message (sent + received) plus queued (scheduled) next-sends.
     msg_rows = (
-        await session.execute(
-            select(Message, Campaign)
-            .join(Enrollment, Message.enrollment_id == Enrollment.id)
-            .join(Campaign, Enrollment.campaign_id == Campaign.id)
-            .where(
-                Enrollment.contact_id == contact_id,
-                (Message.status != MessageStatus.draft) | (Message.scheduled_at.isnot(None)),
+        (
+            await session.execute(
+                select(Message, Campaign)
+                .join(Enrollment, Message.enrollment_id == Enrollment.id)
+                .join(Campaign, Enrollment.campaign_id == Campaign.id)
+                .where(
+                    Enrollment.contact_id == contact_id,
+                    (Message.status != MessageStatus.draft) | (Message.scheduled_at.isnot(None)),
+                )
+                .order_by(Message.created_at.desc())
+                .limit(40)
             )
-            .order_by(Message.created_at.desc())
-            .limit(40)
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     activity = [
         ContactActivityOut(
             id=m.id,

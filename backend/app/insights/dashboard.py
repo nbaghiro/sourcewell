@@ -106,7 +106,9 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
                 .where(Enrollment.workspace_id == ws)
                 .group_by(Enrollment.campaign_id)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     awaiting_by: dict[str, int] = {
         cid: cnt
@@ -119,7 +121,9 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
                 )
                 .group_by(Enrollment.campaign_id)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     replies_by: dict[str, int] = {
         cid: cnt
@@ -131,7 +135,9 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
                 .where(Message.workspace_id == ws, Message.direction == MessageDirection.inbound)
                 .group_by(Enrollment.campaign_id)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     }
     campaign_rows = (
         (
@@ -175,7 +181,9 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
                 .order_by(Enrollment.score.desc())
                 .limit(6)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     ]
 
     # Recent inbound replies.
@@ -194,7 +202,9 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
                 .order_by(Message.created_at.desc())
                 .limit(6)
             )
-        ).all()
+        )
+        .tuples()
+        .all()
     ]
 
     return DashboardSummary(

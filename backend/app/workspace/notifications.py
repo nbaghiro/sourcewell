@@ -48,15 +48,19 @@ async def notifications(ctx: ContextDep, session: SessionDep) -> NotificationsOu
 
     # Recent inbound replies.
     reply_rows = (
-        await session.execute(
-            select(Message, Contact)
-            .join(Enrollment, Message.enrollment_id == Enrollment.id)
-            .join(Contact, Enrollment.contact_id == Contact.id)
-            .where(Message.workspace_id == ws, Message.direction == MessageDirection.inbound)
-            .order_by(Message.created_at.desc())
-            .limit(8)
+        (
+            await session.execute(
+                select(Message, Contact)
+                .join(Enrollment, Message.enrollment_id == Enrollment.id)
+                .join(Contact, Enrollment.contact_id == Contact.id)
+                .where(Message.workspace_id == ws, Message.direction == MessageDirection.inbound)
+                .order_by(Message.created_at.desc())
+                .limit(8)
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     for m, c in reply_rows:
         items.append(
             NotificationItem(
@@ -73,14 +77,20 @@ async def notifications(ctx: ContextDep, session: SessionDep) -> NotificationsOu
 
     # Recent hand-offs.
     handoff_rows = (
-        await session.execute(
-            select(Enrollment, Contact)
-            .join(Contact, Enrollment.contact_id == Contact.id)
-            .where(Enrollment.workspace_id == ws, Enrollment.state == EnrollmentState.handed_off)
-            .order_by(Enrollment.updated_at.desc())
-            .limit(4)
+        (
+            await session.execute(
+                select(Enrollment, Contact)
+                .join(Contact, Enrollment.contact_id == Contact.id)
+                .where(
+                    Enrollment.workspace_id == ws, Enrollment.state == EnrollmentState.handed_off
+                )
+                .order_by(Enrollment.updated_at.desc())
+                .limit(4)
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     for e, c in handoff_rows:
         items.append(
             NotificationItem(

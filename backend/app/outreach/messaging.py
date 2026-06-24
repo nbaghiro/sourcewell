@@ -532,14 +532,18 @@ class ReplyWebhookOut(BaseModel):
 async def list_approvals(ctx: ContextDep, session: SessionDep) -> list[ApprovalOut]:
     ws = require_workspace(ctx)
     rows = (
-        await session.execute(
-            select(Message, Enrollment, Contact)
-            .join(Enrollment, Message.enrollment_id == Enrollment.id)
-            .join(Contact, Enrollment.contact_id == Contact.id)
-            .where(Message.workspace_id == ws, Message.status == MessageStatus.draft)
-            .order_by(Enrollment.score.desc())
+        (
+            await session.execute(
+                select(Message, Enrollment, Contact)
+                .join(Enrollment, Message.enrollment_id == Enrollment.id)
+                .join(Contact, Enrollment.contact_id == Contact.id)
+                .where(Message.workspace_id == ws, Message.status == MessageStatus.draft)
+                .order_by(Enrollment.score.desc())
+            )
         )
-    ).all()
+        .tuples()
+        .all()
+    )
     return [
         ApprovalOut(
             **dump_message(m).model_dump(),

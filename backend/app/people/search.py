@@ -75,18 +75,22 @@ async def search(q: str, ctx: ContextDep, session: SessionDep) -> SearchOut:
         .all()
     )
     convo_rows = (
-        await session.execute(
-            select(Enrollment, Contact)
-            .join(Contact, Enrollment.contact_id == Contact.id)
-            .where(
-                Enrollment.workspace_id == ws,
-                func.lower(Contact.full_name).like(like),
-                exists().where(Message.enrollment_id == Enrollment.id),
+        (
+            await session.execute(
+                select(Enrollment, Contact)
+                .join(Contact, Enrollment.contact_id == Contact.id)
+                .where(
+                    Enrollment.workspace_id == ws,
+                    func.lower(Contact.full_name).like(like),
+                    exists().where(Message.enrollment_id == Enrollment.id),
+                )
+                .order_by(Enrollment.score.desc())
+                .limit(6)
             )
-            .order_by(Enrollment.score.desc())
-            .limit(6)
         )
-    ).all()
+        .tuples()
+        .all()
+    )
 
     return SearchOut(
         contacts=[
