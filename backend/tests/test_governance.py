@@ -21,9 +21,9 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
-from app.people import suppression
 from app.services.outreach import enrollment as enr_service
 from app.services.outreach import governor
+from app.services.people import suppression
 
 
 async def _setup(

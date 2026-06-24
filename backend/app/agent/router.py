@@ -24,7 +24,7 @@ from app.models import (
     MessageStatus,
     Workspace,
 )
-from app.people import suppression
+from app.services.people import suppression
 from app.services.sourcing import people
 from app.services.sourcing.adapters.registry import build_providers_for_org
 from app.targeting import Targeting

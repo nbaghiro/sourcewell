@@ -29,7 +29,7 @@ from app.models import (
     SuppressionReason,
     Workspace,
 )
-from app.people import suppression
+from app.services.people import suppression
 
 # --- Channels (email via SMTP → Mailpit; LinkedIn via Unipile) ---------------
 #
