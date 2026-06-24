@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.signing import sign, verify
+from app.core.crypto import sign, verify
 from app.models import Suppression, SuppressionReason
 
 

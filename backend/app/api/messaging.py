@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.crypto import verify_hmac
 from app.core.db import get_session
-from app.core.signing import verify_hmac
 from app.core.types import JsonObject
 from app.deps import ContextDep, SessionDep, require_workspace
 from app.models import (

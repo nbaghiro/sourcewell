@@ -6,7 +6,7 @@ import hmac
 import pytest
 from fastapi import HTTPException
 
-from app.core import signing
+from app.core import crypto
 from app.deps import TenantContext, require_org_admin, require_workspace
 from app.services.people import suppression
 
@@ -37,10 +37,10 @@ def test_require_workspace_needs_header() -> None:
 
 
 def test_signing_roundtrip_and_tamper() -> None:
-    token = signing.sign("org_1|a@b.com")
-    assert signing.verify(token) == "org_1|a@b.com"
-    assert signing.verify(token + "x") is None
-    assert signing.verify("garbage") is None
+    token = crypto.sign("org_1|a@b.com")
+    assert crypto.verify(token) == "org_1|a@b.com"
+    assert crypto.verify(token + "x") is None
+    assert crypto.verify("garbage") is None
 
 
 def test_unsubscribe_token_roundtrip() -> None:
@@ -52,7 +52,7 @@ def test_unsubscribe_token_roundtrip() -> None:
 def test_hmac_verify() -> None:
     body = b'{"from":"x@y.com","text":"hi"}'
     sig = hmac.new(b"secret", body, hashlib.sha256).hexdigest()
-    assert signing.verify_hmac(body, sig, secret="secret")
-    assert signing.verify_hmac(body, f"sha256={sig}", secret="secret")
-    assert not signing.verify_hmac(body, "deadbeef", secret="secret")
-    assert not signing.verify_hmac(body, None, secret="secret")
+    assert crypto.verify_hmac(body, sig, secret="secret")
+    assert crypto.verify_hmac(body, f"sha256={sig}", secret="secret")
+    assert not crypto.verify_hmac(body, "deadbeef", secret="secret")
+    assert not crypto.verify_hmac(body, None, secret="secret")
