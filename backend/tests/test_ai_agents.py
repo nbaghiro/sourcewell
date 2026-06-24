@@ -7,7 +7,7 @@ from app.services.outreach.messaging import (
     draft_reply_text,
     summarize_thread,
 )
-from app.services.sourcing.agents import evaluate_llm
+from app.services.people.scoring import evaluate_llm
 
 
 def _contact() -> Contact:

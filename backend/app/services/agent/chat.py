@@ -15,9 +15,8 @@ from app.core.types import JsonObject
 from app.deps import TenantContext, require_workspace
 from app.models import Contact, Enrollment
 from app.services.agent.state import StateData, aggregate_state
-from app.services.people import suppression
-from app.services.sourcing import people
-from app.services.sourcing.adapters.registry import build_providers_for_org
+from app.services.people import discovery, suppression
+from app.services.people.adapters.registry import build_providers_for_org
 from app.targeting import Targeting
 
 _INTENTS = {"status", "explain", "find", "help"}
@@ -137,7 +136,7 @@ async def handle_chat(session: AsyncSession, ctx: TenantContext, *, message: str
     if intent == "find":
         providers = await build_providers_for_org(session, ctx.org_id)
         targeting = Targeting(keywords=message)
-        hits = await people.search_people(providers, targeting, limit=15)
+        hits = await discovery.search_people(providers, targeting, limit=15)
         top = ", ".join(h.full_name for h in hits[:3])
         return ChatResult(
             kind="find",

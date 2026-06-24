@@ -15,12 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.crypto import unseal
 from app.models import ProviderCredential
-from app.services.sourcing.adapters.apollo import ApolloProvider
-from app.services.sourcing.adapters.base import SourceProvider
-from app.services.sourcing.adapters.demo import DemoProvider
-from app.services.sourcing.adapters.hunter import HunterProvider
-from app.services.sourcing.adapters.pdl import PDLProvider
-from app.services.sourcing.adapters.unipile import UnipileProvider
+from app.services.people.adapters.apollo import ApolloProvider
+from app.services.people.adapters.base import SourceProvider
+from app.services.people.adapters.demo import DemoProvider
+from app.services.people.adapters.hunter import HunterProvider
+from app.services.people.adapters.pdl import PDLProvider
+from app.services.people.adapters.unipile import UnipileProvider
 
 
 @dataclass(frozen=True)

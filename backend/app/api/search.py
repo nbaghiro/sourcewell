@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.deps import ContextDep, SessionDep, require_workspace
-from app.services.people.search import search_workspace
+from app.services.insights.search import search_workspace
 
 router = APIRouter(prefix="/search", tags=["search"])
 

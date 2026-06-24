@@ -31,7 +31,7 @@ from app.models import (
     Workspace,
 )
 from app.services.insights import audit
-from app.services.sourcing.adapters.registry import PROVIDER_CATALOG, build_one
+from app.services.people.adapters.registry import PROVIDER_CATALOG, build_one
 from app.services.workspace.settings import (
     ConnectionOut,
     DataProviderOut,

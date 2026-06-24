@@ -3,7 +3,7 @@
 import httpx
 
 from app.core.types import JsonObject
-from app.services.sourcing.adapters.base import (
+from app.services.people.adapters.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,

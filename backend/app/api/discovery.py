@@ -11,9 +11,9 @@ from pydantic import BaseModel, Field
 
 from app.core import llm
 from app.deps import ContextDep, SessionDep, require_workspace
-from app.services.sourcing import people, usage
-from app.services.sourcing.adapters.base import PersonHit
-from app.services.sourcing.adapters.registry import build_providers_for_org
+from app.services.people import discovery, usage
+from app.services.people.adapters.base import PersonHit
+from app.services.people.adapters.registry import build_providers_for_org
 from app.targeting import Targeting
 
 router = APIRouter(prefix="/people", tags=["people"])
@@ -60,7 +60,7 @@ async def search_people(
     providers = await build_providers_for_org(session, ctx.org_id)
     if body.providers:
         providers = [p for p in providers if p.key in body.providers]
-    results = await people.search_people(providers, body, limit=body.limit)
+    results = await discovery.search_people(providers, body, limit=body.limit)
     used = [p.key for p in providers if p.capabilities.search]
     for provider_key in used:
         await usage.record(
@@ -120,8 +120,8 @@ class ImportOut(BaseModel):
 async def import_people(body: ImportIn, ctx: ContextDep, session: SessionDep) -> ImportOut:
     ws = require_workspace(ctx)
     providers = await build_providers_for_org(session, ctx.org_id)
-    hits = await people.verify_hits(providers, body.hits)
-    created = await people.import_hits(session, workspace_id=ws, hits=hits)
+    hits = await discovery.verify_hits(providers, body.hits)
+    created = await discovery.import_hits(session, workspace_id=ws, hits=hits)
     for provider_key, n in Counter(c.source for c in created).items():
         await usage.record(
             session, organization_id=ctx.org_id, provider=provider_key, kind="import", count=n
@@ -164,7 +164,7 @@ class EnrichOut(BaseModel):
 async def enrich_person(body: EnrichIn, ctx: ContextDep, session: SessionDep) -> EnrichOut:
     require_workspace(ctx)
     providers = await build_providers_for_org(session, ctx.org_id)
-    hit = await people.enrich_ref(
+    hit = await discovery.enrich_ref(
         providers,
         email=body.email,
         linkedin_url=body.linkedin_url,
