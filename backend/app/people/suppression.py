@@ -11,9 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.db import get_session
 from app.core.signing import sign, verify
+from app.deps import ContextDep, SessionDep, require_org_admin
 from app.insights import audit
 from app.models import Suppression, SuppressionReason
-from app.workspace.tenancy import ContextDep, SessionDep, require_org_admin
 
 router = APIRouter(tags=["suppression"])
 

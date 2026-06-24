@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.types import JsonList
+from app.deps import ContextDep, SessionDep, require_workspace
 from app.insights import audit
 from app.models import (
     AutonomyMode,
@@ -39,7 +40,6 @@ from app.models import (
 from app.outreach.messaging import draft_message, send_via_channel
 from app.people import suppression
 from app.runtime import governor
-from app.workspace.tenancy import ContextDep, SessionDep, require_workspace
 
 router = APIRouter(prefix="/enrollments", tags=["enrollments"])
 

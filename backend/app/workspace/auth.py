@@ -18,6 +18,7 @@ from workos.user_management import AuthenticateResponse
 
 from app.core.config import get_settings
 from app.core.db import new_id
+from app.deps import ContextDep, SessionDep
 from app.models import (
     Membership,
     MembershipRole,
@@ -27,7 +28,6 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
-from app.workspace.tenancy import ContextDep, SessionDep
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

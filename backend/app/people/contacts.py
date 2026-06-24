@@ -8,6 +8,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.types import JsonList
+from app.deps import ContextDep, SessionDep, require_workspace
 from app.insights import audit
 from app.models import (
     Campaign,
@@ -19,7 +20,6 @@ from app.models import (
     SuppressionReason,
 )
 from app.people import suppression
-from app.workspace.tenancy import ContextDep, SessionDep, require_workspace
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 

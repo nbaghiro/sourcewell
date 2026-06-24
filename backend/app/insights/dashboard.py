@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import Select, func, select
 
+from app.deps import ContextDep, SessionDep, require_workspace
 from app.models import (
     Campaign,
     CampaignStatus,
@@ -16,7 +17,6 @@ from app.models import (
     MessageDirection,
     MessageStatus,
 )
-from app.workspace.tenancy import ContextDep, SessionDep, require_workspace
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 

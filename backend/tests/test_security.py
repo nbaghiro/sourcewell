@@ -7,8 +7,8 @@ import pytest
 from fastapi import HTTPException
 
 from app.core import signing
+from app.deps import TenantContext, require_org_admin, require_workspace
 from app.people import suppression
-from app.workspace.tenancy import TenantContext, require_org_admin, require_workspace
 
 
 def _ctx(*, is_admin: bool, workspace: str | None = "w") -> TenantContext:

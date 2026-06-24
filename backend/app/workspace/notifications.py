@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from app.deps import ContextDep, SessionDep, require_workspace
 from app.models import (
     Contact,
     Enrollment,
@@ -15,7 +16,6 @@ from app.models import (
     MessageStatus,
     User,
 )
-from app.workspace.tenancy import ContextDep, SessionDep, require_workspace
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 

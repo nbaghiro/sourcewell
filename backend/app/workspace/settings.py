@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.core.crypto import seal, unseal
 from app.core.types import JsonObject
+from app.deps import ContextDep, SessionDep, require_org_admin, require_workspace
 from app.insights import audit
 from app.models import (
     Campaign,
@@ -28,7 +29,6 @@ from app.models import (
     Workspace,
 )
 from app.people.sourcing.adapters.registry import PROVIDER_CATALOG, ProviderSpec, build_one
-from app.workspace.tenancy import ContextDep, SessionDep, require_org_admin, require_workspace
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

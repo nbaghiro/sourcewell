@@ -13,6 +13,7 @@ from sqlalchemy import Select, func, select
 
 from app.core import llm
 from app.core.types import JsonObject
+from app.deps import ContextDep, SessionDep, require_workspace
 from app.models import (
     Campaign,
     Contact,
@@ -27,7 +28,6 @@ from app.people import suppression
 from app.people.sourcing import people
 from app.people.sourcing.adapters.registry import build_providers_for_org
 from app.targeting import Targeting
-from app.workspace.tenancy import ContextDep, SessionDep, require_workspace
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 

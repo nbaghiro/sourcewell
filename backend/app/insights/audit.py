@@ -7,8 +7,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.deps import ContextDep, SessionDep, TenantContext
 from app.models import AuditEvent, User
-from app.workspace.tenancy import ContextDep, SessionDep, TenantContext
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 

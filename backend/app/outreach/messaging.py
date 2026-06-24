@@ -23,6 +23,7 @@ from app.core.config import get_settings
 from app.core.db import get_session
 from app.core.signing import verify_hmac
 from app.core.types import JsonObject
+from app.deps import ContextDep, SessionDep, require_workspace
 from app.insights import audit
 from app.models import (
     Campaign,
@@ -37,7 +38,6 @@ from app.models import (
     Workspace,
 )
 from app.people import suppression
-from app.workspace.tenancy import ContextDep, SessionDep, require_workspace
 
 router = APIRouter(tags=["messaging"])
 

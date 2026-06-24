@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.deps import get_context
 from app.models import MembershipRole, MembershipScope
 from app.workspace import tenancy as service
-from app.workspace.tenancy import get_context
 from tests import factories
 
 

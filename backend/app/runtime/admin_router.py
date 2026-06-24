@@ -5,9 +5,9 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.deps import ContextDep, SessionDep, require_org_admin
 from app.models import Enrollment
 from app.runtime.engine import run_due
-from app.workspace.tenancy import ContextDep, SessionDep, require_org_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

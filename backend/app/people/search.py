@@ -4,8 +4,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import exists, func, or_, select
 
+from app.deps import ContextDep, SessionDep, require_workspace
 from app.models import Campaign, Contact, Enrollment, Message
-from app.workspace.tenancy import ContextDep, SessionDep, require_workspace
 
 router = APIRouter(prefix="/search", tags=["search"])
 

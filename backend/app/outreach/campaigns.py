@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.types import JsonList, JsonObject
+from app.deps import ContextDep, SessionDep, require_workspace
 from app.insights import audit
 from app.models import (
     AutonomyMode,
@@ -20,7 +21,6 @@ from app.models import (
 from app.people.sourcing import service as sourcing_service
 from app.people.sourcing.agents import evaluate_llm
 from app.targeting import FIT_THRESHOLD, Targeting, evaluate
-from app.workspace.tenancy import ContextDep, SessionDep, require_workspace
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
