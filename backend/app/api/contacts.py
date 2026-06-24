@@ -6,7 +6,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import or_, select
 
-from app.deps import ContextDep, SessionDep, require_workspace
+from app.api.guards import require_workspace
+from app.deps import ContextDep, SessionDep
 from app.models import (
     Campaign,
     Contact,

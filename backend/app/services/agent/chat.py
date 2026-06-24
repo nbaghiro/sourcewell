@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm
 from app.core.types import JsonObject
-from app.deps import TenantContext, require_workspace
 from app.models import Contact, Enrollment
 from app.services.agent.state import StateData, aggregate_state
 from app.services.people import discovery, suppression
@@ -68,9 +67,10 @@ def _state_payload(st: StateData) -> JsonObject:
     }
 
 
-async def handle_chat(session: AsyncSession, ctx: TenantContext, *, message: str) -> ChatResult:
+async def handle_chat(
+    session: AsyncSession, *, workspace_id: str, org_id: str, message: str
+) -> ChatResult:
     """A bounded copilot: answers about state, explains a person, previews a search."""
-    ws = require_workspace(ctx)
     parsed = await _classify(message)
     intent = parsed["intent"]
 
@@ -85,7 +85,7 @@ async def handle_chat(session: AsyncSession, ctx: TenantContext, *, message: str
 
     if intent == "explain":
         contacts = (
-            (await session.execute(select(Contact).where(Contact.workspace_id == ws)))
+            (await session.execute(select(Contact).where(Contact.workspace_id == workspace_id)))
             .scalars()
             .all()
         )
@@ -105,7 +105,7 @@ async def handle_chat(session: AsyncSession, ctx: TenantContext, *, message: str
                 reply="Tell me who — e.g. “why did you skip Aisha Park?”",
                 data=None,
             )
-        if await suppression.is_suppressed(session, organization_id=ctx.org_id, email=hit.email):
+        if await suppression.is_suppressed(session, organization_id=org_id, email=hit.email):
             return ChatResult(
                 kind="explain",
                 reply=f"{hit.full_name} is on your do-not-contact list, so the agent skips them.",
@@ -114,7 +114,7 @@ async def handle_chat(session: AsyncSession, ctx: TenantContext, *, message: str
         enr = (
             await session.execute(
                 select(Enrollment)
-                .where(Enrollment.workspace_id == ws, Enrollment.contact_id == hit.id)
+                .where(Enrollment.workspace_id == workspace_id, Enrollment.contact_id == hit.id)
                 .limit(1)
             )
         ).scalar_one_or_none()
@@ -134,7 +134,7 @@ async def handle_chat(session: AsyncSession, ctx: TenantContext, *, message: str
         )
 
     if intent == "find":
-        providers = await build_providers_for_org(session, ctx.org_id)
+        providers = await build_providers_for_org(session, org_id)
         targeting = Targeting(keywords=message)
         hits = await discovery.search_people(providers, targeting, limit=15)
         top = ", ".join(h.full_name for h in hits[:3])
@@ -147,7 +147,7 @@ async def handle_chat(session: AsyncSession, ctx: TenantContext, *, message: str
         )
 
     # status (default)
-    st = await aggregate_state(session, workspace_id=ws)
+    st = await aggregate_state(session, workspace_id=workspace_id)
     needs = st.needs_you
     in_seq = st.in_sequence
     parts = []

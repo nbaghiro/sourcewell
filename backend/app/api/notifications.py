@@ -7,7 +7,8 @@ that maps the typed service result onto the response schemas.
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.deps import ContextDep, SessionDep, require_workspace
+from app.api.guards import require_workspace
+from app.deps import ContextDep, SessionDep
 from app.models import User
 from app.services.workspace import notifications as notifications_service
 

@@ -3,7 +3,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.deps import ContextDep, SessionDep, require_workspace
+from app.api.guards import require_workspace
+from app.deps import ContextDep, SessionDep
 from app.services.insights.analytics import workspace_analytics
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])

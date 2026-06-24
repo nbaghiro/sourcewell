@@ -81,15 +81,3 @@ async def get_context(request: Request, response: Response, session: SessionDep)
 
 
 ContextDep = Annotated[TenantContext, Depends(get_context)]
-
-
-def require_org_admin(ctx: TenantContext) -> None:
-    if not ctx.is_org_admin:
-        raise HTTPException(status_code=403, detail="organization admin required")
-
-
-def require_workspace(ctx: TenantContext) -> str:
-    """Resolve the workspace the request operates on (X-Workspace-Id, already access-checked)."""
-    if ctx.current_workspace_id is None:
-        raise HTTPException(status_code=400, detail="missing X-Workspace-Id")
-    return ctx.current_workspace_id

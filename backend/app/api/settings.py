@@ -9,9 +9,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.api.guards import require_org_admin, require_workspace
 from app.core.crypto import seal, unseal
 from app.core.types import JsonObject
-from app.deps import ContextDep, SessionDep, require_org_admin, require_workspace
+from app.deps import ContextDep, SessionDep
 from app.models import (
     Campaign,
     Connection,

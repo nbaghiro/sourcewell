@@ -6,8 +6,9 @@ import hmac
 import pytest
 from fastapi import HTTPException
 
+from app.api.guards import require_org_admin, require_workspace
 from app.core import crypto
-from app.deps import TenantContext, require_org_admin, require_workspace
+from app.deps import TenantContext
 from app.services.people import suppression
 
 

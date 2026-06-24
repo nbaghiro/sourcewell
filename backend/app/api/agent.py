@@ -10,8 +10,9 @@ a service and maps the returned dataclass to the Pydantic response model.
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.api.guards import require_workspace
 from app.core.types import JsonObject
-from app.deps import ContextDep, SessionDep, require_workspace
+from app.deps import ContextDep, SessionDep
 from app.services.agent.activity import ActivityEventData, RefData, build_activity_stream
 from app.services.agent.chat import handle_chat
 from app.services.agent.state import StateData, aggregate_state
@@ -134,5 +135,6 @@ async def state(ctx: ContextDep, session: SessionDep) -> AgentState:
 async def chat(body: ChatIn, ctx: ContextDep, session: SessionDep) -> ChatOut:
     """A bounded copilot: answers about state, explains a person, previews a search. No destructive
     actions yet — those are a fast-follow once the chat direction is validated."""
-    result = await handle_chat(session, ctx, message=body.message)
+    ws = require_workspace(ctx)
+    result = await handle_chat(session, workspace_id=ws, org_id=ctx.org_id, message=body.message)
     return ChatOut(reply=result.reply, kind=result.kind, data=result.data)

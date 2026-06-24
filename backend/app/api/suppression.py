@@ -7,8 +7,9 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.guards import require_org_admin
 from app.core.db import get_session
-from app.deps import ContextDep, SessionDep, require_org_admin
+from app.deps import ContextDep, SessionDep
 from app.models import Suppression, SuppressionReason
 from app.services.insights import audit
 from app.services.people.suppression import (
