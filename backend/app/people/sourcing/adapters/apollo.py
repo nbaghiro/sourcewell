@@ -8,6 +8,9 @@ from app.people.sourcing.adapters.base import (
     PersonHit,
     ProviderCapabilities,
     SearchPage,
+    json_body,
+    json_list,
+    json_object,
     opt_str,
 )
 from app.targeting import Targeting
@@ -33,8 +36,7 @@ class ApolloProvider:
         self._key = api_key
 
     def _normalize(self, p: JsonObject) -> PersonHit:
-        org_raw = p.get("organization")
-        org: JsonObject = org_raw if isinstance(org_raw, dict) else {}
+        org = json_object(p.get("organization"))
         size = org.get("estimated_num_employees")
         name = (
             opt_str(p.get("name"))
@@ -95,14 +97,9 @@ class ApolloProvider:
             return SearchPage(hits=[], total=0)
         if resp.status_code >= 400:
             return SearchPage(hits=[], total=0)
-        data = resp.json()
-        if not isinstance(data, dict):
-            return SearchPage(hits=[], total=0)
-        people_raw = data.get("people")
-        people = people_raw if isinstance(people_raw, list) else []
-        hits = [self._normalize(p) for p in people if isinstance(p, dict)]
-        pagination = data.get("pagination")
-        total = pagination.get("total_entries") if isinstance(pagination, dict) else None
+        data = json_body(resp)
+        hits = [self._normalize(p) for p in json_list(data.get("people"))]
+        total = json_object(data.get("pagination")).get("total_entries")
         return SearchPage(hits=hits, total=total if isinstance(total, int) else None)
 
     async def enrich(
@@ -131,9 +128,8 @@ class ApolloProvider:
             return None
         if resp.status_code >= 400:
             return None
-        data = resp.json()
-        person = data.get("person") if isinstance(data, dict) else None
-        return self._normalize(person) if isinstance(person, dict) else None
+        person = json_object(json_body(resp).get("person"))
+        return self._normalize(person) if person else None
 
     async def verify_email(self, email: str) -> EmailVerdict:
         hit = await self.enrich(email=email)

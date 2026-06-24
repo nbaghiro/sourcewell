@@ -13,6 +13,9 @@ from app.people.sourcing.adapters.base import (
     PersonHit,
     ProviderCapabilities,
     SearchPage,
+    json_body,
+    json_list,
+    json_object,
     opt_str,
     str_list,
 )
@@ -41,9 +44,7 @@ class UnipileProvider:
         )
         company = opt_str(rec.get("company"))
         if not company:
-            current = rec.get("current_company")
-            if isinstance(current, dict):
-                company = opt_str(current.get("name"))
+            company = opt_str(json_object(rec.get("current_company")).get("name"))
         return PersonHit(
             provider=self.key,
             external_id=opt_str(rec.get("id")) or opt_str(rec.get("public_identifier")),
@@ -89,12 +90,9 @@ class UnipileProvider:
             )
         if resp.status_code >= 400:
             return SearchPage(hits=[], total=0)
-        data = resp.json()
-        if not isinstance(data, dict):
-            return SearchPage(hits=[], total=0)
-        items_raw = data.get("items") or data.get("results")
-        items = items_raw if isinstance(items_raw, list) else []
-        hits = [self._normalize(r) for r in items if isinstance(r, dict)]
+        data = json_body(resp)
+        items = json_list(data.get("items")) or json_list(data.get("results"))
+        hits = [self._normalize(r) for r in items]
         total = data.get("total")
         return SearchPage(hits=hits, total=total if isinstance(total, int) else None)
 
@@ -116,8 +114,8 @@ class UnipileProvider:
             )
         if resp.status_code >= 400:
             return None
-        rec = resp.json()
-        return self._normalize(rec) if isinstance(rec, dict) else None
+        rec = json_body(resp)
+        return self._normalize(rec) if rec else None
 
     async def verify_email(self, email: str) -> EmailVerdict:
         return EmailVerdict(email=email, status="unknown")

@@ -14,6 +14,9 @@ from app.people.sourcing.adapters.base import (
     PersonHit,
     ProviderCapabilities,
     SearchPage,
+    json_body,
+    json_list,
+    json_object,
     opt_str,
     str_list,
 )
@@ -138,12 +141,8 @@ class PDLProvider:
             )
         if resp.status_code >= 400:
             return SearchPage(hits=[], total=0)
-        data = resp.json()
-        if not isinstance(data, dict):
-            return SearchPage(hits=[], total=0)
-        records = data.get("data")
-        rows = records if isinstance(records, list) else []
-        hits = [self._normalize(rec) for rec in rows if isinstance(rec, dict)]
+        data = json_body(resp)
+        hits = [self._normalize(rec) for rec in json_list(data.get("data"))]
         total = data.get("total")
         return SearchPage(hits=hits, total=total if isinstance(total, int) else None)
 
@@ -172,9 +171,8 @@ class PDLProvider:
             )
         if resp.status_code >= 400:
             return None
-        payload = resp.json()
-        rec = payload.get("data") if isinstance(payload, dict) else None
-        return self._normalize(rec) if isinstance(rec, dict) else None
+        rec = json_object(json_body(resp).get("data"))
+        return self._normalize(rec) if rec else None
 
     async def verify_email(self, email: str) -> EmailVerdict:
         return EmailVerdict(email=email, status="unknown")  # not a PDL capability

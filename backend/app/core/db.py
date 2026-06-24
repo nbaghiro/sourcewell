@@ -24,7 +24,9 @@ def new_id() -> str:
 
 def sa_enum(e: type[enum.StrEnum]) -> SAEnum:
     """A non-native (VARCHAR + CHECK) enum column storing member values."""
-    return SAEnum(e, native_enum=False, length=32, values_callable=lambda x: [m.value for m in x])
+    return SAEnum(
+        e, native_enum=False, length=32, values_callable=lambda x: [str(m.value) for m in x]
+    )
 
 
 class IdMixin:

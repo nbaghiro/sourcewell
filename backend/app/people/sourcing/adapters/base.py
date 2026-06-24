@@ -7,10 +7,12 @@ their terms forbid it and it would be stale and costly. Caching, if added, is tr
 by query for cost/perf only.
 """
 
-from typing import Protocol
+from typing import Protocol, cast
 
+import httpx
 from pydantic import BaseModel
 
+from app.core.types import JsonList, JsonObject
 from app.targeting import Targeting
 
 
@@ -19,12 +21,41 @@ def opt_str(v: object) -> str | None:
     return v if isinstance(v, str) and v else None
 
 
+def opt_int(v: object, default: int = 0) -> int:
+    """Narrow a decoded-JSON value to an int (truncating floats; `default` if non-numeric)."""
+    return int(v) if isinstance(v, int | float) else default
+
+
 def str_list(v: object, limit: int | None = None) -> list[str]:
     """Narrow a decoded-JSON value to a list of strings (optionally truncated)."""
     if not isinstance(v, list):
         return []
     out = [s for s in v if isinstance(s, str)]
     return out[:limit] if limit is not None else out
+
+
+def json_object(raw: object) -> JsonObject:
+    """Narrow an untyped JSON payload (e.g. httpx's `Any` `.json()`) to a `JsonObject`.
+
+    Returns `{}` for non-objects, so call sites chain `.get(...)` (-> `object`) and the
+    `opt_str`/`opt_int`/`str_list` narrowers without ever touching `Any`.
+    """
+    return cast(JsonObject, raw) if isinstance(raw, dict) else {}
+
+
+def json_list(raw: object) -> JsonList:
+    """Narrow an untyped JSON value to a list of `JsonObject` (non-dict items dropped)."""
+    if not isinstance(raw, list):
+        return []
+    return [cast(JsonObject, x) for x in raw if isinstance(x, dict)]
+
+
+def json_body(resp: httpx.Response) -> JsonObject:
+    """The single httpx→JSON boundary: a response body decoded to a `JsonObject` ({} if not one).
+
+    `httpx.Response.json()` is typed `Any`; isolating it here means call sites never touch `Any`.
+    """
+    return json_object(resp.json())
 
 
 class PersonHit(BaseModel):

@@ -6,6 +6,7 @@ ANTHROPIC_API_KEY to turn on real generation.
 """
 
 import json
+from typing import TypedDict, cast
 
 import httpx
 
@@ -15,6 +16,17 @@ from app.core.types import JsonObject
 _API = "https://api.anthropic.com/v1/messages"
 _VERSION = "2023-06-01"
 _TIMEOUT = 30.0
+
+
+class _ContentBlock(TypedDict, total=False):
+    """One block of an Anthropic Messages response (we only read text blocks)."""
+
+    type: str
+    text: str
+
+
+class _MessagesResponse(TypedDict, total=False):
+    content: list[_ContentBlock]
 
 
 def is_enabled() -> bool:
@@ -47,8 +59,10 @@ async def complete(
             )
         if resp.status_code >= 400:
             return None
-        parts = resp.json().get("content", [])
-        text = "".join(p.get("text", "") for p in parts if p.get("type") == "text")
+        data = cast(_MessagesResponse, resp.json())
+        text = "".join(
+            b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"
+        )
         return text.strip() or None
     except Exception:
         return None

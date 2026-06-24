@@ -7,6 +7,10 @@ from app.people.sourcing.adapters.base import (
     PersonHit,
     ProviderCapabilities,
     SearchPage,
+    json_body,
+    json_object,
+    opt_int,
+    opt_str,
 )
 from app.targeting import Targeting
 
@@ -54,15 +58,16 @@ class HunterProvider:
             return None
         if resp.status_code >= 400:
             return None
-        data = resp.json().get("data") or {}
-        if not data.get("email"):
+        data = json_object(json_body(resp).get("data"))
+        email = opt_str(data.get("email"))
+        if not email:
             return None
         return PersonHit(
             provider=self.key,
             full_name=name,
             company=company,
-            email=data.get("email"),
-            email_status="valid" if (data.get("score") or 0) >= 80 else "risky",
+            email=email,
+            email_status="valid" if opt_int(data.get("score")) >= 80 else "risky",
         )
 
     async def verify_email(self, email: str) -> EmailVerdict:
@@ -75,11 +80,11 @@ class HunterProvider:
             return EmailVerdict(email=email, status="unknown")
         if resp.status_code >= 400:
             return EmailVerdict(email=email, status="unknown")
-        data = resp.json().get("data") or {}
+        data = json_object(json_body(resp).get("data"))
         return EmailVerdict(
             email=email,
             status=_RESULT.get(str(data.get("result")), "unknown"),
-            score=int(data.get("score") or 0),
+            score=opt_int(data.get("score")),
         )
 
     async def verify_credentials(self) -> bool:

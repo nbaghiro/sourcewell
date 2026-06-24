@@ -142,9 +142,8 @@ async def resolve_user_id(session: AsyncSession, sealed: str) -> tuple[str | Non
                 return None, None
             refreshed = getattr(renew, "sealed_session", None)
             wos_user = getattr(renew, "user", None) or {}
-        wos_user_id = (
-            wos_user.get("id") if isinstance(wos_user, dict) else getattr(wos_user, "id", None)
-        )
+        raw_id = wos_user.get("id") if isinstance(wos_user, dict) else getattr(wos_user, "id", None)
+        wos_user_id = raw_id if isinstance(raw_id, str) else None
         if not wos_user_id:
             return None, None
         user = (
