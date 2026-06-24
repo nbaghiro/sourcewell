@@ -12,11 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm
 from app.core.types import JsonObject
+from app.ext.registry import build_providers_for_org
 from app.models import Contact, Enrollment
 from app.services.agent.state import StateData, aggregate_state
 from app.services.sourcing import discovery, suppression
-from app.services.sourcing.adapters.registry import build_providers_for_org
-from app.services.sourcing.targeting import Targeting
+from app.targeting import Targeting
 
 _INTENTS = {"status", "explain", "find", "help"}
 

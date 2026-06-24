@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Campaign, Contact, Enrollment, EnrollmentState
-from app.services.sourcing.targeting import FIT_THRESHOLD, evaluate
+from app.targeting import FIT_THRESHOLD, evaluate
 
 
 async def rank_campaign(

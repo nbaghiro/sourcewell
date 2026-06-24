@@ -3,7 +3,7 @@
 import httpx
 
 from app.core.types import JsonObject
-from app.services.sourcing.adapters.base import (
+from app.ext.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,
@@ -13,7 +13,7 @@ from app.services.sourcing.adapters.base import (
     json_object,
     opt_str,
 )
-from app.services.sourcing.targeting import Targeting
+from app.targeting import Targeting
 
 _BASE = "https://api.apollo.io/v1"
 _TIMEOUT = 25.0

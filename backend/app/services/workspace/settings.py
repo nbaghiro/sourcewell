@@ -10,11 +10,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ext.registry import ProviderSpec
 from app.models import (
     Connection,
     ProviderCredential,
 )
-from app.services.sourcing.adapters.registry import ProviderSpec
 
 
 class ConnectionOut(BaseModel):

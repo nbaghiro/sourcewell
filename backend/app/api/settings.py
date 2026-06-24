@@ -13,6 +13,7 @@ from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin, require_workspace
 from app.core.crypto import seal, unseal
 from app.core.types import JsonObject
+from app.ext.registry import PROVIDER_CATALOG, build_one
 from app.models import (
     Campaign,
     Connection,
@@ -32,7 +33,6 @@ from app.models import (
     Workspace,
 )
 from app.services.insights import audit
-from app.services.sourcing.adapters.registry import PROVIDER_CATALOG, build_one
 from app.services.workspace.settings import (
     ConnectionOut,
     DataProviderOut,

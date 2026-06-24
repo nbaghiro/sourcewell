@@ -4,6 +4,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import seal, unseal
+from app.ext.demo import DemoProvider
+from app.ext.registry import (
+    PROVIDER_CATALOG,
+    build_providers,
+    build_providers_for_org,
+)
 from app.models import (
     Organization,
     ProviderCredential,
@@ -11,13 +17,7 @@ from app.models import (
     WorkspaceKind,
 )
 from app.services.sourcing import discovery, usage
-from app.services.sourcing.adapters.demo import DemoProvider
-from app.services.sourcing.adapters.registry import (
-    PROVIDER_CATALOG,
-    build_providers,
-    build_providers_for_org,
-)
-from app.services.sourcing.targeting import Targeting
+from app.targeting import Targeting
 
 
 async def test_demo_search_scores_and_ranks() -> None:

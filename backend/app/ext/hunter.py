@@ -2,7 +2,7 @@
 
 import httpx
 
-from app.services.sourcing.adapters.base import (
+from app.ext.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,
@@ -12,7 +12,7 @@ from app.services.sourcing.adapters.base import (
     opt_int,
     opt_str,
 )
-from app.services.sourcing.targeting import Targeting
+from app.targeting import Targeting
 
 _BASE = "https://api.hunter.io/v2"
 _TIMEOUT = 20.0

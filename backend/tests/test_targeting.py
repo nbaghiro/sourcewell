@@ -6,7 +6,7 @@ the scoring model, update both sides and these expected values (run the cases th
 
 from typing import TypedDict
 
-from app.services.sourcing.targeting import Targeting, evaluate
+from app.targeting import Targeting, evaluate
 
 
 class TargetingCase(TypedDict, total=False):

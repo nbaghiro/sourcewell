@@ -5,13 +5,13 @@ score sensibly through `evaluate()`. This is the fallback the registry uses when
 key is configured, so the discovery flow is fully exercisable end-to-end without credentials.
 """
 
-from app.services.sourcing.adapters.base import (
+from app.ext.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,
     SearchPage,
 )
-from app.services.sourcing.targeting import Targeting
+from app.targeting import Targeting
 
 _FIRST = [
     "Aisha",
