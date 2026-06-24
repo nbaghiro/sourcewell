@@ -64,7 +64,7 @@ curl -sX POST localhost:8901/contacts/import \
 
 ## 3. Create a campaign
 
-`criteria` is what the Evaluator scores against; `sequence` is the touches. Use `delay_days: 0`
+`criteria` is what the Evaluator scores against; `sequence` is the touchpoints. Use `delay_days: 0`
 on every step so you can step the whole sequence by hand without waiting real days.
 
 `autonomy_mode`:
@@ -106,7 +106,7 @@ curl -sX POST localhost:8901/enrollments/<EID>/approve -H 'X-User-Id: <UID>' -H 
 `POST /admin/run-due` processes every due enrollment once. Each call = one transition.
 
 ```bash
-curl -sX POST localhost:8901/admin/run-due -H 'X-User-Id: <UID>' -H 'X-Workspace-Id: <WS>'   # active -> draft a touch
+curl -sX POST localhost:8901/admin/run-due -H 'X-User-Id: <UID>' -H 'X-Workspace-Id: <WS>'   # active -> draft a touchpoint
 
 # approve_each only: the draft now waits here
 curl -s localhost:8901/approvals -H 'X-User-Id: <UID>' -H 'X-Workspace-Id: <WS>'
@@ -139,7 +139,7 @@ curl -s localhost:8901/inbox -H 'X-User-Id: <UID>' -H 'X-Workspace-Id: <WS>'
 ## State machine (what each tick does)
 
 ```
-proposed --approve--> active --tick--> (draft touch)
+proposed --approve--> active --tick--> (draft touchpoint)
    approve_each: -> awaiting_approval --approve msg--> scheduled
    auto:         -> scheduled
 scheduled --tick--> SEND, advance step --> awaiting_reply
@@ -149,7 +149,7 @@ inbound reply --> handed_off (interested) | opted_out (opt-out)
 
 `state` + `next_run_at` are the source of truth; no external scheduler. With `delay_days: 0`,
 repeated `run-due` calls step the whole sequence. If you set real delays, use
-`POST /admin/enrollments/<EID>/fast-forward` to pull a future touch into the present.
+`POST /admin/enrollments/<EID>/fast-forward` to pull a future touchpoint into the present.
 
 ## Shortcut
 

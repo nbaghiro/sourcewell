@@ -126,7 +126,7 @@ Each phase below states: **Goal · Build · Endpoints · Automated tests · Manu
 ### Phase 3 — Campaigns (create + sequence builder)
 - **Build:** campaign list; "New campaign" wizard — name, criteria (skills/titles chip inputs),
   autonomy toggle (`approve_each`/`auto`), `from_email`, and an ordered **sequence builder**
-  (add/remove/reorder touches: channel, delay_days, subject, body with `{first_name}` token
+  (add/remove/reorder touchpoints: channel, delay_days, subject, body with `{first_name}` token
   chips); campaign detail header (status, counts).
 - **Endpoints:** `POST /campaigns`, `GET /campaigns`, `GET /campaigns/{id}`.
 - **Automated:** zod validation; sequence add/remove/reorder; create payload shape matches API.
@@ -167,7 +167,7 @@ Each phase below states: **Goal · Build · Endpoints · Automated tests · Manu
   `POST /admin/enrollments/{id}/fast-forward`.
 - **Automated:** board groups by state with correct counts; admin-only controls hidden for
   non-admins (role from `GET /me`).
-- **Manual QA:** watch leads move across columns as the worker ticks; fast-forward a delayed touch.
+- **Manual QA:** watch leads move across columns as the worker ticks; fast-forward a delayed touchpoint.
 - **Done when:** operators can see and nudge the state machine.
 
 ### Phase 8 — Theming polish + design-language doc

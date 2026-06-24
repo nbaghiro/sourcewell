@@ -151,7 +151,7 @@ export function ComponentsPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => toast.success("Sent to Jane Doe", { description: "First-touch email delivered." })}
+          onClick={() => toast.success("Sent to Jane Doe", { description: "First-touchpoint email delivered." })}
         >
           Test toast
         </Button>
@@ -311,7 +311,7 @@ export function ComponentsPage() {
                 <DialogHeader>
                   <DialogTitle>Approve &amp; send</DialogTitle>
                   <DialogDescription>
-                    Send this first-touch email to Jane Doe? It will go out during EU business hours.
+                    Send this first-touchpoint email to Jane Doe? It will go out during EU business hours.
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>

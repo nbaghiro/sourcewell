@@ -1294,7 +1294,7 @@ export interface paths {
         put?: never;
         /**
          * Fast Forward
-         * @description Pull a future-scheduled touch into the present so run-due picks it up now.
+         * @description Pull a future-scheduled touchpoint into the present so run-due picks it up now.
          */
         post: operations["fast_forward_admin_enrollments__enrollment_id__fast_forward_post"];
         delete?: never;
@@ -2898,22 +2898,8 @@ export interface components {
             /** Kind */
             kind: string;
         };
-        /** ImportOut */
-        app__people__contacts__ImportOut: {
-            /** Created */
-            created: number;
-            /** Contacts */
-            contacts: components["schemas"]["ContactOut"][];
-        };
-        /** ImportOut */
-        app__people__sourcing__router__ImportOut: {
-            /** Imported */
-            imported: number;
-            /** Contact Ids */
-            contact_ids: string[];
-        };
         /** MeResponse */
-        app__workspace__auth__MeResponse: {
+        app__api__auth__MeResponse: {
             user: components["schemas"]["UserSummary"] | null;
             organization: components["schemas"]["OrgSummary"] | null;
             /** Is Org Admin */
@@ -2923,8 +2909,22 @@ export interface components {
             /** Workspaces */
             workspaces: components["schemas"]["WorkspaceSummary"][];
         };
+        /** ImportOut */
+        app__api__contacts__ImportOut: {
+            /** Created */
+            created: number;
+            /** Contacts */
+            contacts: components["schemas"]["ContactOut"][];
+        };
+        /** ImportOut */
+        app__api__sourcing__ImportOut: {
+            /** Imported */
+            imported: number;
+            /** Contact Ids */
+            contact_ids: string[];
+        };
         /** MeResponse */
-        app__workspace__tenancy__MeResponse: {
+        app__api__tenancy__MeResponse: {
             /** User Id */
             user_id: string;
             /** Org Id */
@@ -3068,7 +3068,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__workspace__auth__MeResponse"];
+                    "application/json": components["schemas"]["app__api__auth__MeResponse"];
                 };
             };
         };
@@ -3143,7 +3143,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__workspace__tenancy__MeResponse"];
+                    "application/json": components["schemas"]["app__api__tenancy__MeResponse"];
                 };
             };
         };
@@ -3317,7 +3317,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__people__contacts__ImportOut"];
+                    "application/json": components["schemas"]["app__api__contacts__ImportOut"];
                 };
             };
             /** @description Validation Error */
@@ -3350,7 +3350,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__people__contacts__ImportOut"];
+                    "application/json": components["schemas"]["app__api__contacts__ImportOut"];
                 };
             };
             /** @description Validation Error */
@@ -5023,7 +5023,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__people__sourcing__router__ImportOut"];
+                    "application/json": components["schemas"]["app__api__sourcing__ImportOut"];
                 };
             };
             /** @description Validation Error */

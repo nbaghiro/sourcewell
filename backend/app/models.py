@@ -91,7 +91,7 @@ class AutonomyMode(enum.StrEnum):
 
 class EnrollmentState(enum.StrEnum):
     proposed = "proposed"  # ranked; awaiting human approval to pursue
-    active = "active"  # approved; ready to draft the next touch
+    active = "active"  # approved; ready to draft the next touchpoint
     awaiting_approval = "awaiting_approval"  # a draft message awaits human approval
     scheduled = "scheduled"  # message approved; ready to send (governor-gated)
     awaiting_reply = "awaiting_reply"  # sent; waiting for reply or the step delay
@@ -352,7 +352,7 @@ class Message(IdMixin, TimestampMixin, Base):
     subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
     body: Mapped[str] = mapped_column(Text, default="")
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # When a draft is queued to auto-send (the "next touch" preview on scheduled enrollments).
+    # When a draft is queued to auto-send (the "next touchpoint" preview on scheduled enrollments).
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Send attempts so far (for retry/backoff on transient send failures).
     attempts: Mapped[int] = mapped_column(default=0)

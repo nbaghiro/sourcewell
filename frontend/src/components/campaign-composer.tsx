@@ -146,7 +146,7 @@ export function CampaignComposer({
                 <button onClick={() => setSel(i)} className="block w-full p-4 text-left">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 font-mono text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                      <ChannelIcon channel={s.channel} className="size-3.5" /> Touch {i + 1} ·{" "}
+                      <ChannelIcon channel={s.channel} className="size-3.5" /> Touchpoint {i + 1} ·{" "}
                       {s.channel}
                     </div>
                     <span className="rounded-full border border-border px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground">
@@ -176,7 +176,7 @@ export function CampaignComposer({
               Any reply → moves to your <b className="font-semibold">Inbox</b> (you take over)
             </Rule>
             <Rule icon={Ban}>Opt-out → stops automatically</Rule>
-            <Rule icon={Clock}>No reply after the last touch → marked no-response</Rule>
+            <Rule icon={Clock}>No reply after the last touchpoint → marked no-response</Rule>
           </ul>
         </div>
       </div>
@@ -302,7 +302,7 @@ function StepEditor({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-display font-semibold">
-          <ChannelIcon channel={step.channel} className="size-4 text-muted-foreground" /> Touch{" "}
+          <ChannelIcon channel={step.channel} className="size-4 text-muted-foreground" /> Touchpoint{" "}
           {index + 1}
         </div>
         <div className="flex items-center gap-0.5">
@@ -345,7 +345,7 @@ function StepEditor({
             value={step.delay_days}
             onChange={(e) => onChange({ delay_days: Math.max(0, Number(e.target.value) || 0) })}
           />
-          <span className="text-sm text-muted-foreground">days after the previous touch</span>
+          <span className="text-sm text-muted-foreground">days after the previous touchpoint</span>
         </div>
       </div>
 

@@ -475,7 +475,7 @@ function ContextRail({
         </div>
         <div className="mt-0.5 text-sm font-semibold">{conv.campaign.name}</div>
         <div className="text-xs text-muted-foreground">
-          Touch {conv.enrollment.current_step + 1} of {conv.campaign.steps}
+          Touchpoint {conv.enrollment.current_step + 1} of {conv.campaign.steps}
         </div>
       </Link>
 

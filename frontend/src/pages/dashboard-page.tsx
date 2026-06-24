@@ -144,7 +144,7 @@ function Onboarding({ workspace }: { workspace: string; onChanged: () => void })
     {
       n: 2,
       title: "Create a campaign",
-      body: "Define who to reach and a multi-channel touch sequence.",
+      body: "Define who to reach and a multi-channel touchpoint sequence.",
       actions: (
         <Button variant="outline" size="sm" onClick={() => navigate("/campaigns/new")}>
           <Plus /> New campaign

@@ -75,7 +75,7 @@ async def test_full_loop_approve_each(db_client: AsyncClient) -> None:
     approved = await db_client.post(f"/enrollments/{eid}/approve", headers=h)
     assert approved.json()["state"] == "active"
 
-    # Tick 1: draft the first touch (manual mode -> awaiting_approval, no auto-send).
+    # Tick 1: draft the first touchpoint (manual mode -> awaiting_approval, no auto-send).
     assert (await db_client.post("/admin/run-due", headers=h)).json()["processed"] >= 1
     drafts = (await db_client.get("/approvals", headers=h)).json()
     assert len(drafts) == 1
@@ -85,7 +85,7 @@ async def test_full_loop_approve_each(db_client: AsyncClient) -> None:
     approve_msg = await db_client.post(f"/messages/{drafts[0]['id']}/approve", headers=h)
     assert approve_msg.json()["status"] == "approved"
 
-    # Tick 2: send the approved touch.
+    # Tick 2: send the approved touchpoint.
     assert (await db_client.post("/admin/run-due", headers=h)).json()["processed"] >= 1
     thread = (await db_client.get(f"/enrollments/{eid}/messages", headers=h)).json()
     assert any(m["status"] == "sent" for m in thread)

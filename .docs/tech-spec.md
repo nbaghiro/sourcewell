@@ -107,7 +107,7 @@ semi-structured data; pgvector column for contact embeddings.
 | **contact** | the person | workspace_id, name, title, company, location, skills/experience jsonb, linkedin_url, email, email_status, sources jsonb, embedding vector |
 | **company** | employer | workspace_id, name, domain, … |
 | **campaign** | the program | workspace_id, name, status, criteria jsonb, channels, autonomy_mode, target_pipeline_size, score_threshold, daily_cap |
-| **step** | a sequence touch | campaign_id, order, channel, delay, template_id, conditions |
+| **step** | a sequence touchpoint | campaign_id, order, channel, delay, template_id, conditions |
 | **template** | message template | workspace_id, name, channel, subject, body, approved |
 | **score** | fit | workspace_id, campaign_id, contact_id, overall, dimensions jsonb, rationale, recommended_action |
 | **enrollment** | state machine | workspace_id, campaign_id, contact_id, connection_id, **state**, current_step, **next_run_at**, reply_pending, outcome · UNIQUE(campaign_id, contact_id) |
@@ -175,7 +175,7 @@ machine and that state *is* product data we query for the UI anyway.
 - **Concurrency & safety:** one tick per enrollment via a Postgres advisory lock; **idempotent sends** via
   `UNIQUE(enrollment_id, step)` + provider idempotency; a crash mid-tick rolls back and is re-dispatched;
   `reconcile` catches stale claims. Effectively-once with the DB as the durable record.
-- **Enrollment states:** `pending_first_touch → awaiting_message_approval → scheduled_send → awaiting_reply →
+- **Enrollment states:** `pending_first_touchpoint → awaiting_message_approval → scheduled_send → awaiting_reply →
   { handed_off | suppressed | completed_no_response }`, with reply/approval signals jumping the wakeup earlier.
 
 When one worker isn't enough, add Redis + arq (queue, retries, concurrency) and split the poller into a

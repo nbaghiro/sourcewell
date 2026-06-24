@@ -125,7 +125,7 @@ export function ApprovalsPage() {
             <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-3">
               <PersonCell name={selected.contact_name} subtitle={selected.contact_title ?? undefined} imageSrc={selected.contact_avatar ?? undefined} />
               <span className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground">
-                <ChannelIcon channel={selected.channel} className="size-3.5" /> Touch {selected.step + 1}
+                <ChannelIcon channel={selected.channel} className="size-3.5" /> Touchpoint {selected.step + 1}
               </span>
             </div>
 

@@ -22,7 +22,7 @@ export function CampaignsPage() {
       <PageHeader
         eyebrow="Outreach"
         title="Campaigns"
-        description="Each campaign defines who to reach (criteria) and how (a multi-touch sequence)."
+        description="Each campaign defines who to reach (criteria) and how (a multi-touchpoint sequence)."
       >
         <Button size="sm" onClick={() => navigate("/campaigns/new")}>
           <Plus /> New campaign
@@ -44,7 +44,7 @@ export function CampaignsPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Autonomy</TableHead>
                 <TableHead>Targets</TableHead>
-                <TableHead className="text-right">Touches</TableHead>
+                <TableHead className="text-right">Touchpoints</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

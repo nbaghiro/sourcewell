@@ -6,10 +6,10 @@ source of truth — no external scheduler.
 
 Flow:
     proposed --approve--> active
-    active     -> draft a touch; auto-mode approves it (scheduled) else awaiting_approval
+    active     -> draft a touchpoint; auto-mode approves it (scheduled) else awaiting_approval
     (message approved) -> scheduled
-    scheduled  -> send the approved touch, advance step, wait (awaiting_reply)
-    awaiting_reply -> next touch due? back to active : completed
+    scheduled  -> send the approved touchpoint, advance step, wait (awaiting_reply)
+    awaiting_reply -> next touchpoint due? back to active : completed
     (inbound reply) -> handed_off (interested) | opted_out  [handled in messaging service]
 """
 
@@ -46,7 +46,7 @@ _BACKOFF = (timedelta(minutes=5), timedelta(minutes=15), timedelta(minutes=60))
 
 
 def _advance(enrollment: Enrollment, sequence: JsonList, now: datetime) -> None:
-    """Move to the next touch (or the post-sequence grace wait)."""
+    """Move to the next touchpoint (or the post-sequence grace wait)."""
     enrollment.current_step += 1
     enrollment.state = EnrollmentState.awaiting_reply
     if enrollment.current_step < len(sequence):
@@ -94,9 +94,9 @@ async def tick(session: AsyncSession, *, enrollment: Enrollment, now: datetime) 
     sequence = campaign.sequence or []
 
     if enrollment.state == EnrollmentState.active:
-        await _draft_touch(session, enrollment, campaign, contact, sequence, now)
+        await _draft_touchpoint(session, enrollment, campaign, contact, sequence, now)
     elif enrollment.state == EnrollmentState.scheduled:
-        await _send_touch(session, enrollment, campaign, contact, sequence, now)
+        await _send_touchpoint(session, enrollment, campaign, contact, sequence, now)
     elif enrollment.state == EnrollmentState.awaiting_reply:
         if enrollment.current_step < len(sequence):
             enrollment.state = EnrollmentState.active
@@ -107,7 +107,7 @@ async def tick(session: AsyncSession, *, enrollment: Enrollment, now: datetime) 
     await session.flush()
 
 
-async def _draft_touch(
+async def _draft_touchpoint(
     session: AsyncSession,
     enrollment: Enrollment,
     campaign: Campaign,
@@ -143,7 +143,7 @@ async def _draft_touch(
         enrollment.next_run_at = None
 
 
-async def _send_touch(
+async def _send_touchpoint(
     session: AsyncSession,
     enrollment: Enrollment,
     campaign: Campaign,

@@ -61,7 +61,7 @@ function CampaignBuilderInner() {
       { name, criteria, sequence: steps, autonomy_mode: autonomy },
       {
         onSuccess: () => {
-          toast.success("Campaign created", { description: `${name} · ${steps.length} touches` });
+          toast.success("Campaign created", { description: `${name} · ${steps.length} touchpoints` });
           navigate("/campaigns");
         },
         onError: () => toast.error("Couldn't save the campaign"),

@@ -100,7 +100,7 @@ makes ranking accurate, so it's explicit.
 
 **6.3 Campaign setup.** A short wizard: confirm **targeting** (criteria + how big a pipeline to keep),
 choose **sources** (data providers; LinkedIn if a seat is connected) and routing (bulk vs targeted), build
-the **sequence** (ordered touches: channel, delay, template), pick **channels + sending seat**, and set
+the **sequence** (ordered touchpoints: channel, delay, template), pick **channels + sending seat**, and set
 **autonomy** (approve-each default) + guardrails (caps, quiet hours, score threshold). The recruiter sets
 **policy**, not prompts — changing policy changes agent behavior immediately.
 
@@ -113,7 +113,7 @@ dropped. The system keeps refilling whenever the qualified pipeline runs low —
 citing their background. The recruiter sees a **ranked shortlist**, each with a fit score and a short "why."
 
 **6.6 Approvals (two light gates).** First, approve **who to pursue** (individually or in bulk above a
-score). Then, for each touch, approve **what gets sent** — approve / edit / reject / snooze, in a batch.
+score). Then, for each touchpoint, approve **what gets sent** — approve / edit / reject / snooze, in a batch.
 Nothing sends on its own; unapproved drafts hold.
 
 **6.7 Outreach & follow-ups.** Approved messages send through the recruiter's own email or LinkedIn within

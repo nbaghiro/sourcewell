@@ -26,7 +26,7 @@ async def run_due_now(ctx: ContextDep, session: SessionDep) -> dict[str, int]:
 
 @router.post("/enrollments/{enrollment_id}/fast-forward", response_model=FastForwardOut)
 async def fast_forward(enrollment_id: str, ctx: ContextDep, session: SessionDep) -> FastForwardOut:
-    """Pull a future-scheduled touch into the present so run-due picks it up now."""
+    """Pull a future-scheduled touchpoint into the present so run-due picks it up now."""
     require_org_admin(ctx)
     enrollment = await session.get(Enrollment, enrollment_id)
     if enrollment is None or enrollment.workspace_id not in ctx.allowed_workspace_ids:

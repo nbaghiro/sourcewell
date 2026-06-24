@@ -363,7 +363,7 @@
 
           <!-- CAMPAIGNS -->
           <div class="ascreen" id="s-campaigns">
-            <div class="ph"><div><h2>Campaigns</h2><div class="d">Each campaign defines who to reach (criteria) and how (a multi-touch sequence).</div></div>
+            <div class="ph"><div><h2>Campaigns</h2><div class="d">Each campaign defines who to reach (criteria) and how (a multi-touchpoint sequence).</div></div>
               <button class="btn btn-primary"><svg class="ic"><use href="#i-plus"/></svg> New campaign</button></div>
             <section class="card"><table><thead><tr><th>Campaign</th><th>Status</th><th class="num">Sourced</th><th class="num">Await</th><th class="num">Replies</th><th>Autonomy</th><th>Owner</th></tr></thead><tbody>
               <tr><td class="cn">Senior Backend Engineer</td><td><span class="badge b-accent"><span class="dot" style="background:var(--success)"></span>Active</span></td><td class="num">142</td><td class="num">12</td><td class="num">3</td><td class="auton">Approve each</td><td>AB</td></tr>
@@ -389,19 +389,19 @@
                   <div class="field"><label class="label">Skills</label><div class="row" style="flex-wrap:wrap;gap:7px"><span class="chip">python <span class="x">✕</span></span><span class="chip">go <span class="x">✕</span></span><span class="chip">distributed systems <span class="x">✕</span></span><span class="chip" style="color:var(--muted)">+ add</span></div></div>
                   <div class="field" style="margin-bottom:0"><label class="label">Locations</label><div class="row" style="flex-wrap:wrap;gap:7px"><span class="chip">EU <span class="x">✕</span></span><span class="chip">Remote <span class="x">✕</span></span><span class="chip" style="color:var(--muted)">+ add</span></div></div>
                 </div></section>
-                <section class="card"><div class="card-h"><h3>Sequence</h3><button class="btn btn-outline btn-sm"><svg class="ic"><use href="#i-plus"/></svg> Add touch</button></div><div style="padding:18px;display:flex;flex-direction:column;gap:12px">
-                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px"><div class="row" style="justify-content:space-between;margin-bottom:10px"><div class="row"><span class="badge b-accent">Touch 1</span><span class="badge b-muted"><svg class="ic" style="width:12px;height:12px"><use href="#i-mail"/></svg> Email</span><span class="auton">Day 0</span></div><span class="x" style="color:var(--muted);cursor:pointer">✕</span></div>
+                <section class="card"><div class="card-h"><h3>Sequence</h3><button class="btn btn-outline btn-sm"><svg class="ic"><use href="#i-plus"/></svg> Add touchpoint</button></div><div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px"><div class="row" style="justify-content:space-between;margin-bottom:10px"><div class="row"><span class="badge b-accent">Touchpoint 1</span><span class="badge b-muted"><svg class="ic" style="width:12px;height:12px"><use href="#i-mail"/></svg> Email</span><span class="auton">Day 0</span></div><span class="x" style="color:var(--muted);cursor:pointer">✕</span></div>
                     <input class="inp" style="margin-bottom:8px" value="Subject — Hi {first_name}" /><textarea class="inp" rows="2">Saw your work on {company}'s platform — open to a chat about a {title} role?</textarea></div>
-                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px"><div class="row" style="justify-content:space-between;margin-bottom:10px"><div class="row"><span class="badge b-accent">Touch 2</span><span class="badge b-muted"><svg class="ic" style="width:12px;height:12px"><use href="#i-mail"/></svg> Email</span><span class="auton">Day 3</span></div><span class="x" style="color:var(--muted);cursor:pointer">✕</span></div>
+                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px"><div class="row" style="justify-content:space-between;margin-bottom:10px"><div class="row"><span class="badge b-accent">Touchpoint 2</span><span class="badge b-muted"><svg class="ic" style="width:12px;height:12px"><use href="#i-mail"/></svg> Email</span><span class="auton">Day 3</span></div><span class="x" style="color:var(--muted);cursor:pointer">✕</span></div>
                     <input class="inp" style="margin-bottom:8px" value="Subject — Following up, {first_name}" /><textarea class="inp" rows="2">Still keen to compare notes? Happy to work around your schedule.</textarea></div>
                 </div></section>
               </div>
               <div>
-                <section class="card" style="position:sticky;top:130px"><div class="card-h"><h3>Preview</h3><span class="s">Touch 1 · Jane Doe</span></div><div style="padding:18px">
+                <section class="card" style="position:sticky;top:130px"><div class="card-h"><h3>Preview</h3><span class="s">Touchpoint 1 · Jane Doe</span></div><div style="padding:18px">
                   <div class="auton" style="margin-bottom:4px">To: jane@example.com</div>
                   <div style="font-weight:600;font-size:14px;margin-bottom:10px">Hi Jane</div>
                   <div style="font-size:13.5px;color:var(--ink-soft);line-height:1.6">Saw your work on Acme's platform — open to a chat about a Senior Backend Engineer role?</div>
-                  <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted)">2 touches · email · approve-each · ~140 matching contacts in this workspace</div>
+                  <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--muted)">2 touchpoints · email · approve-each · ~140 matching contacts in this workspace</div>
                 </div></section>
               </div>
             </div>
@@ -436,7 +436,7 @@
               <div class="card" style="display:flex;flex-direction:column">
                 <div class="card-h"><div class="who"><div class="av">JD</div><div><div class="nm">Jane Doe</div><div class="sb">Senior Backend Engineer · Acme · jane@example.com</div></div></div><span class="badge b-warn">Awaiting approval</span></div>
                 <div style="padding:22px;flex:1">
-                  <div class="auton" style="margin-bottom:4px">Campaign · Senior Backend Engineer · Touch 1 of 2</div>
+                  <div class="auton" style="margin-bottom:4px">Campaign · Senior Backend Engineer · Touchpoint 1 of 2</div>
                   <input class="inp" style="font-weight:600;margin-bottom:12px" value="Hi Jane" />
                   <textarea class="inp" rows="7">Hi Jane,
 
@@ -462,7 +462,7 @@ Saw your work on Acme's payments platform — the move to event-sourced ledgers 
               <div class="card thread">
                 <div class="card-h"><div class="who"><div class="av">PN</div><div><div class="nm">Priya Nair</div><div class="sb">Platform Engineer · Umbrella · Berlin</div></div></div><div class="row"><span class="badge b-success">Interested</span><button class="btn btn-primary btn-sm">Hand off</button></div></div>
                 <div class="thbody">
-                  <div class="msg out"><div class="mh">Sent · Mon 9:14 · Touch 1</div>Hi Priya, saw your platform work at Umbrella — open to a chat about a senior backend role at Acme?</div>
+                  <div class="msg out"><div class="mh">Sent · Mon 9:14 · Touchpoint 1</div>Hi Priya, saw your platform work at Umbrella — open to a chat about a senior backend role at Acme?</div>
                   <div class="msg in"><div class="mh">Priya · Tue 8:40</div>Interested — let's find time next week. What does the team look like?</div>
                   <div class="msg out"><div class="mh">Draft · suggested by agent</div>Great! The team is 8 engineers under Dana… would Thursday 3pm CET work for a 30-min intro?</div>
                 </div>
@@ -480,11 +480,11 @@ Saw your work on Acme's payments platform — the move to event-sourced ledgers 
                 <div class="ccard"><div class="nm">Jane Doe</div><div class="ti">Senior Backend · Acme</div><span class="bar"><span style="width:96%"></span></span><span class="score">96</span></div>
                 <div class="ccard"><div class="nm">Marcus Lee</div><div class="ti">Staff Eng · Globex</div><span class="bar"><span style="width:88%"></span></span><span class="score">88</span></div></div>
               <div class="col"><div class="ch"><span>Awaiting approval</span><span class="n">12</span></div>
-                <div class="ccard"><div class="nm">Raj Kumar</div><div class="ti">Backend · Hooli</div><span class="badge b-warn" style="margin-top:4px">Touch 1 draft</span></div></div>
+                <div class="ccard"><div class="nm">Raj Kumar</div><div class="ti">Backend · Hooli</div><span class="badge b-warn" style="margin-top:4px">Touchpoint 1 draft</span></div></div>
               <div class="col"><div class="ch"><span>Scheduled</span><span class="n">6</span></div>
                 <div class="ccard"><div class="nm">Ana Ruiz</div><div class="ti">SRE · Globex</div><span class="badge b-accent" style="margin-top:4px">Sends 2pm</span></div></div>
               <div class="col"><div class="ch"><span>Awaiting reply</span><span class="n">21</span></div>
-                <div class="ccard"><div class="nm">Lena Park</div><div class="ti">Data Eng · Hooli</div><span class="auton" style="display:block;margin-top:5px">Touch 2 · day 3</span></div></div>
+                <div class="ccard"><div class="nm">Lena Park</div><div class="ti">Data Eng · Hooli</div><span class="auton" style="display:block;margin-top:5px">Touchpoint 2 · day 3</span></div></div>
               <div class="col"><div class="ch"><span>Handed off</span><span class="n">3</span></div>
                 <div class="ccard"><div class="nm">Priya Nair</div><div class="ti">Platform · Umbrella</div><span class="badge b-success" style="margin-top:4px">Interested</span></div></div>
             </div>
