@@ -7,7 +7,7 @@ organization + default workspace + org-admin membership.
 
 from functools import lru_cache
 
-from fastapi import Response
+from fastapi import Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from workos import WorkOSClient
@@ -177,6 +177,36 @@ def set_session_cookie(response: Response, sealed: str) -> None:
 
 def clear_session_cookie(response: Response) -> None:
     response.delete_cookie(key=get_settings().session_cookie_name, path="/")
+
+
+async def resolve_user_from_request(
+    request: Request, response: Response, session: AsyncSession
+) -> str | None:
+    """Identify the caller of a request → local user id (or None).
+
+    WorkOS sealed-session cookie first (refreshing it on `response` if the token was renewed); then
+    the dev-login cookie / `X-User-Id` header when WorkOS isn't configured.
+    """
+    settings = get_settings()
+    if settings.auth_enabled:
+        sealed = request.cookies.get(settings.session_cookie_name)
+        if sealed:
+            user_id, refreshed = await resolve_user_id(session, sealed)
+            if refreshed:
+                set_session_cookie(response, refreshed)
+            if user_id:
+                return user_id
+    elif (dev_id := request.cookies.get(settings.dev_session_cookie_name)) is not None:
+        # Dev-login session (only honored when WorkOS is not configured).
+        user = await session.get(User, dev_id)
+        if user is not None:
+            return user.id
+    header_id = request.headers.get("X-User-Id")
+    if header_id:
+        user = await session.get(User, header_id)
+        if user is not None:
+            return user.id
+    return None
 
 
 # --- Dev login (no WorkOS) ---------------------------------------------------

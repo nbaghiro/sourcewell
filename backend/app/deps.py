@@ -1,10 +1,11 @@
 """Request-scoped dependency injection — the tenant context every router needs.
 
-Identity is resolved from the WorkOS sealed-session cookie when present; otherwise it falls back to
-the `X-User-Id` dev header (local / API QA). Workspace scope comes from `X-Workspace-Id`.
+Identity resolution (cookie/header → user) is delegated to `services/workspace/auth`; this module
+computes the *tenant access* (org/workspace membership, `X-Workspace-Id` scope) and exposes the
+FastAPI deps + guards.
 
-This is shared kernel (root, peer to `models.py`/`targeting.py`): `api/` routers import the FastAPI
-deps (`ContextDep`/`SessionDep`), and services that operate on a request import `TenantContext`.
+Shared kernel (root, peer to `models.py`/`targeting.py`): `api/` routers import the FastAPI deps
+(`ContextDep`/`SessionDep`), and services that operate on a request import `TenantContext`.
 """
 
 from dataclasses import dataclass
@@ -14,9 +15,9 @@ from fastapi import Depends, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.db import get_session
 from app.models import Membership, MembershipRole, MembershipScope, User, Workspace
+from app.services.workspace import auth
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
@@ -31,37 +32,8 @@ class TenantContext:
     current_workspace_id: str | None
 
 
-async def _resolve_user_id(
-    request: Request, response: Response, session: AsyncSession
-) -> str | None:
-    """WorkOS session cookie first; then the X-User-Id dev header."""
-    # Imported lazily to avoid a circular import (auth imports these deps).
-    from app.services.workspace import auth as auth_service
-
-    settings = get_settings()
-    if settings.auth_enabled:
-        sealed = request.cookies.get(settings.session_cookie_name)
-        if sealed:
-            user_id, refreshed = await auth_service.resolve_user_id(session, sealed)
-            if refreshed:
-                auth_service.set_session_cookie(response, refreshed)
-            if user_id:
-                return user_id
-    elif (dev_id := request.cookies.get(settings.dev_session_cookie_name)) is not None:
-        # Dev-login session (only honored when WorkOS is not configured).
-        user = await session.get(User, dev_id)
-        if user is not None:
-            return user.id
-    header_id = request.headers.get("X-User-Id")
-    if header_id:
-        user = await session.get(User, header_id)
-        if user is not None:
-            return user.id
-    return None
-
-
 async def get_context(request: Request, response: Response, session: SessionDep) -> TenantContext:
-    user_id = await _resolve_user_id(request, response, session)
+    user_id = await auth.resolve_user_from_request(request, response, session)
     if user_id is None:
         raise HTTPException(status_code=401, detail="not authenticated")
     user = await session.get(User, user_id)
