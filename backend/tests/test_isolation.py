@@ -8,7 +8,7 @@ from starlette.responses import Response
 
 from app.deps import get_context
 from app.models import MembershipRole, MembershipScope
-from app.workspace import tenancy as service
+from app.services.workspace import tenancy as service
 from tests import factories
 
 

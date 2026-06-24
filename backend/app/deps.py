@@ -36,7 +36,7 @@ async def _resolve_user_id(
 ) -> str | None:
     """WorkOS session cookie first; then the X-User-Id dev header."""
     # Imported lazily to avoid a circular import (auth imports these deps).
-    from app.workspace import auth as auth_service
+    from app.services.workspace import auth as auth_service
 
     settings = get_settings()
     if settings.auth_enabled:

@@ -1,12 +1,16 @@
-"""A lightweight notification feed synthesized from recent activity (no separate table)."""
+"""Notification feed (service layer): synthesize a lightweight feed from recent activity.
 
+There's no separate notifications table; the feed is composed from recent inbound replies, recent
+hand-offs, the count of drafts waiting on approval, and the user's last-seen marker (for unread).
+HTTP endpoints + response schemas live in `app/api/notifications.py`.
+"""
+
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from fastapi import APIRouter
-from pydantic import BaseModel
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.deps import ContextDep, SessionDep, require_workspace
 from app.models import (
     Contact,
     Enrollment,
@@ -17,10 +21,9 @@ from app.models import (
     User,
 )
 
-router = APIRouter(prefix="/notifications", tags=["notifications"])
 
-
-class NotificationItem(BaseModel):
+@dataclass(frozen=True)
+class FeedItem:
     id: str
     type: str
     title: str
@@ -31,20 +34,16 @@ class NotificationItem(BaseModel):
     created_at: str | None
 
 
-class NotificationsOut(BaseModel):
-    items: list[NotificationItem]
+@dataclass(frozen=True)
+class Feed:
+    items: list[FeedItem]
     approvals_waiting: int
     unread: int
 
 
-class StatusOut(BaseModel):
-    status: str
-
-
-@router.get("", response_model=NotificationsOut)
-async def notifications(ctx: ContextDep, session: SessionDep) -> NotificationsOut:
-    ws = require_workspace(ctx)
-    items: list[NotificationItem] = []
+async def build_feed(session: AsyncSession, *, workspace_id: str, user: User | None) -> Feed:
+    """Compose the notification feed for a workspace (recent replies + hand-offs + approvals)."""
+    items: list[FeedItem] = []
 
     # Recent inbound replies.
     reply_rows = (
@@ -53,7 +52,10 @@ async def notifications(ctx: ContextDep, session: SessionDep) -> NotificationsOu
                 select(Message, Contact)
                 .join(Enrollment, Message.enrollment_id == Enrollment.id)
                 .join(Contact, Enrollment.contact_id == Contact.id)
-                .where(Message.workspace_id == ws, Message.direction == MessageDirection.inbound)
+                .where(
+                    Message.workspace_id == workspace_id,
+                    Message.direction == MessageDirection.inbound,
+                )
                 .order_by(Message.created_at.desc())
                 .limit(8)
             )
@@ -63,7 +65,7 @@ async def notifications(ctx: ContextDep, session: SessionDep) -> NotificationsOu
     )
     for m, c in reply_rows:
         items.append(
-            NotificationItem(
+            FeedItem(
                 id=m.id,
                 type="reply",
                 title=f"{c.full_name} replied",
@@ -82,7 +84,8 @@ async def notifications(ctx: ContextDep, session: SessionDep) -> NotificationsOu
                 select(Enrollment, Contact)
                 .join(Contact, Enrollment.contact_id == Contact.id)
                 .where(
-                    Enrollment.workspace_id == ws, Enrollment.state == EnrollmentState.handed_off
+                    Enrollment.workspace_id == workspace_id,
+                    Enrollment.state == EnrollmentState.handed_off,
                 )
                 .order_by(Enrollment.updated_at.desc())
                 .limit(4)
@@ -93,7 +96,7 @@ async def notifications(ctx: ContextDep, session: SessionDep) -> NotificationsOu
     )
     for e, c in handoff_rows:
         items.append(
-            NotificationItem(
+            FeedItem(
                 id=e.id,
                 type="handoff",
                 title=f"{c.full_name} handed off",
@@ -113,20 +116,20 @@ async def notifications(ctx: ContextDep, session: SessionDep) -> NotificationsOu
             await session.execute(
                 select(func.count())
                 .select_from(Message)
-                .where(Message.workspace_id == ws, Message.status == MessageStatus.draft)
+                .where(
+                    Message.workspace_id == workspace_id,
+                    Message.status == MessageStatus.draft,
+                )
             )
         ).scalar_one()
     )
-    user = await session.get(User, ctx.user_id)
     seen = user.notifications_seen_at if user else None
     unread = sum(1 for i in items if seen is None or (i.created_at or "") > seen.isoformat())
-    return NotificationsOut(items=items, approvals_waiting=approvals_waiting, unread=unread)
+    return Feed(items=items, approvals_waiting=approvals_waiting, unread=unread)
 
 
-@router.post("/read", response_model=StatusOut)
-async def mark_all_read(ctx: ContextDep, session: SessionDep) -> StatusOut:
-    user = await session.get(User, ctx.user_id)
+async def mark_all_read(session: AsyncSession, *, user: User | None) -> None:
+    """Stamp the user's last-seen marker so the feed's unread count resets."""
     if user is not None:
         user.notifications_seen_at = datetime.now(UTC)
         await session.flush()
-    return StatusOut(status="read")
