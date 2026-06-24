@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
-from app.deps import ContextDep, SessionDep
 from app.models import (
     Contact,
     Enrollment,
@@ -57,7 +57,9 @@ async def approve_enrollment_endpoint(
     )
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="enrollment.approved",
         summary="Approved a proposed lead",
         target_type="enrollment",
@@ -86,7 +88,9 @@ async def bulk_approve(
             continue
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="enrollment.approved",
         summary=f"Approved {len(approved)} leads in bulk",
         target_type="enrollment",
@@ -117,7 +121,9 @@ async def hand_off(enrollment_id: str, ctx: ContextDep, session: SessionDep) -> 
     )
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="enrollment.handed_off",
         summary="Handed off a candidate",
         target_type="enrollment",
@@ -145,7 +151,9 @@ async def opt_out(enrollment_id: str, ctx: ContextDep, session: SessionDep) -> E
         )
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="enrollment.opted_out",
         summary="Marked a candidate not interested",
         target_type="enrollment",

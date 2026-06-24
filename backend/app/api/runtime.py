@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin
-from app.deps import ContextDep, SessionDep
 from app.models import Enrollment
 from app.worker import run_due
 

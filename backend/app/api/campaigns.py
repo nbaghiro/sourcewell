@@ -6,9 +6,9 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.types import JsonList, JsonObject
-from app.deps import ContextDep, SessionDep
 from app.models import (
     AutonomyMode,
     Campaign,
@@ -137,7 +137,9 @@ async def create_campaign_endpoint(
     )
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="campaign.created",
         summary=f"Created campaign “{campaign.name}”",
         target_type="campaign",
@@ -241,7 +243,9 @@ async def delete_campaign(campaign_id: str, ctx: ContextDep, session: SessionDep
     await session.flush()
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="campaign.deleted",
         summary="Deleted a campaign",
         target_type="campaign",

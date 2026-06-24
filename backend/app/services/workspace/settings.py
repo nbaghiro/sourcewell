@@ -8,8 +8,8 @@ stay self-contained without a `services -> api` import.
 from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.deps import ContextDep, SessionDep
 from app.models import (
     Connection,
     ProviderCredential,
@@ -61,14 +61,14 @@ def _dump_data_provider(spec: ProviderSpec, cred: ProviderCredential | None) -> 
     )
 
 
-async def _owned_connection(session: SessionDep, ctx: ContextDep, connection_id: str) -> Connection:
+async def _owned_connection(session: AsyncSession, org_id: str, connection_id: str) -> Connection:
     conn = await session.get(Connection, connection_id)
-    if conn is None or conn.organization_id != ctx.org_id:
+    if conn is None or conn.organization_id != org_id:
         raise HTTPException(status_code=404, detail="connection not found")
     return conn
 
 
-async def _provider_creds(session: SessionDep, org_id: str) -> dict[str, ProviderCredential]:
+async def _provider_creds(session: AsyncSession, org_id: str) -> dict[str, ProviderCredential]:
     rows = (
         (
             await session.execute(

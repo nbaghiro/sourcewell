@@ -4,8 +4,8 @@ Identity resolution (cookie/header → user) is delegated to `services/workspace
 computes the *tenant access* (org/workspace membership, `X-Workspace-Id` scope) and exposes the
 FastAPI deps + guards.
 
-Shared kernel (root, peer to `models.py`/`targeting.py`): `api/` routers import the FastAPI deps
-(`ContextDep`/`SessionDep`), and services that operate on a request import `TenantContext`.
+Lives in the api layer: `api/` routers import the FastAPI deps (`ContextDep`/`SessionDep`), and
+guards import `TenantContext`.
 """
 
 from dataclasses import dataclass

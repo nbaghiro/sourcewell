@@ -9,8 +9,8 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.api.context import ContextDep, SessionDep
 from app.core.config import get_settings
-from app.deps import ContextDep, SessionDep
 from app.models import Organization, User, Workspace
 from app.services.workspace import auth as auth_service
 

@@ -9,10 +9,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin, require_workspace
 from app.core.crypto import seal, unseal
 from app.core.types import JsonObject
-from app.deps import ContextDep, SessionDep
 from app.models import (
     Campaign,
     Connection,
@@ -213,7 +213,7 @@ async def connect(
 
 @router.post("/connections/{connection_id}/disconnect", response_model=StatusIdOut)
 async def disconnect(connection_id: str, ctx: ContextDep, session: SessionDep) -> StatusIdOut:
-    conn = await _owned_connection(session, ctx, connection_id)
+    conn = await _owned_connection(session, ctx.org_id, connection_id)
     await session.delete(conn)
     await session.flush()
     return StatusIdOut(status="disconnected", id=connection_id)
@@ -221,7 +221,7 @@ async def disconnect(connection_id: str, ctx: ContextDep, session: SessionDep) -
 
 @router.post("/connections/{connection_id}/reauth", response_model=ConnectionOut)
 async def reauth(connection_id: str, ctx: ContextDep, session: SessionDep) -> ConnectionOut:
-    conn = await _owned_connection(session, ctx, connection_id)
+    conn = await _owned_connection(session, ctx.org_id, connection_id)
     conn.status = ConnectionStatus.ok
     await session.flush()
     user = await session.get(User, conn.user_id)
@@ -343,7 +343,9 @@ async def set_data_provider(
     await session.flush()
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="provider.key_set",
         summary=f"Set the {provider} API key",
         target_type="provider",
@@ -361,7 +363,9 @@ async def delete_data_provider(provider: str, ctx: ContextDep, session: SessionD
         await session.flush()
         await audit.record(
             session,
-            ctx,
+            org_id=ctx.org_id,
+            workspace_id=ctx.current_workspace_id,
+            actor_user_id=ctx.user_id,
             action="provider.key_removed",
             summary=f"Removed the {provider} API key",
             target_type="provider",
@@ -389,7 +393,9 @@ async def verify_data_provider(
     await session.flush()
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="provider.key_verified",
         summary=f"Verified the {provider} key ({cred.status})",
         target_type="provider",
@@ -509,7 +515,9 @@ async def export_org(ctx: ContextDep, session: SessionDep) -> OrgExport:
     )
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="org.exported",
         summary="Exported organization data (GDPR)",
     )

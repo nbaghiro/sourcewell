@@ -2,14 +2,15 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.deps import TenantContext
 from app.models import AuditEvent
 
 
 async def record(
     session: AsyncSession,
-    ctx: TenantContext,
     *,
+    org_id: str,
+    workspace_id: str | None,
+    actor_user_id: str,
     action: str,
     summary: str,
     target_type: str | None = None,
@@ -18,9 +19,9 @@ async def record(
     """Append an audit event for the current actor + org/workspace."""
     session.add(
         AuditEvent(
-            organization_id=ctx.org_id,
-            workspace_id=ctx.current_workspace_id,
-            actor_user_id=ctx.user_id,
+            organization_id=org_id,
+            workspace_id=workspace_id,
+            actor_user_id=actor_user_id,
             action=action,
             target_type=target_type,
             target_id=target_id,

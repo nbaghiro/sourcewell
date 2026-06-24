@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import or_, select
 
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
-from app.deps import ContextDep, SessionDep
 from app.models import (
     Campaign,
     Contact,
@@ -143,7 +143,9 @@ async def import_contacts(body: ImportRequest, ctx: ContextDep, session: Session
     )
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="contact.imported",
         summary=f"Imported {len(created)} contacts",
         target_type="contact",
@@ -211,7 +213,9 @@ async def delete_contact(contact_id: str, ctx: ContextDep, session: SessionDep) 
     await session.flush()
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="contact.deleted",
         summary="Deleted a contact",
         target_type="contact",
@@ -237,7 +241,9 @@ async def forget_contact(contact_id: str, ctx: ContextDep, session: SessionDep) 
     await session.flush()
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="contact.forgotten",
         summary="Erased a contact (GDPR)",
         target_type="contact",

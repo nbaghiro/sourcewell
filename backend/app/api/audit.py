@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.deps import ContextDep, SessionDep
+from app.api.context import ContextDep, SessionDep
 from app.models import AuditEvent, User
 
 router = APIRouter(prefix="/audit", tags=["audit"])

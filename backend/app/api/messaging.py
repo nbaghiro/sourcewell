@@ -9,12 +9,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.config import get_settings
 from app.core.crypto import verify_hmac
 from app.core.db import get_session
 from app.core.types import JsonObject
-from app.deps import ContextDep, SessionDep
 from app.models import (
     Campaign,
     Channel,
@@ -196,7 +196,9 @@ async def approve_message_endpoint(
     )
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="message.approved",
         summary="Approved a drafted message",
         target_type="message",
@@ -350,7 +352,9 @@ async def send_reply(
     await session.flush()
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="reply.sent",
         summary="Sent a manual reply",
         target_type="enrollment",

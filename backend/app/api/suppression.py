@@ -7,9 +7,9 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin
 from app.core.db import get_session
-from app.deps import ContextDep, SessionDep
 from app.models import Suppression, SuppressionReason
 from app.services.insights import audit
 from app.services.people.suppression import (
@@ -74,7 +74,9 @@ async def add_suppression(
         raise HTTPException(status_code=400, detail="a valid email is required")
     await audit.record(
         session,
-        ctx,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
         action="suppression.added",
         summary=f"Suppressed {row.email}",
         target_type="suppression",
@@ -87,7 +89,14 @@ async def add_suppression(
 async def remove_suppression(email: str, ctx: ContextDep, session: SessionDep) -> RemovedOut:
     require_org_admin(ctx)
     await remove(session, organization_id=ctx.org_id, email=email)
-    await audit.record(session, ctx, action="suppression.removed", summary=f"Un-suppressed {email}")
+    await audit.record(
+        session,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
+        action="suppression.removed",
+        summary=f"Un-suppressed {email}",
+    )
     return RemovedOut(status="removed", email=email)
 
 

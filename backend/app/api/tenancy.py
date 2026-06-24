@@ -6,8 +6,8 @@ Business logic lives in `app.services.workspace.tenancy`; request-context DI liv
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin
-from app.deps import ContextDep, SessionDep
 from app.models import (
     Membership,
     MembershipRole,

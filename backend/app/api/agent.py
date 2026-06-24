@@ -10,9 +10,9 @@ a service and maps the returned dataclass to the Pydantic response model.
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.types import JsonObject
-from app.deps import ContextDep, SessionDep
 from app.services.agent.activity import ActivityEventData, RefData, build_activity_stream
 from app.services.agent.chat import handle_chat
 from app.services.agent.state import StateData, aggregate_state
