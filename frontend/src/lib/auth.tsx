@@ -1,7 +1,6 @@
 import * as React from "react";
 
 import { api, API_URL, ApiError } from "@/lib/api";
-import { DEMO_MODE } from "@/lib/api/demo/transport";
 
 export interface Workspace {
   id: string;
@@ -76,30 +75,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const login = React.useCallback(() => {
-    // No real WorkOS in demo mode — every "Continue with…" just signs in as the demo account.
-    if (DEMO_MODE) {
-      void devLogin();
-      return;
-    }
     window.location.href = `${API_URL}/auth/login`;
-  }, [devLogin]);
+  }, []);
 
   const logout = React.useCallback(async () => {
     try {
       const { logout_url } = await api<{ logout_url: string }>("/auth/logout", { method: "POST" });
-      if (DEMO_MODE) {
-        // No external IdP to bounce through — just drop the session and show the login page.
-        setMe(null);
-        setStatus("anon");
-        return;
-      }
       window.location.href = logout_url;
     } catch {
-      if (DEMO_MODE) {
-        setMe(null);
-        setStatus("anon");
-        return;
-      }
       window.location.href = "/login";
     }
   }, []);

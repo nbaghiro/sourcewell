@@ -1,7 +1,6 @@
 import createClient, { type Middleware } from "openapi-fetch";
 
 import { API_URL } from "@/lib/api";
-import { appFetch } from "./demo/transport";
 import type { paths } from "./schema";
 
 // The middleware can't read React context, so the active workspace id is mirrored here by
@@ -19,7 +18,7 @@ const workspaceMiddleware: Middleware = {
 };
 
 /** Fully-typed API client generated from the backend's OpenAPI schema. */
-export const client = createClient<paths>({ baseUrl: API_URL, credentials: "include", fetch: appFetch });
+export const client = createClient<paths>({ baseUrl: API_URL, credentials: "include" });
 client.use(workspaceMiddleware);
 
 /** Narrow openapi-fetch's {data,error} result to data, throwing on error (for react-query). */

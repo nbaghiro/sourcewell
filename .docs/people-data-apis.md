@@ -106,8 +106,8 @@ pre‑ingesting *the provider's whole catalog to search it* = not OK.
 
 ## 5. The adapter module (what's built)
 
-Everything lives in `backend/app/modules/sourcing/`. Adding a provider = one adapter file; nothing
-else changes (the same swap‑behind‑one‑interface pattern as the client's `appFetch`/`DEMO_MODE`).
+Everything lives in `backend/app/people/sourcing/`. Adding a provider = one adapter file; nothing
+else changes — it's a swap‑behind‑one‑interface pattern (the same idea as the runtime's send channels).
 
 ```
 sourcing/
@@ -222,7 +222,6 @@ sealing. Verified end‑to‑end; backend gate green.
 - More adapters: **Apollo**, Cognism, Hunter; a waterfall orchestrator.
 - Transient response cache + per‑org **credits/usage** metering.
 - "Refresh owned contacts" job (the legitimate §3 sync) and a suppression list.
-- Demo‑mock handlers for `/people/*` and `/settings/data-providers` (standalone `VITE_DEMO=1` build).
 
 ---
 
