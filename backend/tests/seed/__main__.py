@@ -1,4 +1,4 @@
-"""CLI: rebuild the demo dataset. Run with `make seed` or `python -m app.demo.seed`."""
+"""CLI: rebuild the demo dataset. Run with `make seed` or `python -m tests.seed`."""
 
 import asyncio
 import os
@@ -8,7 +8,7 @@ os.environ.setdefault("EMAIL_DRY_RUN", "1")
 
 import app.models  # noqa: F401  (register every ORM table)
 from app.core.db import SessionLocal
-from app.demo.builder import seed_demo
+from tests.seed.builder import seed_demo
 
 
 async def _run() -> None:

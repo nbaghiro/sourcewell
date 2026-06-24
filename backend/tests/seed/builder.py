@@ -18,13 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.types import JsonObject
-from app.demo.data import (
-    SequenceStep,
-    _stable_hash,
-    build_messages,
-    make_contacts,
-    states_for,
-)
 from app.models import (
     AuditEvent,
     AutonomyMode,
@@ -50,6 +43,13 @@ from app.models import (
     WorkspaceKind,
 )
 from app.targeting import evaluate
+from tests.seed.data import (
+    SequenceStep,
+    _stable_hash,
+    build_messages,
+    make_contacts,
+    states_for,
+)
 
 DEMO_ORG_SLUG = "acme-talent"
 

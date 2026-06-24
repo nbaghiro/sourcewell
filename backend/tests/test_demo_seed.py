@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.demo.builder import seed_demo
 from app.models import Contact, Organization, Workspace
+from tests.seed.builder import seed_demo
 
 
 @pytest.mark.db

@@ -30,7 +30,7 @@ worker:
 	cd backend && uv run python -m app.runtime.worker
 
 seed:
-	cd backend && uv run python -m app.demo.seed
+	cd backend && uv run python -m tests.seed
 
 web-install:
 	cd frontend && npm install
