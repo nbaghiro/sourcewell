@@ -13,7 +13,7 @@ import httpx
 from pydantic import BaseModel
 
 from app.core.types import JsonList, JsonObject
-from app.targeting import Targeting
+from app.services.sourcing.targeting import Targeting
 
 
 def opt_str(v: object) -> str | None:

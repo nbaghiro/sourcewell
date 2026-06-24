@@ -12,7 +12,7 @@ from app.api.guards import require_org_admin
 from app.core.db import get_session
 from app.models import Suppression, SuppressionReason
 from app.services.insights import audit
-from app.services.people.suppression import (
+from app.services.sourcing.suppression import (
     list_for_org,
     parse_unsubscribe,
     remove,

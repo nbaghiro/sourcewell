@@ -15,7 +15,7 @@ from app.models import (
 )
 from app.services.insights import audit
 from app.services.outreach.enrollment import approve_enrollment
-from app.services.people import suppression
+from app.services.sourcing import suppression
 
 router = APIRouter(prefix="/enrollments", tags=["enrollments"])
 

@@ -35,7 +35,7 @@ from app.models import (
 )
 from app.services.outreach import governor
 from app.services.outreach.messaging import draft_message, send_via_channel
-from app.services.people import suppression
+from app.services.sourcing import suppression
 
 _FINAL_GRACE_DAYS = 3
 _MAX_SEND_ATTEMPTS = 3

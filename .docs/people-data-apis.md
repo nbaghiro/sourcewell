@@ -106,7 +106,7 @@ pre‑ingesting *the provider's whole catalog to search it* = not OK.
 
 ## 5. The adapter module (what's built)
 
-Everything lives in `backend/app/services/people/` (`discovery.py` + `adapters/`). Adding a provider =
+Everything lives in `backend/app/services/sourcing/` (`discovery.py` + `adapters/`). Adding a provider =
 one adapter file; nothing else changes — a swap‑behind‑one‑interface pattern (like the worker's send channels).
 
 ```

@@ -42,7 +42,7 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
-from app.targeting import evaluate
+from app.services.sourcing.targeting import evaluate
 from tests.seed.data import (
     SequenceStep,
     _stable_hash,

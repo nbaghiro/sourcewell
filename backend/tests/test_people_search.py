@@ -10,14 +10,14 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
-from app.services.people import discovery, usage
-from app.services.people.adapters.demo import DemoProvider
-from app.services.people.adapters.registry import (
+from app.services.sourcing import discovery, usage
+from app.services.sourcing.adapters.demo import DemoProvider
+from app.services.sourcing.adapters.registry import (
     PROVIDER_CATALOG,
     build_providers,
     build_providers_for_org,
 )
-from app.targeting import Targeting
+from app.services.sourcing.targeting import Targeting
 
 
 async def test_demo_search_scores_and_ranks() -> None:

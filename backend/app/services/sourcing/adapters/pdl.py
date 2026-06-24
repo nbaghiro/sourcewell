@@ -9,7 +9,7 @@ search responses are returned to the request and discarded. No avatar is mapped 
 import httpx
 
 from app.core.types import JsonObject
-from app.services.people.adapters.base import (
+from app.services.sourcing.adapters.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,
@@ -20,7 +20,7 @@ from app.services.people.adapters.base import (
     opt_str,
     str_list,
 )
-from app.targeting import Targeting
+from app.services.sourcing.targeting import Targeting
 
 _BASE = "https://api.peopledatalabs.com/v5"
 _TIMEOUT = 20.0

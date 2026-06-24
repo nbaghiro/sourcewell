@@ -18,8 +18,8 @@ from app.models import (
     SuppressionReason,
 )
 from app.services.insights import audit
-from app.services.people import suppression
-from app.services.people.contacts import create_contacts, generate_sample
+from app.services.sourcing import suppression
+from app.services.sourcing.contacts import create_contacts, generate_sample
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 

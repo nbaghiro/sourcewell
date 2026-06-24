@@ -14,7 +14,7 @@ from app.models import (
     Connection,
     ProviderCredential,
 )
-from app.services.people.adapters.registry import ProviderSpec
+from app.services.sourcing.adapters.registry import ProviderSpec
 
 
 class ConnectionOut(BaseModel):

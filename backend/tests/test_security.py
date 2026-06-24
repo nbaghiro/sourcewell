@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from app.api.context import TenantContext
 from app.api.guards import require_org_admin, require_workspace
 from app.core import crypto
-from app.services.people import suppression
+from app.services.sourcing import suppression
 
 
 def _ctx(*, is_admin: bool, workspace: str | None = "w") -> TenantContext:

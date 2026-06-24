@@ -23,7 +23,7 @@ from app.models import (
 )
 from app.services.outreach import enrollment as enr_service
 from app.services.outreach import governor
-from app.services.people import suppression
+from app.services.sourcing import suppression
 
 
 async def _setup(

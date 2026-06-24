@@ -1,14 +1,20 @@
 """Evaluator agent — LLM-judged fit on top of the deterministic scorer.
 
-The deterministic scoring + the `Candidate` protocol now live in `app/targeting.py` (the single
+The deterministic scoring + the `Candidate` protocol live in the sibling `targeting.py` (the single
 source of truth, mirrored byte-for-byte by the frontend). This module keeps only the async,
 Claude-judged path used for single-contact, user-initiated scoring (e.g. enroll); bulk ranking
-uses `app.targeting.evaluate` directly so the audience estimate stays mirrored on the frontend.
+uses `targeting.evaluate` directly so the audience estimate stays mirrored on the frontend.
 """
 
 from app.core import llm
 from app.core.types import JsonObject
-from app.targeting import FIT_THRESHOLD, Candidate, Targeting, as_targeting, evaluate
+from app.services.sourcing.targeting import (
+    FIT_THRESHOLD,
+    Candidate,
+    Targeting,
+    as_targeting,
+    evaluate,
+)
 
 __all__ = ["FIT_THRESHOLD", "Candidate", "evaluate", "evaluate_llm"]
 

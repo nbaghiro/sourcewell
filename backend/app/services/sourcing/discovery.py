@@ -15,8 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Contact
-from app.services.people.adapters.base import PersonHit, SourceProvider
-from app.targeting import Targeting, evaluate
+from app.services.sourcing.adapters.base import PersonHit, SourceProvider
+from app.services.sourcing.targeting import Targeting, evaluate
 
 # Transient, process-local search cache (cost/perf only — NOT a corpus). Short TTL, bounded.
 _CACHE: dict[str, tuple[float, list[PersonHit]]] = {}

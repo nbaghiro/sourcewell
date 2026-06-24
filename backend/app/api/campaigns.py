@@ -23,9 +23,9 @@ from app.services.outreach.campaigns import (
     get_campaign,
     list_campaigns,
 )
-from app.services.people import ranking as sourcing_service
-from app.services.people.scoring import evaluate_llm
-from app.targeting import FIT_THRESHOLD, Targeting, evaluate
+from app.services.sourcing import ranking as sourcing_service
+from app.services.sourcing.scoring import evaluate_llm
+from app.services.sourcing.targeting import FIT_THRESHOLD, Targeting, evaluate
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
