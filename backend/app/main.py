@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.agent.router import router as agent_router
+from app.api.runtime import router as admin_router
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, logger
@@ -22,7 +23,6 @@ from app.people.contacts import router as contacts_router
 from app.people.search import router as search_router
 from app.people.sourcing.router import router as people_router
 from app.people.suppression import router as suppression_router
-from app.runtime.admin_router import router as admin_router
 from app.workspace.auth import router as auth_router
 from app.workspace.notifications import router as notifications_router
 from app.workspace.settings import router as settings_router

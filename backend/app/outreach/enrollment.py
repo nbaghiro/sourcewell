@@ -39,7 +39,7 @@ from app.models import (
 )
 from app.outreach.messaging import draft_message, send_via_channel
 from app.people import suppression
-from app.runtime import governor
+from app.services.outreach import governor
 
 router = APIRouter(prefix="/enrollments", tags=["enrollments"])
 

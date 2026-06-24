@@ -1,4 +1,4 @@
-"""Admin/QA controls: drive the runtime by hand (no waiting on the worker)."""
+"""Admin/QA controls: drive the autonomous engine by hand (no waiting on the worker)."""
 
 from datetime import UTC, datetime
 
@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.deps import ContextDep, SessionDep, require_org_admin
 from app.models import Enrollment
-from app.runtime.engine import run_due
+from app.worker import run_due
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

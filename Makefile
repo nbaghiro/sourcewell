@@ -27,7 +27,7 @@ dev:
 	cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8901 --reload
 
 worker:
-	cd backend && uv run python -m app.runtime.worker
+	cd backend && uv run python -m app.worker
 
 seed:
 	cd backend && uv run python -m tests.seed
