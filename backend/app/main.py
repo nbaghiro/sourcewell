@@ -9,6 +9,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.agent.router import router as agent_router
+from app.api.campaigns import router as campaigns_router
+from app.api.enrollment import router as enrollment_router
+from app.api.messaging import router as messaging_router
 from app.api.runtime import router as admin_router
 from app.core.config import get_settings
 from app.core.db import SessionLocal
@@ -16,9 +19,6 @@ from app.core.logging import configure_logging, logger
 from app.insights.analytics import router as analytics_router
 from app.insights.audit import router as audit_router
 from app.insights.dashboard import router as dashboard_router
-from app.outreach.campaigns import router as campaigns_router
-from app.outreach.enrollment import router as enrollment_router
-from app.outreach.messaging import router as messaging_router
 from app.people.contacts import router as contacts_router
 from app.people.search import router as search_router
 from app.people.sourcing.router import router as people_router

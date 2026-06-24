@@ -19,8 +19,8 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
-from app.outreach import enrollment as enr_service
-from app.outreach import messaging as msg_service
+from app.services.outreach import enrollment as enr_service
+from app.services.outreach import messaging as msg_service
 
 
 async def _ws_contact(session: AsyncSession, slug: str) -> tuple[Organization, Workspace, Contact]:

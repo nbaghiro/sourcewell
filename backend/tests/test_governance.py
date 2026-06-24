@@ -21,8 +21,8 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
-from app.outreach import enrollment as enr_service
 from app.people import suppression
+from app.services.outreach import enrollment as enr_service
 from app.services.outreach import governor
 
 

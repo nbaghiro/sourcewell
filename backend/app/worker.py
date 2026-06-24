@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, logger
 from app.models import Enrollment, EnrollmentState
-from app.outreach.enrollment import tick
+from app.services.outreach.enrollment import tick
 
 _POLL_SECONDS = 10
 _ACTIONABLE = (
