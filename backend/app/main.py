@@ -9,9 +9,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.agent.router import router as agent_router
+from app.api.analytics import router as analytics_router
+from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.campaigns import router as campaigns_router
 from app.api.contacts import router as contacts_router
+from app.api.dashboard import router as dashboard_router
 from app.api.enrollment import router as enrollment_router
 from app.api.messaging import router as messaging_router
 from app.api.notifications import router as notifications_router
@@ -24,9 +27,6 @@ from app.api.tenancy import router as tenancy_router
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, logger
-from app.insights.analytics import router as analytics_router
-from app.insights.audit import router as audit_router
-from app.insights.dashboard import router as dashboard_router
 
 # In-process fixed-window rate limiter (per client IP). Front with a shared store for multi-process.
 _RL: dict[str, tuple[float, int]] = {}

@@ -1,12 +1,11 @@
 """Read-only dashboard aggregation for the current workspace."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter
-from pydantic import BaseModel
 from sqlalchemy import Select, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.deps import ContextDep, SessionDep, require_workspace
 from app.models import (
     Campaign,
     CampaignStatus,
@@ -18,17 +17,17 @@ from app.models import (
     MessageStatus,
 )
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-
-class DashboardStats(BaseModel):
+@dataclass(frozen=True)
+class DashboardStatsData:
     active_campaigns: int
     contacts: int
     awaiting_approval: int
     replies_7d: int
 
 
-class DashboardCampaign(BaseModel):
+@dataclass(frozen=True)
+class DashboardCampaignData:
     id: str
     name: str
     status: str
@@ -38,7 +37,8 @@ class DashboardCampaign(BaseModel):
     replies: int
 
 
-class DashboardApproval(BaseModel):
+@dataclass(frozen=True)
+class DashboardApprovalData:
     enrollment_id: str
     message_id: str
     contact_name: str
@@ -48,28 +48,29 @@ class DashboardApproval(BaseModel):
     score: int
 
 
-class DashboardReply(BaseModel):
+@dataclass(frozen=True)
+class DashboardReplyData:
     contact_name: str
     snippet: str
     state: str
 
 
-class DashboardSummary(BaseModel):
-    stats: DashboardStats
-    campaigns: list[DashboardCampaign]
-    approvals: list[DashboardApproval]
-    recent_replies: list[DashboardReply]
+@dataclass(frozen=True)
+class DashboardData:
+    stats: DashboardStatsData
+    campaigns: list[DashboardCampaignData]
+    approvals: list[DashboardApprovalData]
+    recent_replies: list[DashboardReplyData]
 
 
-@router.get("/summary", response_model=DashboardSummary)
-async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
-    ws = require_workspace(ctx)
+async def workspace_dashboard(session: AsyncSession, *, workspace_id: str) -> DashboardData:
+    ws = workspace_id
     since = datetime.now(UTC) - timedelta(days=7)
 
     async def scalar(stmt: Select[tuple[int]]) -> int:
         return int((await session.execute(stmt)).scalar_one())
 
-    stats = DashboardStats(
+    stats = DashboardStatsData(
         active_campaigns=await scalar(
             select(func.count())
             .select_from(Campaign)
@@ -149,7 +150,7 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
         .all()
     )
     campaigns = [
-        DashboardCampaign(
+        DashboardCampaignData(
             id=c.id,
             name=c.name,
             status=c.status.value,
@@ -163,7 +164,7 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
 
     # Approval queue (top drafts by fit).
     approvals = [
-        DashboardApproval(
+        DashboardApprovalData(
             enrollment_id=e.id,
             message_id=m.id,
             contact_name=ct.full_name,
@@ -188,7 +189,7 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
 
     # Recent inbound replies.
     recent_replies = [
-        DashboardReply(
+        DashboardReplyData(
             contact_name=ct.full_name,
             snippet=(m.body[:80] + "…") if len(m.body) > 80 else m.body,
             state=e.state.value,
@@ -207,7 +208,7 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
         .all()
     ]
 
-    return DashboardSummary(
+    return DashboardData(
         stats=stats,
         campaigns=campaigns,
         approvals=approvals,

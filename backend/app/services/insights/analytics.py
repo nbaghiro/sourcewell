@@ -1,10 +1,10 @@
 """Workspace analytics: funnel, channel reply-rates, per-campaign performance, activity feed."""
 
-from fastapi import APIRouter
-from pydantic import BaseModel
-from sqlalchemy import Select, distinct, func, select
+from dataclasses import dataclass
 
-from app.deps import ContextDep, SessionDep, require_workspace
+from sqlalchemy import Select, distinct, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models import (
     Campaign,
     Channel,
@@ -16,24 +16,25 @@ from app.models import (
     MessageStatus,
 )
 
-router = APIRouter(prefix="/analytics", tags=["analytics"])
 
-
-class FunnelOut(BaseModel):
+@dataclass(frozen=True)
+class FunnelData:
     sourced: int
     contacted: int
     replied: int
     handed_off: int
 
 
-class ChannelStatOut(BaseModel):
+@dataclass(frozen=True)
+class ChannelStatData:
     channel: str
     sent: int
     replied: int
     reply_rate: float
 
 
-class CampaignStatOut(BaseModel):
+@dataclass(frozen=True)
+class CampaignStatData:
     id: str
     name: str
     status: str
@@ -43,7 +44,8 @@ class CampaignStatOut(BaseModel):
     reply_rate: float
 
 
-class ActivityOut(BaseModel):
+@dataclass(frozen=True)
+class ActivityData:
     id: str
     type: str
     title: str
@@ -53,20 +55,20 @@ class ActivityOut(BaseModel):
     created_at: str | None
 
 
-class AnalyticsOut(BaseModel):
-    funnel: FunnelOut
-    channels: list[ChannelStatOut]
-    campaigns: list[CampaignStatOut]
-    activity: list[ActivityOut]
+@dataclass(frozen=True)
+class AnalyticsData:
+    funnel: FunnelData
+    channels: list[ChannelStatData]
+    campaigns: list[CampaignStatData]
+    activity: list[ActivityData]
 
 
 def _rate(num: int, den: int) -> float:
     return round(num / den, 3) if den else 0.0
 
 
-@router.get("", response_model=AnalyticsOut)
-async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
-    ws = require_workspace(ctx)
+async def workspace_analytics(session: AsyncSession, *, workspace_id: str) -> AnalyticsData:
+    ws = workspace_id
 
     async def scalar(stmt: Select[tuple[int]]) -> int:
         return int((await session.execute(stmt)).scalar_one())
@@ -91,7 +93,7 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
         .select_from(Enrollment)
         .where(Enrollment.workspace_id == ws, Enrollment.state == EnrollmentState.handed_off)
     )
-    funnel = FunnelOut(
+    funnel = FunnelData(
         sourced=sourced,
         contacted=contacted,
         replied=replied,
@@ -127,7 +129,7 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
         .all()
     }
     channels = [
-        ChannelStatOut(
+        ChannelStatData(
             channel=ch.value,
             sent=int(sent_by_ch.get(ch, 0)),
             replied=int(repl_by_ch.get(ch, 0)),
@@ -186,7 +188,7 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
         .all()
     )
     campaigns = [
-        CampaignStatOut(
+        CampaignStatData(
             id=c.id,
             name=c.name,
             status=c.status.value,
@@ -214,7 +216,7 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
         .all()
     )
     activity = [
-        ActivityOut(
+        ActivityData(
             id=m.id,
             type="reply" if m.direction == MessageDirection.inbound else "sent",
             title=(
@@ -230,4 +232,4 @@ async def analytics(ctx: ContextDep, session: SessionDep) -> AnalyticsOut:
         for m, c, camp in msg_rows
     ]
 
-    return AnalyticsOut(funnel=funnel, channels=channels, campaigns=campaigns, activity=activity)
+    return AnalyticsData(funnel=funnel, channels=channels, campaigns=campaigns, activity=activity)
