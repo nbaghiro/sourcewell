@@ -1,22 +1,21 @@
-"""Auth: WorkOS AuthKit integration (service layer).
+"""Auth: LinkedIn sign-in via Unipile hosted-auth + the sealed session cookie.
 
-The sealed session is a Fernet-encrypted cookie holding the WorkOS access/refresh tokens. We map
-the WorkOS user (by id, stored on `User.sso_subject`) to a local user; first login provisions an
-organization + default workspace + org-admin membership.
+Sign-in connects a real LinkedIn account through Unipile's hosted-auth wizard; the connected
+account's stable identity (`member_urn`) maps to a local user, provisioning an org + default
+workspace on first login. The session is a Fernet-sealed cookie holding the local user id. A
+dev-login bypass (header / cookie) is available when LinkedIn auth isn't configured (local / QA).
 """
-
-from functools import lru_cache
 
 from fastapi import Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from workos import WorkOSClient
-from workos.session import seal_session_from_auth_response
-from workos.user_management import AuthenticateResponse
 
 from app.core.config import get_settings
+from app.core.crypto import seal, unseal
 from app.core.db import new_id
+from app.ext.unipile import unipile_connection
 from app.models import (
+    LoginAttempt,
     Membership,
     MembershipRole,
     MembershipScope,
@@ -25,141 +24,31 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
+from app.services.workspace.connections import provision_from_linkedin
 
 
-@lru_cache
-def _client() -> WorkOSClient:
-    s = get_settings()
-    if not s.auth_enabled:
-        raise RuntimeError("WorkOS is not configured")
-    return WorkOSClient(api_key=s.workos_api_key, client_id=s.workos_client_id)
+def _opt(payload: object, key: str) -> str | None:
+    if isinstance(payload, dict):
+        value = payload.get(key)
+        return value if isinstance(value, str) and value else None
+    return None
 
 
-def login_url(state: str | None = None) -> str:
-    s = get_settings()
-    return _client().user_management.get_authorization_url(
-        provider="authkit", redirect_uri=s.workos_redirect_uri, state=state
-    )
+# --- the sealed session ------------------------------------------------------
 
 
-def _seal(resp: AuthenticateResponse) -> str:
-    user = resp.user
-    # Runtime fallback for older WorkOS user shapes; the stub doesn't model the mapping form.
-    user_dict = user.model_dump() if hasattr(user, "model_dump") else dict(user)  # type: ignore[call-overload]
-    return seal_session_from_auth_response(
-        access_token=resp.access_token,
-        refresh_token=resp.refresh_token,
-        user=user_dict,
-        cookie_password=get_settings().session_cookie_password,
-    )
+def mint_session(user_id: str) -> str:
+    """Seal a local user id into the session-cookie value."""
+    return seal(user_id)
 
 
-async def complete_login(session: AsyncSession, *, code: str) -> tuple[User, str]:
-    """Exchange an AuthKit code → provision/find the local user → return (user, sealed cookie)."""
-    resp = _client().user_management.authenticate_with_code(code=code)
-    wos_user = resp.user
-    first = getattr(wos_user, "first_name", None) or ""
-    last = getattr(wos_user, "last_name", None) or ""
-    name = f"{first} {last}".strip() or wos_user.email
-    user = await _provision(
-        session,
-        wos_user_id=wos_user.id,
-        email=wos_user.email,
-        name=name,
-        wos_org_id=getattr(resp, "organization_id", None),
-    )
-    return user, _seal(resp)
-
-
-async def _provision(
-    session: AsyncSession, *, wos_user_id: str, email: str, name: str, wos_org_id: str | None
-) -> User:
-    existing = (
-        await session.execute(select(User).where(User.sso_subject == wos_user_id))
-    ).scalar_one_or_none()
-    if existing is not None:
-        return existing
-
-    org: Organization | None = None
-    if wos_org_id:
-        org = (
-            await session.execute(
-                select(Organization).where(Organization.workos_org_id == wos_org_id)
-            )
-        ).scalar_one_or_none()
-    if org is None:
-        domain = email.split("@")[-1].split(".")[0] if "@" in email else "workspace"
-        org = Organization(
-            name=domain.capitalize(),
-            slug=f"{domain}-{new_id()[:8].lower()}",
-            workos_org_id=wos_org_id,
-        )
-        session.add(org)
-        await session.flush()
-        session.add(
-            Workspace(organization_id=org.id, name="Default workspace", kind=WorkspaceKind.team)
-        )
-        await session.flush()
-
-    user = User(organization_id=org.id, email=email, name=name, sso_subject=wos_user_id)
-    session.add(user)
-    await session.flush()
-    session.add(
-        Membership(
-            user_id=user.id,
-            organization_id=org.id,
-            scope=MembershipScope.organization,
-            role=MembershipRole.org_admin,
-        )
-    )
-    await session.flush()
-    return user
-
-
-async def resolve_user_id(session: AsyncSession, sealed: str) -> tuple[str | None, str | None]:
-    """Validate the sealed cookie → return (local user_id, refreshed cookie or None).
-
-    The refreshed cookie is non-None when the access token had expired and was renewed; the caller
-    should write it back so the session stays alive.
-    """
-    s = get_settings()
+async def _session_user_id(session: AsyncSession, sealed: str) -> str | None:
     try:
-        sess = _client().user_management.load_sealed_session(
-            session_data=sealed, cookie_password=s.session_cookie_password
-        )
-        result = sess.authenticate()
-        refreshed: str | None = None
-        if getattr(result, "authenticated", False):
-            wos_user = getattr(result, "user", None) or {}
-        else:
-            renew = sess.refresh(cookie_password=s.session_cookie_password)
-            if not getattr(renew, "authenticated", False):
-                return None, None
-            refreshed = getattr(renew, "sealed_session", None)
-            wos_user = getattr(renew, "user", None) or {}
-        raw_id = wos_user.get("id") if isinstance(wos_user, dict) else getattr(wos_user, "id", None)
-        wos_user_id = raw_id if isinstance(raw_id, str) else None
-        if not wos_user_id:
-            return None, None
-        user = (
-            await session.execute(select(User).where(User.sso_subject == wos_user_id))
-        ).scalar_one_or_none()
-        return (user.id if user else None), refreshed
+        user_id = unseal(sealed)
     except Exception:
-        return None, None
-
-
-def logout_url(sealed: str | None) -> str:
-    s = get_settings()
-    if not sealed:
-        return s.frontend_url
-    try:
-        sess = _client().user_management.load_sealed_session(
-            session_data=sealed, cookie_password=s.session_cookie_password
-        )
-        return sess.get_logout_url(return_to=s.frontend_url)
-    except Exception:
-        return s.frontend_url
+        return None
+    user = await session.get(User, user_id)
+    return user.id if user is not None else None
 
 
 def set_session_cookie(response: Response, sealed: str) -> None:
@@ -179,37 +68,88 @@ def clear_session_cookie(response: Response) -> None:
     response.delete_cookie(key=get_settings().session_cookie_name, path="/")
 
 
+# --- LinkedIn (Unipile hosted-auth) sign-in ----------------------------------
+
+
+async def start_linkedin_login(session: AsyncSession) -> str | None:
+    """Create a hosted-auth wizard link for a sign-in; returns its URL (None if unconfigured)."""
+    conn = unipile_connection()
+    if conn is None:
+        return None
+    s = get_settings()
+    state = new_id()
+    session.add(LoginAttempt(state=state, status="pending"))
+    await session.flush()
+    notify = f"{s.api_base_url}/auth/linkedin/notify?token={s.unipile_webhook_secret}"
+    redirect = f"{s.api_base_url}/auth/callback?state={state}"
+    return await conn.create_link(user_ref=state, notify_url=notify, redirect_url=redirect)
+
+
+async def complete_linkedin_notify(session: AsyncSession, *, state: str, account_id: str) -> None:
+    """Unipile notify: read the connected account's identity, provision the user, mark ready."""
+    attempt = (
+        await session.execute(select(LoginAttempt).where(LoginAttempt.state == state))
+    ).scalar_one_or_none()
+    if attempt is None:
+        return
+    conn = unipile_connection()
+    profile = await conn.profile(account_id=account_id) if conn is not None else None
+    member_urn = _opt(profile, "member_urn") or account_id
+    name = " ".join(filter(None, [_opt(profile, "first_name"), _opt(profile, "last_name")]))
+    user = await provision_from_linkedin(
+        session,
+        member_urn=member_urn,
+        name=name,
+        email=_opt(profile, "email"),
+        account_id=account_id,
+    )
+    attempt.user_id = user.id
+    attempt.account_id = account_id
+    attempt.status = "ready"
+    await session.flush()
+
+
+async def finish_linkedin_login(session: AsyncSession, *, state: str) -> str | None:
+    """Browser callback: if the notify provisioned the user, return their id (and consume it)."""
+    attempt = (
+        await session.execute(select(LoginAttempt).where(LoginAttempt.state == state))
+    ).scalar_one_or_none()
+    if attempt is None or attempt.status != "ready" or attempt.user_id is None:
+        return None
+    user_id = attempt.user_id
+    await session.delete(attempt)
+    await session.flush()
+    return user_id
+
+
+# --- request → user id -------------------------------------------------------
+
+
 async def resolve_user_from_request(
     request: Request, response: Response, session: AsyncSession
 ) -> str | None:
-    """Identify the caller of a request → local user id (or None).
-
-    WorkOS sealed-session cookie first (refreshing it on `response` if the token was renewed); then
-    the dev-login cookie / `X-User-Id` header when WorkOS isn't configured.
-    """
+    """Identify the caller: the sealed LinkedIn session cookie, then the dev-login fallback."""
     settings = get_settings()
-    if settings.auth_enabled:
-        sealed = request.cookies.get(settings.session_cookie_name)
-        if sealed:
-            user_id, refreshed = await resolve_user_id(session, sealed)
-            if refreshed:
-                set_session_cookie(response, refreshed)
-            if user_id:
-                return user_id
-    elif (dev_id := request.cookies.get(settings.dev_session_cookie_name)) is not None:
-        # Dev-login session (only honored when WorkOS is not configured).
-        user = await session.get(User, dev_id)
-        if user is not None:
-            return user.id
-    header_id = request.headers.get("X-User-Id")
-    if header_id:
-        user = await session.get(User, header_id)
-        if user is not None:
-            return user.id
+    sealed = request.cookies.get(settings.session_cookie_name)
+    if sealed:
+        user_id = await _session_user_id(session, sealed)
+        if user_id:
+            return user_id
+    if settings.dev_login_enabled:
+        dev_id = request.cookies.get(settings.dev_session_cookie_name)
+        if dev_id is not None:
+            user = await session.get(User, dev_id)
+            if user is not None:
+                return user.id
+        header_id = request.headers.get("X-User-Id")
+        if header_id:
+            user = await session.get(User, header_id)
+            if user is not None:
+                return user.id
     return None
 
 
-# --- Dev login (no WorkOS) ---------------------------------------------------
+# --- Dev login (only when LinkedIn auth is not configured) -------------------
 
 
 async def ensure_demo_user(session: AsyncSession) -> User:

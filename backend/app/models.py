@@ -180,8 +180,6 @@ class Organization(IdMixin, TimestampMixin, Base):
     slug: Mapped[str] = mapped_column(String(100), unique=True)
     plan: Mapped[str] = mapped_column(String(50), default="trial")
     data_region: Mapped[str] = mapped_column(String(20), default="us")
-    # Maps a WorkOS organization to this org (set on first SSO login).
-    workos_org_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
 
 
 class Workspace(IdMixin, TimestampMixin, Base):
@@ -214,12 +212,26 @@ class User(IdMixin, TimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(320))
     name: Mapped[str] = mapped_column(String(200))
     status: Mapped[UserStatus] = mapped_column(sa_enum(UserStatus), default=UserStatus.active)
+    # The federated identity key: the LinkedIn member_urn from Unipile hosted-auth sign-in.
     sso_subject: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     notifications_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
     __table_args__ = (UniqueConstraint("organization_id", "email", name="uq_user_org_email"),)
+
+
+class LoginAttempt(IdMixin, TimestampMixin, Base):
+    """A pending LinkedIn (Unipile hosted-auth) sign-in. Correlates the server-side notify webhook
+    with the browser redirect via a one-time `state` token; consumed when the session is minted.
+    """
+
+    __tablename__ = "login_attempt"
+
+    state: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | ready
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class Membership(IdMixin, TimestampMixin, Base):

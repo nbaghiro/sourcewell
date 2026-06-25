@@ -21,10 +21,7 @@ class Settings(BaseSettings):
     # Where the React app is served — used for CORS + post-auth redirects.
     frontend_url: str = "http://localhost:8900"
 
-    # --- WorkOS AuthKit ---
-    workos_api_key: str = ""
-    workos_client_id: str = ""
-    workos_redirect_uri: str = "http://localhost:8901/auth/callback"
+    # --- Session (LinkedIn sign-in via Unipile hosted-auth) ---
     # Fernet key used to seal the session cookie. Generate with:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     session_cookie_password: str = ""
@@ -62,19 +59,19 @@ class Settings(BaseSettings):
     # Shared secret a provider HMAC-signs inbound webhook bodies with (blank disables the check).
     inbound_webhook_secret: str = ""
 
-    # --- Dev login (auth bypass for design/QA; ignored once WorkOS is configured) ---
+    # --- Dev login (auth bypass for design/QA; ignored once LinkedIn auth is configured) ---
     dev_session_cookie_name: str = "sw_dev_user"
     demo_admin_email: str = "demo@sourcewell.ai"
     demo_password: str = "pass"
 
     @property
     def auth_enabled(self) -> bool:
-        """True only when WorkOS is fully configured; otherwise dev-header auth is used."""
-        return bool(self.workos_api_key and self.workos_client_id and self.session_cookie_password)
+        """True when LinkedIn (Unipile hosted-auth) sign-in is configured; else dev-header auth."""
+        return bool(self.unipile_api_key and self.unipile_dsn and self.session_cookie_password)
 
     @property
     def dev_login_enabled(self) -> bool:
-        """One-click demo sign-in is available only when WorkOS is NOT configured."""
+        """One-click demo sign-in is available only when LinkedIn auth is NOT configured."""
         return not self.auth_enabled
 
 

@@ -13,7 +13,7 @@ dependencies = [
     "pydantic-settings>=2.6",
     "pgvector>=0.3.6",
     "python-ulid>=2.7",
-    "workos>=8.2.0",
+    "cryptography>=44.0",
     "anthropic>=0.112.0",
 ]
 

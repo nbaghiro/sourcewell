@@ -13,7 +13,7 @@ _DSN = "https://api1.unipile.com:1234"
 _LINKEDIN = ConnectionProvider.linkedin
 
 
-# --- provisioning (the WorkOS replacement) -----------------------------------
+# --- provisioning (LinkedIn sign-in) -----------------------------------------
 
 
 @pytest.mark.db

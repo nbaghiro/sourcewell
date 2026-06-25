@@ -1,8 +1,11 @@
-"""Auth HTTP endpoints: WorkOS AuthKit login/callback + dev login + me/logout.
+"""Auth HTTP endpoints: LinkedIn (Unipile) login/notify/callback + dev login + me/logout.
 
-Business logic (WorkOS client, session sealing, provisioning) lives in
+Business logic (the hosted-auth link, session sealing, provisioning) lives in
 `app.services.workspace.auth`; this module is the HTTP layer only.
 """
+
+import hmac
+import json
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
@@ -18,10 +21,43 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/login")
-async def login() -> RedirectResponse:
-    if not get_settings().auth_enabled:
-        raise HTTPException(status_code=503, detail="WorkOS is not configured")
-    return RedirectResponse(auth_service.login_url())
+async def login(session: SessionDep) -> RedirectResponse:
+    """Start a LinkedIn sign-in: redirect the browser to the Unipile hosted-auth wizard."""
+    url = await auth_service.start_linkedin_login(session)
+    if url is None:
+        raise HTTPException(status_code=503, detail="LinkedIn auth is not configured")
+    return RedirectResponse(url)
+
+
+@router.post("/linkedin/notify")
+async def linkedin_notify(request: Request, session: SessionDep) -> dict[str, str]:
+    """Unipile server notify: provision the user for the connected account (token-gated)."""
+    secret = get_settings().unipile_webhook_secret
+    token = request.query_params.get("token") or ""
+    if not secret or not hmac.compare_digest(token, secret):
+        raise HTTPException(status_code=401, detail="invalid token")
+    try:
+        parsed: object = json.loads(await request.body() or b"{}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="invalid JSON") from None
+    payload = parsed if isinstance(parsed, dict) else {}
+    account_id = payload.get("account_id")
+    state = payload.get("name")  # the state token we set as `name` on the hosted-auth link
+    if isinstance(account_id, str) and isinstance(state, str):
+        await auth_service.complete_linkedin_notify(session, state=state, account_id=account_id)
+    return {"status": "ok"}
+
+
+@router.get("/callback")
+async def callback(state: str, session: SessionDep) -> RedirectResponse:
+    """Browser redirect after the wizard: mint the session once the notify provisioned the user."""
+    settings = get_settings()
+    user_id = await auth_service.finish_linkedin_login(session, state=state)
+    if user_id is None:
+        return RedirectResponse(f"{settings.frontend_url}/login?error=auth_failed")
+    redirect = RedirectResponse(settings.frontend_url)
+    auth_service.set_session_cookie(redirect, auth_service.mint_session(user_id))
+    return redirect
 
 
 class DevLoginRequest(BaseModel):
@@ -43,31 +79,21 @@ class DevLoginResponse(BaseModel):
 async def dev_login(
     session: SessionDep, response: Response, body: DevLoginRequest | None = None
 ) -> DevLoginResponse:
-    """Demo sign-in that bypasses WorkOS (local design/QA only).
+    """Demo sign-in that bypasses LinkedIn auth (local design/QA only).
 
     With no body it's a one-click bypass; with email/password it validates the demo credentials.
     """
     settings = get_settings()
     if not settings.dev_login_enabled:
-        raise HTTPException(status_code=403, detail="dev login disabled (WorkOS is configured)")
+        raise HTTPException(
+            status_code=403, detail="dev login disabled (LinkedIn auth is configured)"
+        )
     if body is not None and (body.email or body.password):
         if body.email != settings.demo_admin_email or body.password != settings.demo_password:
             raise HTTPException(status_code=401, detail="invalid credentials")
     user = await auth_service.ensure_demo_user(session)
     auth_service.set_dev_cookie(response, user.id)
     return DevLoginResponse(user=UserSummary(id=user.id, email=user.email, name=user.name))
-
-
-@router.get("/callback")
-async def callback(code: str, session: SessionDep) -> RedirectResponse:
-    settings = get_settings()
-    try:
-        _user, sealed = await auth_service.complete_login(session, code=code)
-    except Exception:
-        return RedirectResponse(f"{settings.frontend_url}/login?error=auth_failed")
-    redirect = RedirectResponse(settings.frontend_url)
-    auth_service.set_session_cookie(redirect, sealed)
-    return redirect
 
 
 class OrgSummary(BaseModel):
@@ -114,10 +140,7 @@ async def me(ctx: ContextDep, session: SessionDep) -> MeResponse:
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response) -> dict[str, str]:
-    settings = get_settings()
-    sealed = request.cookies.get(settings.session_cookie_name)
-    url = auth_service.logout_url(sealed) if settings.auth_enabled else settings.frontend_url
+async def logout(response: Response) -> dict[str, str]:
     auth_service.clear_session_cookie(response)
     auth_service.clear_dev_cookie(response)
-    return {"logout_url": url}
+    return {"logout_url": get_settings().frontend_url}

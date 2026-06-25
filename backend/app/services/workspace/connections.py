@@ -122,8 +122,7 @@ async def provision_from_linkedin(
     seat_type: SeatType = SeatType.basic,
 ) -> User:
     """Find or create the local user for a LinkedIn member (keyed on `member_urn`), and (re)connect
-    their seat. First login provisions an org + default workspace + org-admin membership — mirroring
-    the WorkOS path, so the Unipile connect flow can replace it without other code changing.
+    their seat. First login provisions an org + default workspace + org-admin membership.
     """
     existing = (
         await session.execute(select(User).where(User.sso_subject == member_urn))
