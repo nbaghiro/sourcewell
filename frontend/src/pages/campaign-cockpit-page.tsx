@@ -28,7 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   useCampaign,
-  useCampaignChat,
+  streamAgentChat,
   useCampaignEnrollments,
   useCampaignFunnel,
   useCampaignRuns,
@@ -463,7 +463,7 @@ function CandidatesTab({ campaignId }: { campaignId: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Chat panel — reuses the copilot bubble markup, calls useCampaignChat, and
+// Chat panel — streams the agent turn token-by-token (streamAgentChat, SSE) and
 // renders typed entities below each assistant turn.
 // ---------------------------------------------------------------------------
 
@@ -482,26 +482,45 @@ function ChatPanel({ campaignId }: { campaignId: string }) {
     { role: "agent", text: GREETING },
   ]);
   const [input, setInput] = React.useState("");
-  const chat = useCampaignChat(campaignId);
+  const [streaming, setStreaming] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  // Mutate the trailing agent message (the one being streamed) in place.
+  function patchLastAgent(patch: (m: ChatMessage) => ChatMessage) {
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last?.role === "agent") next[next.length - 1] = patch(last);
+      return next;
+    });
+  }
 
   React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, chat.isPending]);
+  }, [messages, streaming]);
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || chat.isPending) return;
+    if (!trimmed || streaming) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", text: trimmed }]);
+    // append the user turn + an empty agent turn that the stream fills in.
+    setMessages((m) => [...m, { role: "user", text: trimmed }, { role: "agent", text: "" }]);
+    setStreaming(true);
     try {
-      const res = await chat.mutateAsync(trimmed);
-      setMessages((m) => [...m, { role: "agent", text: res.reply, entities: res.entities }]);
+      await streamAgentChat(
+        { message: trimmed, campaign_id: campaignId },
+        {
+          onToken: (t) => patchLastAgent((m) => ({ ...m, text: m.text + t })),
+          onDone: (entities) => patchLastAgent((m) => ({ ...m, entities })),
+        },
+      );
     } catch {
-      setMessages((m) => [
+      patchLastAgent((m) => ({
         ...m,
-        { role: "agent", text: "Sorry — I couldn't reach the agent just now. Try again?" },
-      ]);
+        text: m.text || "Sorry — I couldn't reach the agent just now. Try again?",
+      }));
+    } finally {
+      setStreaming(false);
     }
   }
 
@@ -531,24 +550,16 @@ function ChatPanel({ campaignId }: { campaignId: string }) {
                   </AvatarFallback>
                 </Avatar>
                 <div className="max-w-[80%] rounded-2xl rounded-bl-sm border border-border bg-card px-3.5 py-2 text-sm text-foreground shadow-sm">
-                  <Markdown>{m.text}</Markdown>
+                  {m.text ? (
+                    <Markdown>{m.text}</Markdown>
+                  ) : (
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  )}
                 </div>
               </div>
               <ChatEntities entities={m.entities} className="pl-9" />
             </div>
           ),
-        )}
-        {chat.isPending && (
-          <div className="flex items-end gap-2">
-            <Avatar className="size-7 shrink-0 rounded-full">
-              <AvatarFallback className="bg-accent text-accent-foreground">
-                <Bot className="size-3.5" />
-              </AvatarFallback>
-            </Avatar>
-            <div className="rounded-2xl rounded-bl-sm border border-border bg-card px-3.5 py-2.5 shadow-sm">
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            </div>
-          </div>
         )}
       </div>
 
@@ -558,7 +569,7 @@ function ChatPanel({ campaignId }: { campaignId: string }) {
             <button
               key={s}
               type="button"
-              disabled={chat.isPending}
+              disabled={streaming}
               onClick={() => void send(s)}
               className="rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:opacity-50"
             >
@@ -578,10 +589,10 @@ function ChatPanel({ campaignId }: { campaignId: string }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask your agent…"
-            disabled={chat.isPending}
+            disabled={streaming}
           />
-          <Button type="submit" size="icon" disabled={chat.isPending || !input.trim()}>
-            {chat.isPending ? <Loader2 className="animate-spin" /> : <Send />}
+          <Button type="submit" size="icon" disabled={streaming || !input.trim()}>
+            {streaming ? <Loader2 className="animate-spin" /> : <Send />}
           </Button>
         </form>
       </CardContent>
