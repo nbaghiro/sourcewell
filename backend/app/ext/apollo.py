@@ -15,7 +15,7 @@ from app.ext.base import (
 )
 from app.targeting import Targeting
 
-_BASE = "https://api.apollo.io/v1"
+_BASE = "https://api.apollo.io/api/v1"
 _TIMEOUT = 25.0
 _STATUS = {
     "verified": "valid",
@@ -34,6 +34,14 @@ class ApolloProvider:
 
     def __init__(self, api_key: str) -> None:
         self._key = api_key
+
+    def _headers(self) -> dict[str, str]:
+        # Apollo removed body/query api_key auth (Sept 2024) — the master key rides in x-api-key.
+        return {
+            "x-api-key": self._key,
+            "Content-Type": "application/json",
+            "accept": "application/json",
+        }
 
     def _normalize(self, p: JsonObject) -> PersonHit:
         org = json_object(p.get("organization"))
@@ -62,7 +70,6 @@ class ApolloProvider:
         self, targeting: Targeting, *, limit: int = 25, cursor: str | None = None
     ) -> SearchPage:
         payload: JsonObject = {
-            "api_key": self._key,
             "page": 1,
             "per_page": min(limit, 100),
         }
@@ -92,7 +99,9 @@ class ApolloProvider:
             payload["q_keywords"] = keyword_text
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.post(f"{_BASE}/mixed_people/search", json=payload)
+                resp = await client.post(
+                    f"{_BASE}/mixed_people/search", headers=self._headers(), json=payload
+                )
         except Exception:
             return SearchPage(hits=[], total=0)
         if resp.status_code >= 400:
@@ -110,7 +119,7 @@ class ApolloProvider:
         name: str | None = None,
         company: str | None = None,
     ) -> PersonHit | None:
-        payload: JsonObject = {"api_key": self._key}
+        payload: JsonObject = {}
         if email:
             payload["email"] = email
         if linkedin_url:
@@ -119,11 +128,13 @@ class ApolloProvider:
             payload["name"] = name
         if company:
             payload["organization_name"] = company
-        if len(payload) == 1:
+        if not payload:
             return None
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.post(f"{_BASE}/people/match", json=payload)
+                resp = await client.post(
+                    f"{_BASE}/people/match", headers=self._headers(), json=payload
+                )
         except Exception:
             return None
         if resp.status_code >= 400:
@@ -140,7 +151,7 @@ class ApolloProvider:
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
                 resp = await client.post(
-                    f"{_BASE}/mixed_people/search", json={"api_key": self._key, "per_page": 1}
+                    f"{_BASE}/mixed_people/search", headers=self._headers(), json={"per_page": 1}
                 )
             return resp.status_code < 400
         except Exception:

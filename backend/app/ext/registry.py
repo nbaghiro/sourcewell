@@ -16,6 +16,7 @@ from app.core.config import Settings, get_settings
 from app.core.crypto import unseal
 from app.ext.apollo import ApolloProvider
 from app.ext.base import SourceProvider
+from app.ext.cognism import CognismProvider
 from app.ext.demo import DemoProvider
 from app.ext.hunter import HunterProvider
 from app.ext.pdl import PDLProvider
@@ -35,7 +36,7 @@ PROVIDER_CATALOG: list[ProviderSpec] = [
     ProviderSpec("pdl", "People Data Labs", True, "https://docs.peopledatalabs.com"),
     ProviderSpec("apollo", "Apollo.io", True, "https://docs.apollo.io"),
     ProviderSpec("hunter", "Hunter", True, "https://hunter.io/api-documentation"),
-    ProviderSpec("cognism", "Cognism", False, "https://www.cognism.com/api"),
+    ProviderSpec("cognism", "Cognism", True, "https://www.cognism.com/api"),
     # Rail A: configured via platform Unipile env (api key + dsn + connected seat), not a BYO key.
     ProviderSpec("linkedin", "LinkedIn search (Unipile)", False, "https://www.unipile.com/"),
 ]
@@ -45,6 +46,7 @@ _FACTORIES: dict[str, Callable[[str], SourceProvider]] = {
     "pdl": lambda key: PDLProvider(key),
     "apollo": lambda key: ApolloProvider(key),
     "hunter": lambda key: HunterProvider(key),
+    "cognism": lambda key: CognismProvider(key),
     "linkedin": lambda key: UnipileProvider(key),
 }
 
@@ -57,6 +59,8 @@ def _platform_keys(settings: Settings) -> dict[str, str]:
         keys["apollo"] = settings.apollo_api_key
     if settings.hunter_api_key:
         keys["hunter"] = settings.hunter_api_key
+    if settings.cognism_api_key:
+        keys["cognism"] = settings.cognism_api_key
     if settings.unipile_api_key:
         keys["linkedin"] = settings.unipile_api_key
     return keys
