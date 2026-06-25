@@ -65,10 +65,13 @@ class Settings(BaseSettings):
     # Shared secret a provider HMAC-signs inbound webhook bodies with (blank disables the check).
     inbound_webhook_secret: str = ""
 
-    # --- Dev login (auth bypass for design/QA; ignored once LinkedIn auth is configured) ---
+    # --- Dev login (auth bypass for design/QA) ---
     dev_session_cookie_name: str = "sw_dev_user"
     demo_admin_email: str = "demo@sourcewell.ai"
     demo_password: str = "pass"
+    # Force-allow the demo login even when a real provider is configured (local dev only — leave
+    # false in production, where a configured provider already disables it).
+    enable_dev_login: bool = False
 
     @property
     def workos_enabled(self) -> bool:
@@ -87,8 +90,8 @@ class Settings(BaseSettings):
 
     @property
     def dev_login_enabled(self) -> bool:
-        """One-click demo sign-in is available only when no real provider is configured."""
-        return not self.auth_enabled
+        """Demo sign-in: when no provider is configured, or when explicitly enabled (local dev)."""
+        return self.enable_dev_login or not self.auth_enabled
 
 
 @lru_cache
