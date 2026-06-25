@@ -8,8 +8,9 @@ is the data substrate behind the cockpit's ✨/🔒 chips and the single autonom
 from app.core.types import JsonObject
 from app.models import Authorship, Campaign
 
-# The strategy sections that carry ownership (the cockpit's editable cards).
-SECTIONS: tuple[str, ...] = ("audience", "sequence", "messaging")
+# The strategy sections that carry ownership — each maps to a distinct Campaign field, so pinning
+# one fully protects it (audience -> criteria, sequence -> sequence incl. its messaging).
+SECTIONS: tuple[str, ...] = ("audience", "sequence")
 
 
 def default_owners(authored_by: Authorship) -> JsonObject:

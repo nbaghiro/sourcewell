@@ -24,6 +24,16 @@ from app.targeting import Targeting
 _TIMEOUT = 25.0
 
 
+async def fetch_job_postings(*, organization_id: str) -> list[str]:
+    """Pull the org's open job postings from its connected LinkedIn account (Unipile) as JD text.
+
+    STUB: the real implementation will hit Unipile's recruiter/job endpoints for the org's account.
+    Returns `[]` for now so the intake flow's "pull from LinkedIn" source is wired end-to-end;
+    paste/upload is the working path until this lands.
+    """
+    return []
+
+
 class UnipileProvider:
     key = "linkedin"
     name = "LinkedIn (Unipile)"

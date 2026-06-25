@@ -11,10 +11,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.intake import parse_brief
+from app.agents.main import design_campaign, deterministic_design
+from app.agents.verticals import DEFAULT_VERTICAL
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
-from app.core.types import JsonObject
-from app.models import Campaign
+from app.core.agent import default_llm
+from app.core.types import JsonList, JsonObject
+from app.models import Campaign, Workspace
 from app.services.agent.activity import ActivityEventData, RefData, build_activity_stream
 from app.services.agent.chat import handle_chat
 from app.services.agent.runs import campaign_funnel, recent_runs
@@ -173,10 +177,11 @@ class CampaignFunnelOut(BaseModel):
 
 async def _campaign_in_workspace(
     session: AsyncSession, campaign_id: str, workspace_id: str
-) -> None:
+) -> Campaign:
     campaign = await session.get(Campaign, campaign_id)
     if campaign is None or campaign.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="campaign not found")
+    return campaign
 
 
 @router.get("/runs", response_model=list[AgentRunOut])
@@ -214,3 +219,55 @@ async def funnel(ctx: ContextDep, session: SessionDep, campaign_id: str) -> Camp
     return CampaignFunnelOut(
         sourced=f.sourced, contacted=f.contacted, replied=f.replied, handed_off=f.handed_off
     )
+
+
+# ---- brief intake + the Main agent's design (the create flow) --------------
+
+
+class IntakeIn(BaseModel):
+    text: str
+
+
+class IntakeOut(BaseModel):
+    objective: str
+    criteria: JsonObject
+    facts: JsonObject
+
+
+@router.post("/intake", response_model=IntakeOut)
+async def intake(body: IntakeIn, ctx: ContextDep, session: SessionDep) -> IntakeOut:
+    """Parse a JD / brief into an objective + targeting (the create flow's step 0)."""
+    ws = require_workspace(ctx)
+    workspace = await session.get(Workspace, ws)
+    vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
+    brief = await parse_brief(body.text, vertical=vertical)
+    return IntakeOut(
+        objective=brief.objective, criteria=brief.targeting.model_dump(), facts=brief.facts
+    )
+
+
+class DesignIn(BaseModel):
+    campaign_id: str
+
+
+class DesignOut(BaseModel):
+    status: str
+    criteria: JsonObject
+    sequence: JsonList
+
+
+@router.post("/design", response_model=DesignOut)
+async def design(body: DesignIn, ctx: ContextDep, session: SessionDep) -> DesignOut:
+    """Run the Main agent's cold-start design (LLM-free fallback when no key)."""
+    ws = require_workspace(ctx)
+    campaign = await _campaign_in_workspace(session, body.campaign_id, ws)
+    client = default_llm()
+    if client is not None:
+        result = await design_campaign(
+            session, llm=client, campaign=campaign, organization_id=ctx.org_id
+        )
+        status = result.status
+    else:
+        await deterministic_design(session, campaign=campaign, organization_id=ctx.org_id)
+        status = "done"
+    return DesignOut(status=status, criteria=campaign.criteria, sequence=campaign.sequence)
