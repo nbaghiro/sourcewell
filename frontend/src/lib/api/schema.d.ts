@@ -1354,10 +1354,109 @@ export interface paths {
         put?: never;
         /**
          * Chat
-         * @description A bounded copilot: answers about state, explains a person, previews a search. No destructive
-         *     actions yet — those are a fast-follow once the chat direction is validated.
+         * @description Main-agent chat: text + typed entities (catalog §12); the legacy copilot when no LLM.
          */
         post: operations["chat_agent_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runs
+         * @description The agent-episode trace feed for a campaign — the narrated activity tab.
+         */
+        get: operations["runs_agent_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/funnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Funnel
+         * @description The per-campaign funnel rollup — the cockpit header.
+         */
+        get: operations["funnel_agent_funnel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/intake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Intake
+         * @description Parse a JD / brief into an objective + targeting (the create flow's step 0).
+         */
+        post: operations["intake_agent_intake_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/design": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Design
+         * @description Run the Main agent's cold-start design (LLM-free fallback when no key).
+         */
+        post: operations["design_agent_design_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/apply-audience": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Audience
+         * @description Apply a previewed audience (a human action) — set the criteria and pin the section.
+         */
+        post: operations["apply_audience_agent_apply_audience_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1413,6 +1512,25 @@ export interface components {
             /** Active */
             active: number;
         };
+        /** AgentRunOut */
+        AgentRunOut: {
+            /** Id */
+            id: string;
+            /** Role */
+            role: string;
+            /** Trigger */
+            trigger: string;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: string;
+            /** Tokens */
+            tokens: number;
+            /** Created At */
+            created_at: string;
+            /** Steps */
+            steps: components["schemas"]["AgentStepOut"][];
+        };
         /** AgentState */
         AgentState: {
             /** Status */
@@ -1436,6 +1554,16 @@ export interface components {
             /** Campaigns */
             campaigns: components["schemas"]["AgentCampaign"][];
         };
+        /** AgentStepOut */
+        AgentStepOut: {
+            /** Seq */
+            seq: number;
+            /** Kind */
+            kind: string;
+            /** Tool Name */
+            tool_name: string | null;
+            content: components["schemas"]["JsonObject"];
+        };
         /** AnalyticsOut */
         AnalyticsOut: {
             funnel: components["schemas"]["FunnelOut"];
@@ -1445,6 +1573,12 @@ export interface components {
             campaigns: components["schemas"]["CampaignStatOut"][];
             /** Activity */
             activity: components["schemas"]["ActivityOut"][];
+        };
+        /** ApplyAudienceIn */
+        ApplyAudienceIn: {
+            /** Campaign Id */
+            campaign_id: string;
+            criteria: components["schemas"]["JsonObject"];
         };
         /** ApprovalOut */
         ApprovalOut: {
@@ -1517,6 +1651,17 @@ export interface components {
             /** Ids */
             ids: string[];
         };
+        /** CampaignFunnelOut */
+        CampaignFunnelOut: {
+            /** Sourced */
+            sourced: number;
+            /** Contacted */
+            contacted: number;
+            /** Replied */
+            replied: number;
+            /** Handed Off */
+            handed_off: number;
+        };
         /** CampaignIn */
         CampaignIn: {
             /** Name */
@@ -1561,6 +1706,13 @@ export interface components {
             from_email: string | null;
             criteria: components["schemas"]["JsonObject"];
             sequence: components["schemas"]["JsonList"];
+            /** Objective */
+            objective: string | null;
+            /** Autonomy Level */
+            autonomy_level: string;
+            /** Authored By */
+            authored_by: string;
+            field_owners: components["schemas"]["JsonObject"];
         };
         /** CampaignPatch */
         CampaignPatch: {
@@ -1611,6 +1763,8 @@ export interface components {
         ChatIn: {
             /** Message */
             message: string;
+            /** Campaign Id */
+            campaign_id?: string | null;
         };
         /** ChatOut */
         ChatOut: {
@@ -1619,6 +1773,8 @@ export interface components {
             /** Kind */
             kind: string;
             data?: components["schemas"]["JsonObject"] | null;
+            /** @default [] */
+            entities: components["schemas"]["JsonList"];
         };
         /** ConnectionOut */
         ConnectionOut: {
@@ -1971,6 +2127,18 @@ export interface components {
             /** Id */
             id: string;
         };
+        /** DesignIn */
+        DesignIn: {
+            /** Campaign Id */
+            campaign_id: string;
+        };
+        /** DesignOut */
+        DesignOut: {
+            /** Status */
+            status: string;
+            criteria: components["schemas"]["JsonObject"];
+            sequence: components["schemas"]["JsonList"];
+        };
         /** DevLoginRequest */
         DevLoginRequest: {
             /** Email */
@@ -2246,6 +2414,18 @@ export interface components {
             /** Last At */
             last_at: string | null;
             last_message: components["schemas"]["MessageOut"];
+        };
+        /** IntakeIn */
+        IntakeIn: {
+            /** Text */
+            text: string;
+        };
+        /** IntakeOut */
+        IntakeOut: {
+            /** Objective */
+            objective: string;
+            criteria: components["schemas"]["JsonObject"];
+            facts: components["schemas"]["JsonObject"];
         };
         /** InviteOut */
         InviteOut: {
@@ -2917,7 +3097,7 @@ export interface components {
             contacts: components["schemas"]["ContactOut"][];
         };
         /** ImportOut */
-        app__api__sourcing__ImportOut: {
+        app__api__discovery__ImportOut: {
             /** Imported */
             imported: number;
             /** Contact Ids */
@@ -5023,7 +5203,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__api__sourcing__ImportOut"];
+                    "application/json": components["schemas"]["app__api__discovery__ImportOut"];
                 };
             };
             /** @description Validation Error */
@@ -5380,6 +5560,168 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    runs_agent_runs_get: {
+        parameters: {
+            query: {
+                campaign_id: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    funnel_agent_funnel_get: {
+        parameters: {
+            query: {
+                campaign_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignFunnelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    intake_agent_intake_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    design_agent_design_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_audience_agent_apply_audience_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyAudienceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignOut"];
                 };
             };
             /** @description Validation Error */

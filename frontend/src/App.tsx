@@ -14,6 +14,7 @@ import { AnalyticsPage } from "@/pages/analytics-page";
 import { ApprovalsPage } from "@/pages/approvals-page";
 import { AuditPage } from "@/pages/audit-page";
 import { CampaignBuilderPage } from "@/pages/campaign-builder-page";
+import { CampaignCockpitPage } from "@/pages/campaign-cockpit-page";
 import { CampaignDetailPage } from "@/pages/campaign-detail-page";
 import { CampaignsPage } from "@/pages/campaigns-page";
 import { ComponentsPage } from "@/pages/components-page";
@@ -83,6 +84,7 @@ export default function App() {
               <Route path="/campaigns" element={<CampaignsPage />} />
               <Route path="/campaigns/new" element={<CampaignBuilderPage />} />
               <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
+              <Route path="/campaigns/:id/cockpit" element={<CampaignCockpitPage />} />
               <Route path="/approvals" element={<ApprovalsPage />} />
               <Route path="/inbox" element={<InboxPage />} />
               <Route path="/pipeline" element={<PipelinePage />} />

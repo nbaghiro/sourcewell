@@ -481,6 +481,48 @@ export function useAgentChat() {
   });
 }
 
+// ---- campaign cockpit (per-campaign agent surface) ----
+
+export function useCampaignFunnel(id: string) {
+  const ws = useWorkspaceId();
+  return useQuery({
+    queryKey: ["campaignFunnel", ws, id],
+    enabled: !!ws && !!id,
+    refetchInterval: 20_000,
+    queryFn: async () =>
+      unwrap(await client.GET("/agent/funnel", { params: { query: { campaign_id: id } } })),
+  });
+}
+
+export function useCampaignRuns(id: string) {
+  const ws = useWorkspaceId();
+  return useQuery({
+    queryKey: ["campaignRuns", ws, id],
+    enabled: !!ws && !!id,
+    refetchInterval: 15_000,
+    queryFn: async () =>
+      unwrap(
+        await client.GET("/agent/runs", { params: { query: { campaign_id: id, limit: 40 } } }),
+      ),
+  });
+}
+
+export function useCampaignChat(id: string) {
+  return useMutation({
+    mutationFn: async (message: string) =>
+      unwrap(await client.POST("/agent/chat", { body: { message, campaign_id: id } })),
+  });
+}
+
+export function useApplyAudience() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { campaign_id: string; criteria: S["JsonObject"] }) =>
+      unwrap(await client.POST("/agent/apply-audience", { body: v })),
+    onSuccess: () => invalidateCampaign(qc),
+  });
+}
+
 export function useDataProviders() {
   return useQuery({
     queryKey: ["dataProviders"],

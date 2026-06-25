@@ -166,6 +166,11 @@ export function CampaignDetailPage() {
       ) : (
         <>
           <PageHeader eyebrow="Campaign" title={campaign.name}>
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/campaigns/${campaign.id}/cockpit`}>
+                <Sparkles /> Cockpit
+              </Link>
+            </Button>
             <Button variant="outline" size="sm" disabled={busy} onClick={() => void rank()}>
               <Sparkles /> Rank contacts
             </Button>

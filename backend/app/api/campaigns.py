@@ -56,6 +56,11 @@ class CampaignOut(BaseModel):
     from_email: str | None
     criteria: JsonObject
     sequence: JsonList
+    # Agent-native fields (the cockpit reads these).
+    objective: str | None
+    autonomy_level: str
+    authored_by: str
+    field_owners: JsonObject
 
 
 class EnrollmentOut(BaseModel):
@@ -101,6 +106,10 @@ def dump(c: Campaign) -> CampaignOut:
         from_email=c.from_email,
         criteria=c.criteria,
         sequence=c.sequence,
+        objective=c.objective,
+        autonomy_level=c.autonomy_level.value,
+        authored_by=c.authored_by.value,
+        field_owners=c.field_owners,
     )
 
 
