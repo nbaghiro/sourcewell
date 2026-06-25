@@ -1,5 +1,8 @@
 """Unipile connect — identity provisioning + the connection client."""
 
+import json
+import re
+
 import httpx
 import pytest
 import respx
@@ -47,13 +50,16 @@ async def test_provision_returning_user_refreshes_seat(db_session: AsyncSession)
 
 @respx.mock
 async def test_create_link_returns_wizard_url() -> None:
-    respx.post(f"{_DSN}/api/v1/hosted/accounts/link").mock(
+    route = respx.post(f"{_DSN}/api/v1/hosted/accounts/link").mock(
         return_value=httpx.Response(200, json={"object": "HostedAuthURL", "url": "https://wizard"})
     )
     url = await UnipileConnection("key", _DSN).create_link(
         user_ref="u1", notify_url="https://n", redirect_url="https://r"
     )
     assert url == "https://wizard"
+    body = json.loads(route.calls.last.request.content)
+    # Unipile rejects anything but YYYY-MM-DDTHH:MM:SS.sssZ
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$", body["expiresOn"])
 
 
 @respx.mock

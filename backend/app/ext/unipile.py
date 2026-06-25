@@ -179,7 +179,10 @@ class UnipileConnection:
             "type": "create",
             "providers": ["LINKEDIN"],
             "api_url": self._dsn,
-            "expiresOn": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            # Unipile wants exactly YYYY-MM-DDTHH:MM:SS.sssZ — not isoformat's offset.
+            "expiresOn": (datetime.now(UTC) + timedelta(hours=1)).strftime(
+                "%Y-%m-%dT%H:%M:%S.000Z"
+            ),
             "notify_url": notify_url,
             "success_redirect_url": redirect_url,
             "name": user_ref,

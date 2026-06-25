@@ -13,10 +13,27 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 
 # Never hit a real SMTP server from the test suite.
 os.environ.setdefault("EMAIL_DRY_RUN", "1")
-# Keep the suite deterministic + offline: force the LLM off regardless of a local .env key
-# (env vars take precedence over .env in pydantic-settings), so agent tests use the FakeLLM /
-# deterministic paths and never make a real Claude call.
-os.environ["ANTHROPIC_API_KEY"] = ""
+# Keep the suite deterministic + offline: blank out any real provider / auth keys from the
+# developer's .env (env vars take precedence over .env in pydantic-settings), so the LLM, the
+# people-data providers, and the auth providers are all "unconfigured" in tests regardless of host.
+os.environ.update(
+    dict.fromkeys(
+        [
+            "ANTHROPIC_API_KEY",
+            "PDL_API_KEY",
+            "APOLLO_API_KEY",
+            "HUNTER_API_KEY",
+            "UNIPILE_API_KEY",
+            "UNIPILE_DSN",
+            "UNIPILE_ACCOUNT_ID",
+            "UNIPILE_WEBHOOK_SECRET",
+            "WORKOS_API_KEY",
+            "WORKOS_CLIENT_ID",
+            "SESSION_COOKIE_PASSWORD",
+        ],
+        "",
+    )
+)
 
 import app.models  # noqa: F401  (so Base.metadata is complete before create_all)
 from app.core.config import Settings, get_settings
