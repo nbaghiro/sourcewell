@@ -483,6 +483,14 @@ export function useAgentChat() {
   });
 }
 
+/** Parse a JD / brief into an objective + targeting criteria (campaign intake, step 0). */
+export function useIntake() {
+  return useMutation({
+    mutationFn: async (text: string) =>
+      unwrap(await client.POST("/agent/intake", { body: { text } })),
+  });
+}
+
 // ---- campaign cockpit (per-campaign agent surface) ----
 
 export function useCampaignFunnel(id: string) {
