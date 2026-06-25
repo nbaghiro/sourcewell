@@ -19,6 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.types import JsonObject
 from app.models import (
+    AgentRole,
+    AgentRun,
+    AgentStep,
     AuditEvent,
     AutonomyMode,
     Campaign,
@@ -409,6 +412,8 @@ async def _seed_workspace(
         start = (i * 4) % len(contacts)
         await _assign(session, ws, c, contacts[start : start + 5], kind, now)
 
+    await _seed_agent_runs(session, ws, campaigns, contacts, now, rng)
+
 
 async def _generate_audit(
     session: AsyncSession, org_id: str, ws_ids: list[str], actor_ids: list[str], now: datetime
@@ -531,6 +536,149 @@ async def _summary(session: AsyncSession, org: Organization, ws_ids: list[str]) 
         "workspaces": len(ws_ids),
         "enrollments_by_state": by_state,
     }
+
+
+async def _seed_agent_runs(
+    session: AsyncSession,
+    ws: Workspace,
+    campaigns: list[Campaign],
+    contacts: list[Contact],
+    now: datetime,
+    rng: random.Random,
+) -> None:
+    """Synthesize agent-run traces (design / sourcing / review / reply) behind the seeded campaigns,
+    so the cockpit run feed + activity view show the agents having actually done the work.
+    """
+    Block = tuple[str, str | None, JsonObject]
+    planned: list[tuple[AgentRun, list[Block]]] = []
+
+    def plan(
+        c: Campaign,
+        *,
+        role: AgentRole,
+        trigger: str,
+        summary: str,
+        tokens: int,
+        when: datetime,
+        blocks: list[Block],
+    ) -> None:
+        run = AgentRun(
+            workspace_id=ws.id,
+            campaign_id=c.id,
+            role=role,
+            trigger=trigger,
+            status="done",
+            summary=summary,
+            tokens=tokens,
+            started_at=when,
+            ended_at=when + timedelta(seconds=rng.randint(4, 22)),
+            created_at=when,
+        )
+        planned.append((run, blocks))
+
+    names = [c.full_name for c in contacts if c.full_name]
+    for c in campaigns:
+        titles = c.criteria.get("titles") or []
+        skills = c.criteria.get("skills") or []
+        base = c.created_at or now
+        plan(
+            c,
+            role=AgentRole.main,
+            trigger="cold_start",
+            tokens=rng.randint(1500, 2200),
+            when=base + timedelta(hours=1),
+            summary="Designed the campaign: set the audience and a multi-step sequence.",
+            blocks=[
+                (
+                    "thought",
+                    None,
+                    {"text": "Sizing the audience, then setting targeting + sequence."},
+                ),
+                ("tool_call", "estimate_audience", {"titles": titles}),
+                ("result", "estimate_audience", {"estimate": rng.randint(14, 42)}),
+                ("tool_call", "set_audience", {"titles": titles, "skills": skills}),
+                ("result", "set_audience", {"applied": True}),
+                ("tool_call", "set_sequence", {"steps": len(c.sequence or [])}),
+                ("result", "set_sequence", {"applied": True}),
+                ("thought", None, {"text": "Designed — audience set and sequence drafted."}),
+            ],
+        )
+        if c.status == CampaignStatus.draft:
+            continue
+        for day in (1, 4, 8):
+            when = base + timedelta(days=day)
+            if when > now:
+                break
+            found, imported = rng.randint(18, 40), rng.randint(4, 12)
+            plan(
+                c,
+                role=AgentRole.sourcing,
+                trigger="source_due",
+                tokens=rng.randint(2000, 3000),
+                when=when,
+                summary=f"Sourced {found} candidates; imported {imported} strong matches.",
+                blocks=[
+                    ("tool_call", "search", {"limit": 25}),
+                    ("result", "search", {"found": found}),
+                    ("tool_call", "import", {"ids": [f"h{i}" for i in range(imported)]}),
+                    ("result", "import", {"imported": imported, "enrolled": imported}),
+                    ("thought", None, {"text": f"Imported {imported} strong matches."}),
+                ],
+            )
+        plan(
+            c,
+            role=AgentRole.main,
+            trigger="review",
+            tokens=rng.randint(900, 1400),
+            when=now - timedelta(days=rng.randint(1, 3), hours=rng.randint(0, 10)),
+            summary="Reviewed the funnel and tightened the audience to lift reply rate.",
+            blocks=[
+                ("tool_call", "read_funnel", {}),
+                (
+                    "result",
+                    "read_funnel",
+                    {"sourced": rng.randint(8, 20), "replied": rng.randint(1, 6)},
+                ),
+                ("tool_call", "set_audience", {"seniorities": ["senior", "staff"]}),
+                ("result", "set_audience", {"applied": True}),
+                ("thought", None, {"text": "Tightened the audience toward stronger fits."}),
+            ],
+        )
+        if c.status == CampaignStatus.active and names:
+            for _ in range(rng.randint(1, 2)):
+                who = rng.choice(names)
+                plan(
+                    c,
+                    role=AgentRole.outreach,
+                    trigger="reply",
+                    tokens=rng.randint(600, 1000),
+                    when=now - timedelta(hours=rng.randint(2, 30)),
+                    summary=f"Handled {who}'s reply — answered and proposed a call.",
+                    blocks=[
+                        (
+                            "thought",
+                            None,
+                            {"text": f"{who} asked about the role — answer + propose a call."},
+                        ),
+                        (
+                            "tool_call",
+                            "reply",
+                            {"text": "Happy to share more — would a quick call work?"},
+                        ),
+                        ("result", "reply", {"sent": True}),
+                    ],
+                )
+
+    runs = [r for r, _ in planned]
+    session.add_all(runs)
+    await session.flush()
+    steps = [
+        AgentStep(run_id=run.id, seq=i, kind=kind, tool_name=tool, content=content)
+        for run, blocks in planned
+        for i, (kind, tool, content) in enumerate(blocks)
+    ]
+    session.add_all(steps)
+    await session.flush()
 
 
 async def seed_demo(
