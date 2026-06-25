@@ -2,8 +2,8 @@
 
 Presentational tools (`show_funnel` / `show_candidates` / `preview_audience`) append typed entities
 to the response; interactive ones carry a declarative `action`. See the entity catalog in
-`.docs/agent-architecture.md` §12. Falls back to the legacy copilot (`services/agent/chat`) when no
-LLM is available — that wiring lives in the API layer.
+`.docs/agent-architecture.md` §12. Requires an LLM; the API layer returns an "unavailable" reply
+when none is configured.
 """
 
 from dataclasses import dataclass, field

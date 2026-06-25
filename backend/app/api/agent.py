@@ -2,9 +2,9 @@
 is doing.
 
 Synthesized from what we already persist (enrollments, messages, governor settings) — no new
-tables. Every agent-experience UI variant (activity feed, mission control, daily briefing, copilot
-chat) renders off these endpoints, so the comparison is on UX, not data. Thin: each endpoint calls
-a service and maps the returned dataclass to the Pydantic response model.
+tables. Every agent-experience UI surface (activity feed, mission control, daily briefing, chat)
+renders off these endpoints, so the comparison is on UX, not data. Thin: each endpoint calls a
+service and maps the returned dataclass to the Pydantic response model.
 """
 
 from fastapi import APIRouter, HTTPException
@@ -21,7 +21,6 @@ from app.core.agent import default_llm
 from app.core.types import JsonList, JsonObject
 from app.models import Campaign, Workspace
 from app.services.agent.activity import ActivityEventData, RefData, build_activity_stream
-from app.services.agent.chat import handle_chat
 from app.services.agent.runs import campaign_funnel, recent_runs
 from app.services.agent.state import StateData, aggregate_state
 
@@ -143,21 +142,25 @@ async def state(ctx: ContextDep, session: SessionDep) -> AgentState:
 
 @router.post("/chat", response_model=ChatOut)
 async def chat(body: ChatIn, ctx: ContextDep, session: SessionDep) -> ChatOut:
-    """Main-agent chat: text + typed entities (catalog §12); the legacy copilot when no LLM."""
+    """Main-agent chat: text + typed entities (catalog §12). Requires an LLM."""
     ws = require_workspace(ctx)
     client = default_llm()
-    if client is not None:
-        res = await run_chat(
-            session,
-            llm=client,
-            workspace_id=ws,
-            organization_id=ctx.org_id,
-            message=body.message,
-            campaign_id=body.campaign_id,
+    if client is None:
+        return ChatOut(
+            reply="Chat needs an AI model connected. Use Find People or Approvals meanwhile.",
+            kind="help",
+            data=None,
+            entities=[],
         )
-        return ChatOut(reply=res.reply, kind="agent", data=None, entities=res.entities)
-    legacy = await handle_chat(session, workspace_id=ws, org_id=ctx.org_id, message=body.message)
-    return ChatOut(reply=legacy.reply, kind=legacy.kind, data=legacy.data, entities=[])
+    res = await run_chat(
+        session,
+        llm=client,
+        workspace_id=ws,
+        organization_id=ctx.org_id,
+        message=body.message,
+        campaign_id=body.campaign_id,
+    )
+    return ChatOut(reply=res.reply, kind="agent", data=None, entities=res.entities)
 
 
 # ---- per-campaign agent runs + funnel (the cockpit Activity tab + header) ---

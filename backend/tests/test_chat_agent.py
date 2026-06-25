@@ -131,11 +131,11 @@ async def test_apply_audience_endpoint_pins_section(
     assert c.field_owners.get("audience") == "human"  # a human apply pins the section
 
 
-# --- the chat endpoint falls back to the legacy copilot when no LLM ----------
+# --- the chat endpoint returns an unavailable reply when no LLM --------------
 
 
 @pytest.mark.db
-async def test_chat_endpoint_fallback_no_llm(
+async def test_chat_endpoint_unavailable_no_llm(
     db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(agent_api, "default_llm", lambda: None)
@@ -144,4 +144,4 @@ async def test_chat_endpoint_fallback_no_llm(
     assert resp.status_code == 200
     body = resp.json()
     assert "reply" in body
-    assert body["entities"] == []  # legacy path emits no entities
+    assert body["entities"] == []  # no LLM → no agent entities
