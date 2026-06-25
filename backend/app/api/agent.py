@@ -7,17 +7,22 @@ renders off these endpoints, so the comparison is on UX, not data. Thin: each en
 service and maps the returned dataclass to the Pydantic response model.
 """
 
+import json
+from collections.abc import AsyncIterator
+
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.chat import run_chat
+from app.agents.chat import run_chat, run_chat_stream
 from app.agents.intake import parse_brief
 from app.agents.main import design_campaign, deterministic_design
 from app.agents.verticals import DEFAULT_VERTICAL
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.agent import default_llm
+from app.core.db import SessionLocal
 from app.core.types import JsonList, JsonObject
 from app.models import Campaign, Workspace
 from app.services.agent.activity import ActivityEventData, RefData, build_activity_stream
@@ -161,6 +166,40 @@ async def chat(body: ChatIn, ctx: ContextDep, session: SessionDep) -> ChatOut:
         campaign_id=body.campaign_id,
     )
     return ChatOut(reply=res.reply, kind="agent", data=None, entities=res.entities)
+
+
+def _sse(obj: JsonObject) -> str:
+    return f"data: {json.dumps(obj)}\n\n"
+
+
+@router.post("/chat/stream")
+async def chat_stream(body: ChatIn, ctx: ContextDep) -> StreamingResponse:
+    """Streaming Main-agent chat (SSE): `token` events as the narration streams, then a `done`
+    event carrying the typed entities. Requires an LLM.
+    """
+    ws = require_workspace(ctx)
+    org_id = ctx.org_id
+    client = default_llm()
+
+    async def gen() -> AsyncIterator[str]:
+        if client is None:
+            yield _sse({"type": "token", "text": "Chat needs an AI model connected."})
+            yield _sse({"type": "done", "entities": []})
+            return
+        # the request-scoped session is closed by the time this body streams — use a fresh one.
+        async with SessionLocal() as session:
+            async for ev in run_chat_stream(
+                session,
+                llm=client,
+                workspace_id=ws,
+                organization_id=org_id,
+                message=body.message,
+                campaign_id=body.campaign_id,
+            ):
+                yield _sse(ev)
+            await session.commit()
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 # ---- per-campaign agent runs + funnel (the cockpit Activity tab + header) ---

@@ -4,8 +4,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.chat import run_chat
+from app.agents.chat import run_chat, run_chat_stream
 from app.api import agent as agent_api
+from app.core.types import JsonObject
 from app.models import Authorship, Campaign, Contact, Enrollment, EnrollmentState
 from tests.factories import make_org, make_workspace
 from tests.fake_llm import FakeLLM, text_turn, tool_turn
@@ -100,6 +101,39 @@ async def test_run_chat_preview_audience_carries_action(db_session: AsyncSession
     assert isinstance(action, dict)
     assert action.get("verb") == "apply"
     assert action.get("endpoint") == "/agent/apply-audience"
+
+
+# --- streaming chat ----------------------------------------------------------
+
+
+@pytest.mark.db
+async def test_run_chat_stream_yields_tokens_then_done(db_session: AsyncSession) -> None:
+    org = await make_org(db_session, slug="chat-stream")
+    ws = await make_workspace(db_session, org=org)
+    c = Campaign(workspace_id=ws.id, name="C", criteria={}, sequence=[])
+    db_session.add(c)
+    await db_session.flush()
+    # tool turn (surfaces a funnel entity) then a streamed text turn.
+    llm = FakeLLM([tool_turn("show_funnel", {}, call_id="f1"), text_turn("Here's the funnel.")])
+
+    events: list[JsonObject] = []
+    async for ev in run_chat_stream(
+        db_session,
+        llm=llm,
+        workspace_id=ws.id,
+        organization_id=org.id,
+        message="show me",
+        campaign_id=c.id,
+    ):
+        events.append(ev)
+
+    text = "".join(str(e.get("text", "")) for e in events if e.get("type") == "token")
+    assert "Here's the funnel." in text  # the narration streamed in deltas
+    done = events[-1]
+    assert done.get("type") == "done"
+    entities = done.get("entities")
+    assert isinstance(entities, list)
+    assert any(isinstance(en, dict) and en.get("type") == "funnel" for en in entities)
 
 
 # --- the interactive loop: apply-audience endpoint ---------------------------

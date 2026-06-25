@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { API_URL } from "@/lib/api";
 import { useWorkspaceId } from "@/lib/workspace";
-import { client, unwrap } from "./client";
+import { client, getApiWorkspaceId, unwrap } from "./client";
 import type { components } from "./schema";
 
 type S = components["schemas"];
@@ -481,6 +482,46 @@ export function useAgentChat() {
     mutationFn: async (vars: { message: string; campaign_id?: string }) =>
       unwrap(await client.POST("/agent/chat", { body: vars })),
   });
+}
+
+/**
+ * Stream a Main-agent chat turn over SSE: `onToken` fires per text delta as it arrives, then
+ * `onDone` with the typed entities the tools surfaced. Hand-rolled fetch (openapi-fetch can't
+ * stream) — mirrors the client's credentials + X-Workspace-Id header.
+ */
+export async function streamAgentChat(
+  vars: { message: string; campaign_id?: string },
+  handlers: { onToken: (text: string) => void; onDone: (entities: unknown) => void },
+  signal?: AbortSignal,
+): Promise<void> {
+  const wsId = getApiWorkspaceId();
+  const res = await fetch(`${API_URL}/agent/chat/stream`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(wsId ? { "X-Workspace-Id": wsId } : {}) },
+    body: JSON.stringify(vars),
+    signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`chat stream failed: ${res.status}`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? ""; // keep the trailing partial frame for the next read
+    for (const frame of frames) {
+      const line = frame.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload) continue;
+      const ev = JSON.parse(payload) as { type: string; text?: string; entities?: unknown };
+      if (ev.type === "token" && ev.text) handlers.onToken(ev.text);
+      else if (ev.type === "done") handlers.onDone(ev.entities);
+    }
+  }
 }
 
 /** Parse a JD / brief into an objective + targeting criteria (campaign intake, step 0). */

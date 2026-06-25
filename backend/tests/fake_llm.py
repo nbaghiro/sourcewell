@@ -4,7 +4,9 @@ Build a list of turns with `text_turn` / `tool_turn` and feed it to `FakeLLM`; t
 them in order. The linchpin that lets every agent be tested without hitting Anthropic.
 """
 
-from app.core.agent import LLMTurn, ToolCall
+from collections.abc import AsyncIterator
+
+from app.core.agent import LLMTurn, StreamItem, TextDelta, ToolCall, TurnDone
 from app.core.types import JsonList, JsonObject
 
 
@@ -50,3 +52,16 @@ class FakeLLM:
         turn = self._script[self.calls]
         self.calls += 1
         return turn
+
+    async def stream(
+        self, *, system: str, messages: JsonList, tools: list[JsonObject]
+    ) -> AsyncIterator[StreamItem]:
+        self.seen_tools.append(tools)
+        turn = self._script[self.calls]
+        self.calls += 1
+        text = turn.text
+        mid = len(text) // 2
+        for chunk in (text[:mid], text[mid:]):  # a couple of real deltas for tests
+            if chunk:
+                yield TextDelta(text=chunk)
+        yield TurnDone(turn=turn)

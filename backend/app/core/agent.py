@@ -11,7 +11,7 @@ CI); `AnthropicLLM` is the real client (SDK imported lazily, key-gated by the ca
 
 import asyncio
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol, cast
@@ -73,10 +73,31 @@ class LLMTurn:
     output_tokens: int
 
 
+@dataclass(frozen=True)
+class TextDelta:
+    """A streamed chunk of assistant text."""
+
+    text: str
+
+
+@dataclass(frozen=True)
+class TurnDone:
+    """Emitted once at the end of a streamed turn — carries the fully assembled turn."""
+
+    turn: LLMTurn
+
+
+StreamItem = TextDelta | TurnDone
+
+
 class AgentLLM(Protocol):
     async def turn(
         self, *, system: str, messages: JsonList, tools: list[JsonObject]
     ) -> LLMTurn: ...
+
+    def stream(
+        self, *, system: str, messages: JsonList, tools: list[JsonObject]
+    ) -> AsyncIterator[StreamItem]: ...
 
 
 @dataclass
@@ -186,6 +207,85 @@ async def run_episode(
     return AgentResult(run_id=run.id, status=status, text=text, tokens=tokens, steps=trace.seq)
 
 
+async def stream_episode(
+    session: AsyncSession,
+    *,
+    llm: AgentLLM,
+    role: AgentRole,
+    trigger: str,
+    workspace_id: str,
+    system: str,
+    user_prompt: str,
+    tools: list[Tool],
+    campaign_id: str | None = None,
+    max_steps: int = MAX_STEPS,
+    token_budget: int = EPISODE_TOKEN_BUDGET,
+    timeout_s: float = EPISODE_TIMEOUT_S,
+) -> AsyncIterator[JsonObject]:
+    """Streaming twin of `run_episode`: yields `{"type":"token","text":...}` as the model emits
+    text, runs any tool calls between turns, and persists the same `AgentRun` + `AgentStep` trace.
+    """
+    run = AgentRun(
+        workspace_id=workspace_id,
+        campaign_id=campaign_id,
+        role=role,
+        trigger=trigger,
+        status="running",
+        started_at=datetime.now(UTC),
+    )
+    session.add(run)
+    await session.flush()
+
+    by_name = {t.name: t for t in tools}
+    specs = [t.spec() for t in tools]
+    messages: JsonList = [{"role": "user", "content": user_prompt}]
+    trace = _Trace(session, run.id)
+    tokens = 0
+    status = "max_steps"
+    text = ""
+
+    try:
+        async with asyncio.timeout(timeout_s):
+            for _ in range(max_steps):
+                turn: LLMTurn | None = None
+                async for item in llm.stream(system=system, messages=messages, tools=specs):
+                    if isinstance(item, TextDelta):
+                        yield {"type": "token", "text": item.text}
+                    else:
+                        turn = item.turn
+                if turn is None:
+                    status = "error"
+                    break
+                tokens += turn.input_tokens + turn.output_tokens
+                if turn.text:
+                    trace.record("thought", None, {"text": turn.text})
+                if not turn.tool_calls:
+                    status, text = "done", turn.text
+                    break
+                messages.append({"role": "assistant", "content": turn.assistant_blocks})
+                results: JsonList = []
+                for tc in turn.tool_calls:
+                    result = await _exec_tool(trace, by_name, tc)
+                    results.append(
+                        {"type": "tool_result", "tool_use_id": tc.id, "content": json.dumps(result)}
+                    )
+                messages.append({"role": "user", "content": results})
+                if tokens > token_budget:
+                    status = "over_budget"
+                    break
+    except TimeoutError:
+        status = "timeout"
+    except Exception as exc:  # a tool or the stream blew up — end the episode cleanly
+        status = "error"
+        trace.record("result", None, {"error": str(exc)})
+
+    run.status = status
+    run.tokens = tokens
+    run.ended_at = datetime.now(UTC)
+    run.summary = text[:500]
+    await session.flush()
+
+
 async def _exec_tool(trace: _Trace, by_name: dict[str, Tool], tc: ToolCall) -> JsonObject:
     """Run one tool call (allow-list + light input validation), tracing the call and its result."""
     trace.record("tool_call", tc.name, tc.input)
@@ -244,6 +344,43 @@ class AnthropicLLM:
             assistant_blocks=blocks,
             input_tokens=resp.usage.input_tokens,
             output_tokens=resp.usage.output_tokens,
+        )
+
+    async def stream(
+        self, *, system: str, messages: JsonList, tools: list[JsonObject]
+    ) -> AsyncIterator[StreamItem]:
+        async with self._client.messages.stream(
+            model=self._model,
+            max_tokens=self._max_tokens,
+            system=system,
+            messages=cast("list[MessageParam]", messages),
+            tools=cast("list[ToolParam]", tools),
+        ) as stream:
+            async for event in stream:
+                if event.type == "text":  # the SDK's high-level text-delta event
+                    yield TextDelta(text=event.text)
+            final = await stream.get_final_message()
+        text = ""
+        tool_calls: list[ToolCall] = []
+        blocks: JsonList = []
+        for block in final.content:
+            blocks.append(block.model_dump())
+            if block.type == "text":
+                text += block.text
+            elif block.type == "tool_use":
+                raw = block.input
+                inp: JsonObject = (
+                    {str(k): v for k, v in raw.items()} if isinstance(raw, dict) else {}
+                )
+                tool_calls.append(ToolCall(id=block.id, name=block.name, input=inp))
+        yield TurnDone(
+            turn=LLMTurn(
+                text=text,
+                tool_calls=tool_calls,
+                assistant_blocks=blocks,
+                input_tokens=final.usage.input_tokens,
+                output_tokens=final.usage.output_tokens,
+            )
         )
 
 

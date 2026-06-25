@@ -7,7 +7,7 @@ import { Markdown } from "@/components/markdown";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAgentChat } from "@/lib/api/queries";
+import { streamAgentChat } from "@/lib/api/queries";
 
 interface ChatMessage {
   role: "user" | "agent";
@@ -30,9 +30,19 @@ export function AgentChatWidget() {
   const [open, setOpen] = React.useState(false);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState("");
-  const chat = useAgentChat();
+  const [streaming, setStreaming] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const campaignId = campaignIdFrom(useLocation().pathname);
+
+  // Mutate the trailing agent message (the one being streamed) in place.
+  function patchLastAgent(patch: (m: ChatMessage) => ChatMessage) {
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last?.role === "agent") next[next.length - 1] = patch(last);
+      return next;
+    });
+  }
 
   const greeting = campaignId
     ? "Ask about this campaign — how it's doing, or how to adjust the audience or sequence."
@@ -43,21 +53,30 @@ export function AgentChatWidget() {
 
   React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, chat.isPending, open]);
+  }, [messages, streaming, open]);
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || chat.isPending) return;
+    if (!trimmed || streaming) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", text: trimmed }]);
+    // append the user turn + an empty agent turn that the stream fills in.
+    setMessages((m) => [...m, { role: "user", text: trimmed }, { role: "agent", text: "" }]);
+    setStreaming(true);
     try {
-      const res = await chat.mutateAsync({ message: trimmed, campaign_id: campaignId });
-      setMessages((m) => [...m, { role: "agent", text: res.reply, entities: res.entities }]);
+      await streamAgentChat(
+        { message: trimmed, campaign_id: campaignId },
+        {
+          onToken: (t) => patchLastAgent((m) => ({ ...m, text: m.text + t })),
+          onDone: (entities) => patchLastAgent((m) => ({ ...m, entities })),
+        },
+      );
     } catch {
-      setMessages((m) => [
+      patchLastAgent((m) => ({
         ...m,
-        { role: "agent", text: "Sorry — I couldn't reach the agent just now. Try again?" },
-      ]);
+        text: m.text || "Sorry — I couldn't reach the agent just now. Try again?",
+      }));
+    } finally {
+      setStreaming(false);
     }
   }
 
@@ -121,24 +140,16 @@ export function AgentChatWidget() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-border bg-card px-3.5 py-2 text-sm text-foreground shadow-sm">
-                      <Markdown>{m.text}</Markdown>
+                      {m.text ? (
+                        <Markdown>{m.text}</Markdown>
+                      ) : (
+                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                      )}
                     </div>
                   </div>
                   <ChatEntities entities={m.entities} className="pl-9" />
                 </div>
               ),
-            )}
-            {chat.isPending && (
-              <div className="flex items-end gap-2">
-                <Avatar className="size-7 shrink-0 rounded-full">
-                  <AvatarFallback className="bg-accent text-[var(--accent-foreground)]">
-                    <Feather className="size-3.5 -rotate-12" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="rounded-2xl rounded-bl-sm border border-border bg-card px-3.5 py-2.5 shadow-sm">
-                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                </div>
-              </div>
             )}
           </div>
 
@@ -148,7 +159,7 @@ export function AgentChatWidget() {
                 <button
                   key={s}
                   type="button"
-                  disabled={chat.isPending}
+                  disabled={streaming}
                   onClick={() => void send(s)}
                   className="rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:opacity-50"
                 >
@@ -167,10 +178,10 @@ export function AgentChatWidget() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask your agent…"
-                disabled={chat.isPending}
+                disabled={streaming}
               />
-              <Button type="submit" size="icon" disabled={chat.isPending || !input.trim()}>
-                {chat.isPending ? <Loader2 className="animate-spin" /> : <Send />}
+              <Button type="submit" size="icon" disabled={streaming || !input.trim()}>
+                {streaming ? <Loader2 className="animate-spin" /> : <Send />}
               </Button>
             </form>
           </div>

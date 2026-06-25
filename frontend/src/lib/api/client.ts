@@ -9,6 +9,10 @@ let currentWorkspaceId: string | null = null;
 export function setApiWorkspaceId(id: string | null) {
   currentWorkspaceId = id;
 }
+/** The active workspace id (for hand-rolled fetches like the SSE chat stream). */
+export function getApiWorkspaceId(): string | null {
+  return currentWorkspaceId;
+}
 
 const workspaceMiddleware: Middleware = {
   onRequest({ request }) {

@@ -6,13 +6,14 @@ to the response; interactive ones carry a declarative `action`. See the entity c
 when none is configured.
 """
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.verticals import DEFAULT_VERTICAL, compose_system
-from app.core.agent import AgentLLM, Tool, run_episode
+from app.core.agent import AgentLLM, Tool, run_episode, stream_episode
 from app.core.db import new_id
 from app.core.types import JsonList, JsonObject
 from app.models import AgentRole, Contact, Enrollment, Workspace
@@ -176,3 +177,38 @@ async def run_chat(
         tools=chat_tools(ctx),
     )
     return ChatResult(reply=result.text, entities=ctx.entities)
+
+
+async def run_chat_stream(
+    session: AsyncSession,
+    *,
+    llm: AgentLLM,
+    workspace_id: str,
+    organization_id: str,
+    message: str,
+    campaign_id: str | None = None,
+) -> AsyncIterator[JsonObject]:
+    """Streaming Main-agent chat turn: yields `{"type":"token"}` events as the narration streams,
+    then a final `{"type":"done", "entities": [...]}` with the typed UI blocks the tools surfaced.
+    """
+    workspace = await session.get(Workspace, workspace_id)
+    vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
+    ctx = ChatContext(
+        session=session,
+        workspace_id=workspace_id,
+        organization_id=organization_id,
+        campaign_id=campaign_id,
+    )
+    async for ev in stream_episode(
+        session,
+        llm=llm,
+        role=AgentRole.main,
+        trigger="chat",
+        workspace_id=workspace_id,
+        campaign_id=campaign_id,
+        system=compose_system(AgentRole.main, vertical, context=_CHAT_GUIDANCE),
+        user_prompt=message,
+        tools=chat_tools(ctx),
+    ):
+        yield ev
+    yield {"type": "done", "entities": ctx.entities}
