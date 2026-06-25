@@ -1,4 +1,4 @@
-import { Bot, Loader2, Send, X } from "lucide-react";
+import { Feather, Loader2, Send, X } from "lucide-react";
 import * as React from "react";
 import { useLocation } from "react-router-dom";
 
@@ -66,9 +66,22 @@ export function AgentChatWidget() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close agent chat" : "Open agent chat"}
-        className="fixed bottom-5 right-5 z-50 grid size-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="fixed bottom-5 right-5 z-50 grid size-12 place-items-center rounded-full bg-gradient-to-br from-score-from to-score-to text-primary-foreground shadow-lg ring-1 ring-black/5 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        {open ? <X className="size-5" /> : <Bot className="size-5" />}
+        {/* gentle "live" pulse — the agent is always working in the background */}
+        {!open && (
+          <span
+            aria-hidden
+            className="absolute inset-0 rounded-full bg-primary/30 motion-safe:animate-ping [animation-duration:2.6s]"
+          />
+        )}
+        <span className="relative grid place-items-center">
+          {open ? (
+            <X className="size-5" />
+          ) : (
+            <Feather className="size-[1.35rem] -rotate-12" strokeWidth={1.9} />
+          )}
+        </span>
       </button>
 
       {open && (
@@ -76,7 +89,7 @@ export function AgentChatWidget() {
           <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
             <Avatar className="size-7 rounded-full">
               <AvatarFallback className="bg-accent text-[var(--accent-foreground)]">
-                <Bot className="size-3.5" />
+                <Feather className="size-3.5 -rotate-12" />
               </AvatarFallback>
             </Avatar>
             <div className="leading-tight">
@@ -103,7 +116,7 @@ export function AgentChatWidget() {
                   <div className="flex items-end gap-2">
                     <Avatar className="size-7 shrink-0 rounded-full">
                       <AvatarFallback className="bg-accent text-[var(--accent-foreground)]">
-                        <Bot className="size-3.5" />
+                        <Feather className="size-3.5 -rotate-12" />
                       </AvatarFallback>
                     </Avatar>
                     <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-border bg-card px-3.5 py-2 text-sm text-foreground shadow-sm">
@@ -118,7 +131,7 @@ export function AgentChatWidget() {
               <div className="flex items-end gap-2">
                 <Avatar className="size-7 shrink-0 rounded-full">
                   <AvatarFallback className="bg-accent text-[var(--accent-foreground)]">
-                    <Bot className="size-3.5" />
+                    <Feather className="size-3.5 -rotate-12" />
                   </AvatarFallback>
                 </Avatar>
                 <div className="rounded-2xl rounded-bl-sm border border-border bg-card px-3.5 py-2.5 shadow-sm">
