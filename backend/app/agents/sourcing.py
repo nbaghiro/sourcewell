@@ -14,8 +14,9 @@ from app.agents.verticals import DEFAULT_VERTICAL, compose_system
 from app.core.agent import AgentLLM, AgentResult, Tool, run_episode
 from app.core.types import JsonList, JsonObject
 from app.ext.base import PersonHit, SourceProvider
-from app.ext.registry import build_providers_for_org
+from app.ext.registry import build_providers_for_org, provider_selection
 from app.models import AgentRole, Campaign, Workspace
+from app.services.sourcing import usage
 from app.services.sourcing.contacts import list_contacts
 from app.services.sourcing.discovery import enrich_ref, import_hits, search_people
 from app.services.sourcing.ranking import rank_campaign
@@ -63,6 +64,11 @@ def sourcing_tools(ctx: SourcingContext) -> list[Tool]:
     async def search(data: JsonObject) -> JsonObject:
         limit = min(_int(data, "limit", 25), 50)
         hits = await search_people(ctx.providers, ctx.targeting, limit=limit, use_cache=False)
+        for p in ctx.providers:
+            if p.key != "demo":  # meter real provider calls (the demo provider is synthetic)
+                await usage.record(
+                    ctx.session, organization_id=ctx.organization_id, provider=p.key, kind="search"
+                )
         ctx.hits = {f"h{i}": h for i, h in enumerate(hits)}
         sample: JsonList = [
             {
@@ -177,7 +183,8 @@ async def run_sourcing(
     """Run one Sourcing episode for an active campaign."""
     workspace = await session.get(Workspace, campaign.workspace_id)
     vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
-    providers = await build_providers_for_org(session, organization_id)
+    selection = provider_selection(workspace.settings) if workspace else None
+    providers = await build_providers_for_org(session, organization_id, selection=selection)
     targeting = as_targeting(campaign.criteria)
     ctx = SourcingContext(
         session=session,
@@ -211,7 +218,9 @@ async def deterministic_source(
     session: AsyncSession, *, campaign: Campaign, organization_id: str
 ) -> int:
     """LLM-free sourcing fallback: search providers, import, and rank into proposed enrollments."""
-    providers = await build_providers_for_org(session, organization_id)
+    workspace = await session.get(Workspace, campaign.workspace_id)
+    selection = provider_selection(workspace.settings) if workspace else None
+    providers = await build_providers_for_org(session, organization_id, selection=selection)
     targeting = as_targeting(campaign.criteria)
     hits = await search_people(providers, targeting, limit=25, use_cache=False)
     kept: list[PersonHit] = []
