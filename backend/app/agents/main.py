@@ -209,7 +209,7 @@ async def review_campaign(
 async def deterministic_design(
     session: AsyncSession, *, campaign: Campaign, organization_id: str
 ) -> None:
-    """LLM-free design: parse the objective into criteria + a default sequence (agent-owned only)."""
+    """LLM-free design: objective -> criteria + a default sequence (agent-owned sections only)."""
     _ctx, vertical = await _ctx_for(session, campaign, organization_id)
     brief = await parse_brief(campaign.objective or campaign.name, vertical=vertical)
     if is_agent_owned(campaign, "audience"):
