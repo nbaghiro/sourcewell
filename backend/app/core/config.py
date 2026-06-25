@@ -1,6 +1,7 @@
 """Application settings (env-driven; defaults match docker-compose on the 89xx band)."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,6 +36,9 @@ class Settings(BaseSettings):
     session_cookie_password_previous: str = ""
     session_cookie_name: str = "sw_session"
     cookie_secure: bool = False  # set True behind HTTPS
+    # "none" (with cookie_secure=true) lets the session cookie ride cross-site — needed when the
+    # frontend (localhost) talks to a backend served through an HTTPS tunnel (ngrok/cloudflared).
+    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
 
     # --- AI (Anthropic Claude) ---
     # Blank = deterministic fallback everywhere; set to enable real generation/scoring.

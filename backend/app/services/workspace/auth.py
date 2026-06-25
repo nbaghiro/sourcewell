@@ -93,7 +93,7 @@ def set_session_cookie(response: Response, sealed: str) -> None:
         value=sealed,
         httponly=True,
         secure=s.cookie_secure,
-        samesite="lax",
+        samesite=s.cookie_samesite,
         path="/",
         max_age=60 * 60 * 24 * 14,
     )
@@ -223,7 +223,7 @@ def set_dev_cookie(response: Response, user_id: str) -> None:
         value=user_id,
         httponly=True,
         secure=s.cookie_secure,
-        samesite="lax",
+        samesite=s.cookie_samesite,
         path="/",
         max_age=60 * 60 * 24 * 7,
     )
