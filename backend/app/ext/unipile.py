@@ -39,11 +39,12 @@ class UnipileProvider:
     name = "LinkedIn (Unipile)"
     capabilities = ProviderCapabilities(search=True, enrich=True, verify_email=False)
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, account_id: str | None = None) -> None:
         s = get_settings()
         self._key = api_key
         self._dsn = s.unipile_dsn.rstrip("/")
-        self._account = s.unipile_account_id
+        # Per-seat account when resolved from a Connection; settings is the back-compat fallback.
+        self._account = account_id or s.unipile_account_id
 
     def _ready(self) -> bool:
         return bool(self._key and self._dsn and self._account)

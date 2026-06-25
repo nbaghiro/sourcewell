@@ -125,3 +125,40 @@ class SourceProvider(Protocol):
     async def verify_email(self, email: str) -> EmailVerdict: ...
 
     async def verify_credentials(self) -> bool: ...
+
+
+# --- Channel + Connection roles (the messaging + seat seams) ------------------
+# A provider may fill any of three roles. Unipile fills all three; the data providers above fill
+# only the Data role (SourceProvider); SMTP fills only ChannelProvider(email).
+
+
+class ChannelProvider(Protocol):
+    """Sends + replies on a channel (email / LinkedIn) from a connected seat (`account_id`).
+
+    `send` returns the provider thread/chat id (persisted on the Message for reply mapping); `reply`
+    posts into an existing thread. Implemented by Unipile (email + LinkedIn) and SMTP (email floor).
+    """
+
+    channel: str  # "email" | "linkedin"
+
+    async def send(
+        self, *, account_id: str, to: str, subject: str | None, body: str
+    ) -> str | None: ...
+
+    async def reply(self, *, account_id: str, thread_id: str, body: str) -> None: ...
+
+
+class ConnectionProvider(Protocol):
+    """Connects + manages seats (hosted auth) and registers inbound webhooks (Unipile).
+
+    `create_link` returns a hosted-auth wizard URL; `profile` reads the connected account's identity
+    (e.g. LinkedIn `member_urn`); `register_webhooks` subscribes the inbound receiver per source.
+    """
+
+    async def create_link(
+        self, *, user_ref: str, notify_url: str, redirect_url: str
+    ) -> str | None: ...
+
+    async def profile(self, *, account_id: str) -> JsonObject | None: ...
+
+    async def register_webhooks(self, *, request_url: str, source: str) -> None: ...
