@@ -32,8 +32,8 @@ export function AgentPage() {
         <PageLayout width="wide">
             <PageHeader
                 eyebrow="Your agent"
-                title="Wren"
-                description="Your sourcing agent — drafting, sending, and watching for replies within your guardrails."
+                title="Mission control"
+                description="Sourcing, drafting, sending, and watching for replies — within your guardrails."
             />
             <MissionControl />
         </PageLayout>
@@ -207,7 +207,7 @@ function NeedsYouCallout({ needs }: { needs: AgentState["needs_you"] }) {
             <Card className="flex items-center gap-3 border-success/40 bg-[color-mix(in_srgb,var(--success)_8%,white)] p-4">
                 <CheckCircle2 className="size-5 text-success" />
                 <span className="text-sm font-medium text-foreground">
-                    Nothing needs you right now — Wren has it handled.
+                    Nothing needs you right now — your agent has it handled.
                 </span>
             </Card>
         );

@@ -35,7 +35,7 @@ export function AgentChatWidget() {
 
   const greeting = campaignId
     ? "Ask about this campaign — how it's doing, or how to adjust the audience or sequence."
-    : "I'm Wren. Ask what needs you, why I skipped someone, or to find people.";
+    : "I'm your agent. Ask what needs you, why I skipped someone, or to find people.";
   const suggestions = campaignId
     ? ["How's this campaign doing?", "Find more senior people"]
     : ["What needs me today?", "Find VPs of Sales in EU fintech"];
@@ -93,9 +93,9 @@ export function AgentChatWidget() {
               </AvatarFallback>
             </Avatar>
             <div className="leading-tight">
-              <div className="text-sm font-semibold text-foreground">Wren</div>
+              <div className="text-sm font-semibold text-foreground">Agent</div>
               <div className="text-xs text-muted-foreground">
-                {campaignId ? "This campaign" : "Your agent"}
+                {campaignId ? "This campaign" : "Your workspace"}
               </div>
             </div>
           </div>
@@ -165,7 +165,7 @@ export function AgentChatWidget() {
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask Wren…"
+                placeholder="Ask your agent…"
                 disabled={chat.isPending}
               />
               <Button type="submit" size="icon" disabled={chat.isPending || !input.trim()}>
