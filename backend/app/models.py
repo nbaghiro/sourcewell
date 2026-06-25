@@ -89,6 +89,48 @@ class AutonomyMode(enum.StrEnum):
     auto = "auto"
 
 
+class AutonomyLevel(enum.StrEnum):
+    """Campaign-level autonomy — drives all three gates (campaign / candidate / message)."""
+
+    manual = "manual"  # approve every gate
+    assisted = "assisted"  # approve the campaign once, auto the rest
+    full = "full"  # auto everywhere; human only at the warm-reply handoff
+
+
+class Authorship(enum.StrEnum):
+    """Who owns a campaign or one of its strategy sections (provenance)."""
+
+    human = "human"
+    agent = "agent"
+
+
+class RelationshipStatus(enum.StrEnum):
+    """The agent's living relationship with a candidate (beyond the send state machine)."""
+
+    active = "active"
+    parked = "parked"  # "ask me later" — re-approach at park_until
+    nurture = "nurture"
+    handed_off = "handed_off"
+    declined = "declined"
+
+
+class MemoryScope(enum.StrEnum):
+    """Scope an accumulated learning is keyed by (recall filters on scope + scope_id)."""
+
+    workspace = "workspace"
+    vertical = "vertical"
+    campaign = "campaign"
+    contact = "contact"
+
+
+class AgentRole(enum.StrEnum):
+    """Which agent ran an episode."""
+
+    main = "main"
+    sourcing = "sourcing"
+    outreach = "outreach"
+
+
 class EnrollmentState(enum.StrEnum):
     proposed = "proposed"  # ranked; awaiting human approval to pursue
     active = "active"  # approved; ready to draft the next touchpoint
@@ -157,6 +199,10 @@ class Workspace(IdMixin, TimestampMixin, Base):
     )
     brand_voice: Mapped[str | None] = mapped_column(String, nullable=True)
     settings: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+    # Industry pack pointer; prompt packs are hardcoded in `app/agents/verticals.py`.
+    vertical: Mapped[str] = mapped_column(
+        String(50), default="recruiting", server_default="recruiting"
+    )
 
 
 class User(IdMixin, TimestampMixin, Base):
@@ -273,6 +319,8 @@ class Contact(IdMixin, TimestampMixin, Base):
     tags: Mapped[list[str]] = mapped_column(JSONB, default=list)
     company_size: Mapped[str | None] = mapped_column(String(50), nullable=True)
     industry: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Vertical-specific fields keep the core columns generic.
+    attributes: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
 
 
 # --- Campaign ----------------------------------------------------------------
@@ -296,6 +344,29 @@ class Campaign(IdMixin, TimestampMixin, Base):
     criteria: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
     # sequence: [{"channel": "email", "delay_days": 0, "subject": "...", "body": "..."}]
     sequence: Mapped[JsonList] = mapped_column(JSONB, default=list)
+
+    # --- Agent-native fields -------------------------------------------------
+    # The natural-language brief that drives AI design (blank for a pure-manual campaign).
+    objective: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Generalizes autonomy_mode across all three gates (campaign / candidate / message).
+    autonomy_level: Mapped[AutonomyLevel] = mapped_column(
+        sa_enum(AutonomyLevel), default=AutonomyLevel.assisted, server_default="assisted"
+    )
+    # Standing guardrails: do-not-contact, voice, send caps, budget, handoff rules.
+    constraints: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+    # Who created the campaign; seeds the initial field ownership.
+    authored_by: Mapped[Authorship] = mapped_column(
+        sa_enum(Authorship), default=Authorship.human, server_default="human"
+    )
+    # Per-section provenance: {"audience": "agent", "messaging": "human", ...}. Agents write
+    # only agent-owned sections; a human edit pins a section to "human".
+    field_owners: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+    # Self-clocking sourcing cadence (the Sourcing agent's source_due tick).
+    next_source_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    # The original brief kept for re-reference / regeneration: {origin, raw_text, ref}.
+    brief_source: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
 
 
 # --- Enrollment --------------------------------------------------------------
@@ -326,6 +397,18 @@ class Enrollment(IdMixin, TimestampMixin, Base):
     reply_pending: Mapped[bool] = mapped_column(Boolean, default=False)
     outcome: Mapped[str | None] = mapped_column(String(50), nullable=True)
     last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # --- Agent-native fields: the candidate's living, per-person journey -----
+    # The agent-decided next-best-action (replaces a rigid sequence step).
+    next_action: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+    # Observed engagement: opens, clicks, profile activity, reply sentiment.
+    signals: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+    relationship_status: Mapped[RelationshipStatus] = mapped_column(
+        sa_enum(RelationshipStatus),
+        default=RelationshipStatus.active,
+        server_default="active",
+    )
+    park_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("campaign_id", "contact_id", name="uq_enrollment_campaign_contact"),
@@ -413,3 +496,65 @@ class ProviderUsage(IdMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("organization_id", "provider", "kind", "day", name="uq_provider_usage"),
     )
+
+
+# --- Agent memory + run traces -----------------------------------------------
+
+
+class Memory(IdMixin, TimestampMixin, Base):
+    """A compounding learning the agents read (by scope) and write.
+
+    Recall is keyed (organization + scope + scope_id) for now; the nullable `embedding`
+    column is the seam for vector recall later (no pgvector dependency yet).
+    """
+
+    __tablename__ = "memory"
+
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"), index=True
+    )
+    scope: Mapped[MemoryScope] = mapped_column(sa_enum(MemoryScope))
+    # The keyed entity: a workspace/campaign/contact id, or the vertical name.
+    scope_id: Mapped[str] = mapped_column(String(64))
+    content: Mapped[str] = mapped_column(Text)
+    # Vector seam — populated only when vector recall is turned on.
+    embedding: Mapped[list[float] | None] = mapped_column(JSONB, nullable=True)
+    meta: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+    created_by_run: Mapped[str | None] = mapped_column(String(26), nullable=True)
+
+    __table_args__ = (Index("ix_memory_recall", "organization_id", "scope", "scope_id"),)
+
+
+class AgentRun(IdMixin, TimestampMixin, Base):
+    """One bounded agent episode — the trace that powers the activity feed + budgets."""
+
+    __tablename__ = "agent_run"
+
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), index=True
+    )
+    campaign_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    role: Mapped[AgentRole] = mapped_column(sa_enum(AgentRole))
+    # cold_start | review | chat | source_due | reply
+    trigger: Mapped[str] = mapped_column(String(32))
+    # running | done | error | over_budget
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    tokens: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentStep(IdMixin, TimestampMixin, Base):
+    """One step within an AgentRun (a thought, a tool call, or a tool result)."""
+
+    __tablename__ = "agent_step"
+
+    run_id: Mapped[str] = mapped_column(ForeignKey("agent_run.id", ondelete="CASCADE"), index=True)
+    seq: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))  # thought | tool_call | result
+    tool_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    content: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+    tokens: Mapped[int] = mapped_column(Integer, default=0)
