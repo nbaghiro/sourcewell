@@ -362,8 +362,10 @@ async def test_unipile_search_normalizes_and_reflects_targeting(unipile_settings
     assert hit.linkedin_url == "https://linkedin.com/in/satya"
     assert hit.skills == ["leadership", "cloud"]
 
-    body = _request_json(route.calls.last.request)
-    assert body["account_id"] == _UNIPILE_ACCOUNT
+    request = route.calls.last.request
+    assert request.url.params["account_id"] == _UNIPILE_ACCOUNT  # account_id is a query param now
+    body = _request_json(request)
+    assert body["api"] == "classic" and body["category"] == "people"
     assert "VP Sales" in str(body["keywords"])  # title folded into keyword string
     assert body["limit"] == 20
 
@@ -414,6 +416,28 @@ async def test_unipile_enrich_maps_user(unipile_settings: None) -> None:
     assert hit.title == "CEO"
     assert hit.company == "Northwind"
     assert hit.linkedin_url == "https://linkedin.com/in/satya"
+
+
+@respx.mock
+async def test_unipile_enrich_extracts_identifier_from_url(unipile_settings: None) -> None:
+    route = respx.get(f"{_UNIPILE_DSN}/api/v1/users/satya").mock(
+        return_value=Response(200, json={"id": "li-1", "name": "Satya N"})
+    )
+    hit = await UnipileProvider("test-key").enrich(
+        linkedin_url="https://www.linkedin.com/in/satya/"
+    )
+    assert hit is not None and hit.full_name == "Satya N"
+    assert route.called  # the full profile URL resolved to the trailing public identifier
+
+
+@respx.mock
+async def test_unipile_search_passes_cursor_and_returns_next(unipile_settings: None) -> None:
+    route = respx.post(f"{_UNIPILE_DSN}/api/v1/linkedin/search").mock(
+        return_value=Response(200, json={"items": [], "cursor": "next-page"})
+    )
+    page = await UnipileProvider("test-key").search(Targeting(), cursor="page-2")
+    assert page.cursor == "next-page"
+    assert route.calls.last.request.url.params["cursor"] == "page-2"
 
 
 @respx.mock

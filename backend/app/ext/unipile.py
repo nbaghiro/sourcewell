@@ -26,6 +26,11 @@ from app.targeting import Targeting
 _TIMEOUT = 25.0
 
 
+def _public_identifier(url: str) -> str:
+    """The trailing public identifier of a LinkedIn profile URL (or the value itself if bare)."""
+    return url.rstrip("/").rsplit("/", 1)[-1]
+
+
 async def fetch_job_postings(*, organization_id: str) -> list[str]:
     """Pull the org's open job postings from its connected LinkedIn account (Unipile) as JD text.
 
@@ -87,18 +92,25 @@ class UnipileProvider:
             ]
         ).strip()
         body: JsonObject = {
-            "account_id": self._account,
+            "api": "classic",
+            "category": "people",
             "keywords": keywords,
             "limit": min(limit, 50),
         }
         if targeting.locations:
             body["location"] = targeting.locations
         if targeting.industries:
-            body["industry"] = targeting.industries  # TODO: confirm Unipile filter key/format
+            # Structured Sales-Nav filters need ID resolution via /linkedin/search/parameters.
+            body["industry"] = targeting.industries
+        # account_id (and the pagination cursor) ride in the query string, not the body.
+        params = {"account_id": self._account}
+        if cursor:
+            params["cursor"] = cursor
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(
                 f"{self._dsn}/api/v1/linkedin/search",
                 headers={"X-API-KEY": self._key, "accept": "application/json"},
+                params=params,
                 json=body,
             )
         if resp.status_code >= 400:
@@ -107,7 +119,11 @@ class UnipileProvider:
         items = json_list(data.get("items")) or json_list(data.get("results"))
         hits = [self._normalize(r) for r in items]
         total = data.get("total")
-        return SearchPage(hits=hits, total=total if isinstance(total, int) else None)
+        return SearchPage(
+            hits=hits,
+            total=total if isinstance(total, int) else None,
+            cursor=opt_str(data.get("cursor")),
+        )
 
     async def enrich(
         self,
@@ -121,7 +137,7 @@ class UnipileProvider:
             return None
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(
-                f"{self._dsn}/api/v1/users/{linkedin_url}",
+                f"{self._dsn}/api/v1/users/{_public_identifier(linkedin_url)}",
                 headers={"X-API-KEY": self._key, "accept": "application/json"},
                 params={"account_id": self._account},
             )
@@ -225,7 +241,7 @@ class UnipileChannel:
 
     async def _provider_id(self, *, account_id: str, identifier: str) -> str | None:
         """Resolve a LinkedIn public identifier / URL → the provider internal id (attendees_ids)."""
-        ident = identifier.rstrip("/").rsplit("/", 1)[-1]
+        ident = _public_identifier(identifier)
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(
                 f"{self._dsn}/api/v1/users/{ident}",
