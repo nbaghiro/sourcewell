@@ -43,7 +43,6 @@ class Settings(BaseSettings):
     pdl_api_key: str = ""
     apollo_api_key: str = ""
     hunter_api_key: str = ""
-    cognism_api_key: str = ""
     people_providers_demo: bool = True  # include the synthetic demo provider as a fallback
 
     # --- LinkedIn / multichannel send (Unipile) ---

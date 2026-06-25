@@ -20,7 +20,6 @@ from app.core.config import Settings
 from app.core.types import JsonObject
 from app.ext.apollo import ApolloProvider
 from app.ext.base import json_object
-from app.ext.cognism import CognismProvider
 from app.ext.hunter import HunterProvider
 from app.ext.pdl import PDLProvider
 from app.ext.unipile import UnipileProvider
@@ -472,62 +471,3 @@ async def test_unipile_search_unconfigured_returns_empty(monkeypatch: pytest.Mon
 async def test_unipile_enrich_unconfigured_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.ext.unipile.get_settings", lambda: Settings(unipile_dsn=""))
     assert await UnipileProvider("test-key").enrich(linkedin_url="x") is None
-
-
-# --------------------------------------------------------------------------- Cognism
-
-
-@respx.mock
-async def test_cognism_search_normalizes_and_uses_bearer() -> None:
-    route = respx.post("https://api.cognism.com/v1/search").mock(
-        return_value=Response(
-            200,
-            json={
-                "total": 1,
-                "results": [
-                    {
-                        "id": "cog-1",
-                        "firstName": "Mei",
-                        "lastName": "Tan",
-                        "jobTitle": "VP Sales",
-                        "companyName": "Globex",
-                        "location": "Singapore",
-                        "linkedinUrl": "https://linkedin.com/in/meitan",
-                    }
-                ],
-            },
-        )
-    )
-    page = await CognismProvider("test-key").search(Targeting(titles=["VP Sales"]))
-    assert page.total == 1
-    hit = page.hits[0]
-    assert hit.provider == "cognism"
-    assert hit.full_name == "Mei Tan"  # firstName + lastName join
-    assert hit.title == "VP Sales"
-    assert hit.company == "Globex"
-    assert route.calls.last.request.headers["Authorization"] == "Bearer test-key"
-
-
-@respx.mock
-async def test_cognism_enrich_redeems_contact() -> None:
-    respx.post("https://api.cognism.com/v1/redeem").mock(
-        return_value=Response(
-            200, json={"contact": {"id": "cog-2", "name": "Ravi K", "email": "ravi@globex.com"}}
-        )
-    )
-    hit = await CognismProvider("test-key").enrich(email="ravi@globex.com")
-    assert hit is not None
-    assert hit.full_name == "Ravi K"
-    assert hit.email == "ravi@globex.com"
-
-
-async def test_cognism_enrich_needs_a_selector() -> None:
-    assert await CognismProvider("test-key").enrich() is None  # no email/linkedin/name → no call
-
-
-@respx.mock
-async def test_cognism_search_empty_on_error() -> None:
-    respx.post("https://api.cognism.com/v1/search").mock(return_value=Response(500, text="boom"))
-    page = await CognismProvider("test-key").search(Targeting(titles=["VP Sales"]))
-    assert page.hits == []
-    assert page.total == 0

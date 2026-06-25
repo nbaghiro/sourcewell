@@ -1,4 +1,4 @@
-"""Adapter contract for Rail B people-data providers (PDL, Apollo, Cognism, ...).
+"""Adapter contract for Rail B people-data providers (PDL, Apollo, Hunter, ...).
 
 Discovery is *live pass-through*: a provider is queried per request and its payload is NORMALIZED
 into `PersonHit` (the shape of our `Contact` table). Nothing here persists — only an explicit
