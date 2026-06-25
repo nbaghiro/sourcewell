@@ -197,7 +197,7 @@ class Workspace(IdMixin, TimestampMixin, Base):
     )
     brand_voice: Mapped[str | None] = mapped_column(String, nullable=True)
     settings: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
-    # Industry pack pointer; prompt packs are hardcoded in `app/agents/verticals.py`.
+    # Industry pack pointer; prompt packs are hardcoded in `app/agents/prompts.py`.
     vertical: Mapped[str] = mapped_column(
         String(50), default="recruiting", server_default="recruiting"
     )

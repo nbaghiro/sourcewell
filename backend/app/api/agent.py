@@ -16,18 +16,18 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.chat import run_chat, run_chat_stream
-from app.agents.intake import parse_brief
 from app.agents.main import design_campaign, deterministic_design
-from app.agents.verticals import DEFAULT_VERTICAL
+from app.agents.prompts import DEFAULT_VERTICAL
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
-from app.core.agent import default_llm
 from app.core.db import SessionLocal
+from app.core.runtime import default_llm
 from app.core.types import JsonList, JsonObject
 from app.models import Campaign, Workspace
-from app.services.agent.activity import ActivityEventData, RefData, build_activity_stream
-from app.services.agent.runs import campaign_funnel, recent_runs
-from app.services.agent.state import StateData, aggregate_state
+from app.services.cockpit.activity import ActivityEventData, RefData, build_activity_stream
+from app.services.cockpit.runs import campaign_funnel, recent_runs
+from app.services.cockpit.state import StateData, aggregate_state
+from app.services.sourcing.briefs import parse_brief
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 

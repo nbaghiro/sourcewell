@@ -25,7 +25,7 @@
 
 The user perceives **one assistant**: chat → Main, rewrite a message → Outreach, "found 12 overnight" → Sourcing.
 
-## 2 · Agent runtime (shared infra — `core/agent.py`)
+## 2 · Agent runtime (shared infra — `core/runtime.py`)
 - **`anthropic` SDK** for the tool‑use loop (keep `complete_json` for single‑shot calls).
 - **Tool abstraction:** `{ name, json_schema, execute_fn }` + dispatch registry.
 - **Bounded loop:** ≤12 steps · ~50k tokens · 60s timeout · allow‑list · validated inputs. Per‑campaign: ~500k tokens/day; on hit → pause agent work for that campaign, fall back to deterministic, surface in the feed.
@@ -39,7 +39,7 @@ The user perceives **one assistant**: chat → Main, rewrite a message → Outre
 
 ## 4 · Data model (extend `Campaign`; one additive migration)
 - **`Campaign`** + `objective` · `autonomy_level (manual|assisted|full)` · `constraints (json)` · `authored_by (human|agent)` · `field_owners (json)` · `next_source_at` · `brief_source {origin, raw_text, ref}`.
-- **`Workspace`** + `vertical: str = "recruiting"` (pointer; prompt packs hardcoded in `app/agents/verticals.py`). No `Vertical` table.
+- **`Workspace`** + `vertical: str = "recruiting"` (pointer; prompt packs hardcoded in `app/agents/prompts.py`). No `Vertical` table.
 - **`Memory`** — `scope (workspace|vertical|campaign|contact)` · `scope_id` · `content` · `embedding (nullable, pgvector — keyed recall now, vector later)` · `metadata` · `created_by_run`.
 - **`AgentRun`/`AgentStep`** — episode + step traces.
 - **`Enrollment`** + `next_action` · `signals` · `relationship_status (active|parked|nurture|handed_off|declined)` · `park_until`.

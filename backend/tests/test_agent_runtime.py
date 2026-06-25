@@ -7,10 +7,10 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents import verticals
-from app.core import agent
-from app.core.agent import Tool, run_episode
+from app.agents import prompts
+from app.core import runtime
 from app.core.config import Settings
+from app.core.runtime import Tool, run_episode
 from app.core.types import JsonObject
 from app.models import AgentRole, AgentRun, AgentStep
 from tests.factories import make_org, make_workspace
@@ -61,26 +61,26 @@ async def _results(session: AsyncSession, run_id: str) -> list[AgentStep]:
 
 
 def test_compose_system_layers_base_vertical_context() -> None:
-    sysprompt = verticals.compose_system(AgentRole.sourcing, "recruiting", context="Campaign X")
+    sysprompt = prompts.compose_system(AgentRole.sourcing, "recruiting", context="Campaign X")
     assert "source" in sysprompt.lower()  # base behavior
     assert "recruiting" in sysprompt.lower()  # vertical overlay
     assert "Campaign X" in sysprompt  # per-episode context
 
 
 def test_unknown_vertical_falls_back_to_recruiting() -> None:
-    assert verticals.get_vertical("aerospace").name == "recruiting"
+    assert prompts.get_vertical("aerospace").name == "recruiting"
 
 
 def test_default_llm_none_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(agent, "get_settings", lambda: Settings(anthropic_api_key=""))
-    assert agent.default_llm() is None
+    monkeypatch.setattr(runtime, "get_settings", lambda: Settings(anthropic_api_key=""))
+    assert runtime.default_llm() is None
 
 
 def test_default_llm_constructs_with_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        agent, "get_settings", lambda: Settings(anthropic_api_key="sk-x", anthropic_model="m")
+        runtime, "get_settings", lambda: Settings(anthropic_api_key="sk-x", anthropic_model="m")
     )
-    assert agent.default_llm() is not None  # AnthropicLLM constructs (lazy SDK import works)
+    assert runtime.default_llm() is not None  # AnthropicLLM constructs (lazy SDK import works)
 
 
 # --- integration: the episode loop + guardrails + tracing --------------------

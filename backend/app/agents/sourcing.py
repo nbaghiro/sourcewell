@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.verticals import DEFAULT_VERTICAL, compose_system
-from app.core.agent import AgentLLM, AgentResult, Tool, run_episode
+from app.agents.prompts import DEFAULT_VERTICAL, compose_system
+from app.core.runtime import AgentLLM, AgentResult, Tool, run_episode
 from app.core.types import JsonList, JsonObject
 from app.ext.base import PersonHit, SourceProvider
 from app.ext.registry import build_providers_for_org, provider_selection

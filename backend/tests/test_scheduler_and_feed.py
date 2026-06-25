@@ -18,7 +18,7 @@ from app.models import (
     MessageDirection,
     MessageStatus,
 )
-from app.services.agent.runs import campaign_funnel, recent_runs
+from app.services.cockpit.runs import campaign_funnel, recent_runs
 from tests.factories import make_org, make_workspace
 from tests.fake_llm import FakeLLM, text_turn, tool_turn
 

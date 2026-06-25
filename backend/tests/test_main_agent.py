@@ -5,9 +5,9 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.intake import parse_brief
 from app.agents.main import design_campaign, deterministic_design, review_campaign
 from app.models import AuditEvent, Authorship, Campaign
+from app.services.sourcing.briefs import parse_brief
 from tests.factories import make_org, make_workspace
 from tests.fake_llm import FakeLLM, text_turn, tool_turn
 

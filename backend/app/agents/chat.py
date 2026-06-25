@@ -12,12 +12,12 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.verticals import DEFAULT_VERTICAL, compose_system
-from app.core.agent import AgentLLM, Tool, run_episode, stream_episode
+from app.agents.prompts import DEFAULT_VERTICAL, compose_system
 from app.core.db import new_id
+from app.core.runtime import AgentLLM, Tool, run_episode, stream_episode
 from app.core.types import JsonList, JsonObject
 from app.models import AgentRole, Contact, Enrollment, Workspace
-from app.services.agent.runs import campaign_funnel
+from app.services.cockpit.runs import campaign_funnel
 from app.services.sourcing.contacts import list_contacts
 from app.targeting import FIT_THRESHOLD, Targeting, evaluate
 

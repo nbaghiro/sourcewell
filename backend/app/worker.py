@@ -12,9 +12,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.sourcing import deterministic_source, run_sourcing
-from app.core.agent import CAMPAIGN_DAILY_TOKEN_BUDGET, AgentLLM, default_llm
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, logger
+from app.core.runtime import CAMPAIGN_DAILY_TOKEN_BUDGET, AgentLLM, default_llm
 from app.models import (
     AgentRun,
     AutonomyLevel,

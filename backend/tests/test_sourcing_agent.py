@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.sourcing import SourcingContext, run_sourcing, sourcing_tools
-from app.core.agent import Tool
+from app.core.runtime import Tool
 from app.ext.registry import build_providers_for_org
 from app.models import (
     Campaign,

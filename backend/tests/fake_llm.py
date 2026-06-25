@@ -6,7 +6,7 @@ them in order. The linchpin that lets every agent be tested without hitting Anth
 
 from collections.abc import AsyncIterator
 
-from app.core.agent import LLMTurn, StreamItem, TextDelta, ToolCall, TurnDone
+from app.core.runtime import LLMTurn, StreamItem, TextDelta, ToolCall, TurnDone
 from app.core.types import JsonList, JsonObject
 
 

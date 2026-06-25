@@ -7,7 +7,7 @@ resolved text feeds this.
 
 from dataclasses import dataclass
 
-from app.agents.verticals import DEFAULT_VERTICAL, get_vertical
+from app.agents.prompts import DEFAULT_VERTICAL, get_vertical
 from app.core import llm
 from app.core.types import JsonObject
 from app.models import AgentRole
