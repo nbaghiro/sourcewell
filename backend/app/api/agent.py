@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.chat import run_chat
 from app.agents.intake import parse_brief
 from app.agents.main import design_campaign, deterministic_design
 from app.agents.verticals import DEFAULT_VERTICAL
@@ -72,12 +73,14 @@ class AgentState(BaseModel):
 
 class ChatIn(BaseModel):
     message: str
+    campaign_id: str | None = None
 
 
 class ChatOut(BaseModel):
     reply: str
-    kind: str  # status | explain | find | help
+    kind: str  # status | explain | find | help | agent
     data: JsonObject | None = None
+    entities: JsonList = []  # typed UI blocks (catalog §12) — populated by the Main-agent chat
 
 
 def _ref(r: RefData | None) -> Ref | None:
@@ -140,11 +143,21 @@ async def state(ctx: ContextDep, session: SessionDep) -> AgentState:
 
 @router.post("/chat", response_model=ChatOut)
 async def chat(body: ChatIn, ctx: ContextDep, session: SessionDep) -> ChatOut:
-    """A bounded copilot: answers about state, explains a person, previews a search. No destructive
-    actions yet — those are a fast-follow once the chat direction is validated."""
+    """Main-agent chat: text + typed entities (catalog §12); the legacy copilot when no LLM."""
     ws = require_workspace(ctx)
-    result = await handle_chat(session, workspace_id=ws, org_id=ctx.org_id, message=body.message)
-    return ChatOut(reply=result.reply, kind=result.kind, data=result.data)
+    client = default_llm()
+    if client is not None:
+        res = await run_chat(
+            session,
+            llm=client,
+            workspace_id=ws,
+            organization_id=ctx.org_id,
+            message=body.message,
+            campaign_id=body.campaign_id,
+        )
+        return ChatOut(reply=res.reply, kind="agent", data=None, entities=res.entities)
+    legacy = await handle_chat(session, workspace_id=ws, org_id=ctx.org_id, message=body.message)
+    return ChatOut(reply=legacy.reply, kind=legacy.kind, data=legacy.data, entities=[])
 
 
 # ---- per-campaign agent runs + funnel (the cockpit Activity tab + header) ---
@@ -271,3 +284,19 @@ async def design(body: DesignIn, ctx: ContextDep, session: SessionDep) -> Design
         await deterministic_design(session, campaign=campaign, organization_id=ctx.org_id)
         status = "done"
     return DesignOut(status=status, criteria=campaign.criteria, sequence=campaign.sequence)
+
+
+class ApplyAudienceIn(BaseModel):
+    campaign_id: str
+    criteria: JsonObject
+
+
+@router.post("/apply-audience", response_model=DesignOut)
+async def apply_audience(body: ApplyAudienceIn, ctx: ContextDep, session: SessionDep) -> DesignOut:
+    """Apply a previewed audience (a human action) — set the criteria and pin the section."""
+    ws = require_workspace(ctx)
+    campaign = await _campaign_in_workspace(session, body.campaign_id, ws)
+    campaign.criteria = body.criteria
+    campaign.field_owners = {**campaign.field_owners, "audience": "human"}
+    await session.flush()
+    return DesignOut(status="applied", criteria=campaign.criteria, sequence=campaign.sequence)
