@@ -8,14 +8,22 @@ engine by hand. Rate-limiting (`can_send_now`) is send-policy — see `services/
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.sourcing import deterministic_source, run_sourcing
-from app.core.agent import AgentLLM, default_llm
+from app.core.agent import CAMPAIGN_DAILY_TOKEN_BUDGET, AgentLLM, default_llm
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, logger
-from app.models import Campaign, CampaignStatus, Enrollment, EnrollmentState, Workspace
+from app.models import (
+    AgentRun,
+    AutonomyLevel,
+    Campaign,
+    CampaignStatus,
+    Enrollment,
+    EnrollmentState,
+    Workspace,
+)
 from app.services.outreach.enrollment import tick
 
 _POLL_SECONDS = 10
@@ -47,6 +55,41 @@ async def run_due(session: AsyncSession, *, now: datetime, limit: int = 200) -> 
     return {"processed": len(due)}
 
 
+async def _tokens_today(session: AsyncSession, *, campaign_id: str, now: datetime) -> int:
+    """Agent tokens spent on a campaign since midnight UTC (the per-campaign daily cap)."""
+    start = datetime(now.year, now.month, now.day, tzinfo=UTC)
+    total = (
+        await session.execute(
+            select(func.coalesce(func.sum(AgentRun.tokens), 0)).where(
+                AgentRun.campaign_id == campaign_id, AgentRun.created_at >= start
+            )
+        )
+    ).scalar_one()
+    return int(total)
+
+
+async def _auto_approve(session: AsyncSession, *, campaign: Campaign, now: datetime) -> int:
+    """Full-autonomy candidate gate: flip proposed enrollments to active (ready to send)."""
+    if campaign.autonomy_level != AutonomyLevel.full:
+        return 0
+    proposed = list(
+        (
+            await session.execute(
+                select(Enrollment).where(
+                    Enrollment.campaign_id == campaign.id,
+                    Enrollment.state == EnrollmentState.proposed,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for enrollment in proposed:
+        enrollment.state = EnrollmentState.active
+        enrollment.next_run_at = now
+    return len(proposed)
+
+
 async def run_source_due(
     session: AsyncSession,
     *,
@@ -56,8 +99,9 @@ async def run_source_due(
 ) -> dict[str, int]:
     """Find active campaigns whose `next_source_at` is due and run one sourcing pass each.
 
-    Uses the Sourcing agent when an LLM is available, else the deterministic fallback. Self-clocking
-    via `next_source_at` (re-armed each pass); `FOR UPDATE SKIP LOCKED` for safe multi-worker.
+    Uses the Sourcing agent when an LLM is available and the campaign is under its daily token
+    budget, else the deterministic fallback. Full-autonomy campaigns auto-approve their proposed
+    candidates. Self-clocking via `next_source_at`; `FOR UPDATE SKIP LOCKED` for safe multi-worker.
     """
     client = llm if llm is not None else default_llm()
     stmt = (
@@ -76,7 +120,12 @@ async def run_source_due(
         ws = await session.get(Workspace, campaign.workspace_id)
         if ws is None:
             continue
-        if client is not None:
+        over_budget = (
+            client is not None
+            and await _tokens_today(session, campaign_id=campaign.id, now=now)
+            >= CAMPAIGN_DAILY_TOKEN_BUDGET
+        )
+        if client is not None and not over_budget:
             await run_sourcing(
                 session, llm=client, campaign=campaign, organization_id=ws.organization_id
             )
@@ -84,6 +133,7 @@ async def run_source_due(
             await deterministic_source(
                 session, campaign=campaign, organization_id=ws.organization_id
             )
+        await _auto_approve(session, campaign=campaign, now=now)
         campaign.next_source_at = now + timedelta(hours=_SOURCE_INTERVAL_HOURS)
     return {"sourced": len(due)}
 
