@@ -6,17 +6,21 @@ engine by hand. Rate-limiting (`can_send_now`) is send-policy — see `services/
 """
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.sourcing import deterministic_source, run_sourcing
+from app.core.agent import AgentLLM, default_llm
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, logger
-from app.models import Enrollment, EnrollmentState
+from app.models import Campaign, CampaignStatus, Enrollment, EnrollmentState, Workspace
 from app.services.outreach.enrollment import tick
 
 _POLL_SECONDS = 10
+_SOURCE_LIMIT = 20
+_SOURCE_INTERVAL_HOURS = 6
 _ACTIONABLE = (
     EnrollmentState.active,
     EnrollmentState.scheduled,
@@ -43,13 +47,60 @@ async def run_due(session: AsyncSession, *, now: datetime, limit: int = 200) -> 
     return {"processed": len(due)}
 
 
+async def run_source_due(
+    session: AsyncSession,
+    *,
+    now: datetime,
+    llm: AgentLLM | None = None,
+    limit: int = _SOURCE_LIMIT,
+) -> dict[str, int]:
+    """Find active campaigns whose `next_source_at` is due and run one sourcing pass each.
+
+    Uses the Sourcing agent when an LLM is available, else the deterministic fallback. Self-clocking
+    via `next_source_at` (re-armed each pass); `FOR UPDATE SKIP LOCKED` for safe multi-worker.
+    """
+    client = llm if llm is not None else default_llm()
+    stmt = (
+        select(Campaign)
+        .where(
+            Campaign.status == CampaignStatus.active,
+            Campaign.next_source_at.is_not(None),
+            Campaign.next_source_at <= now,
+        )
+        .order_by(Campaign.next_source_at)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    due = list((await session.execute(stmt)).scalars().all())
+    for campaign in due:
+        ws = await session.get(Workspace, campaign.workspace_id)
+        if ws is None:
+            continue
+        if client is not None:
+            await run_sourcing(
+                session, llm=client, campaign=campaign, organization_id=ws.organization_id
+            )
+        else:
+            await deterministic_source(
+                session, campaign=campaign, organization_id=ws.organization_id
+            )
+        campaign.next_source_at = now + timedelta(hours=_SOURCE_INTERVAL_HOURS)
+    return {"sourced": len(due)}
+
+
 async def _loop() -> None:
     while True:
         async with SessionLocal() as session:
-            result = await run_due(session, now=datetime.now(UTC))
+            now = datetime.now(UTC)
+            sent = await run_due(session, now=now)
+            sourced = await run_source_due(session, now=now)
             await session.commit()
-        if result["processed"]:
-            logger.info("worker ticked %s enrollment(s)", result["processed"])
+        if sent["processed"] or sourced["sourced"]:
+            logger.info(
+                "worker: ticked %s enrollment(s), sourced %s campaign(s)",
+                sent["processed"],
+                sourced["sourced"],
+            )
         await asyncio.sleep(_POLL_SECONDS)
 
 

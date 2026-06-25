@@ -205,3 +205,22 @@ async def run_sourcing(
         user_prompt=user,
         tools=sourcing_tools(ctx),
     )
+
+
+async def deterministic_source(
+    session: AsyncSession, *, campaign: Campaign, organization_id: str
+) -> int:
+    """LLM-free sourcing fallback: search providers, import, and rank into proposed enrollments."""
+    providers = await build_providers_for_org(session, organization_id)
+    targeting = as_targeting(campaign.criteria)
+    hits = await search_people(providers, targeting, limit=25, use_cache=False)
+    kept: list[PersonHit] = []
+    for h in hits:
+        if h.email and await is_suppressed(session, organization_id=organization_id, email=h.email):
+            continue
+        kept.append(h)
+    await import_hits(session, workspace_id=campaign.workspace_id, hits=kept)
+    enrollments = await rank_campaign(
+        session, workspace_id=campaign.workspace_id, campaign=campaign
+    )
+    return len(enrollments)

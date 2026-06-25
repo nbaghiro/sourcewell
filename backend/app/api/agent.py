@@ -7,14 +7,17 @@ chat) renders off these endpoints, so the comparison is on UX, not data. Thin: e
 a service and maps the returned dataclass to the Pydantic response model.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.types import JsonObject
+from app.models import Campaign
 from app.services.agent.activity import ActivityEventData, RefData, build_activity_stream
 from app.services.agent.chat import handle_chat
+from app.services.agent.runs import campaign_funnel, recent_runs
 from app.services.agent.state import StateData, aggregate_state
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -138,3 +141,76 @@ async def chat(body: ChatIn, ctx: ContextDep, session: SessionDep) -> ChatOut:
     ws = require_workspace(ctx)
     result = await handle_chat(session, workspace_id=ws, org_id=ctx.org_id, message=body.message)
     return ChatOut(reply=result.reply, kind=result.kind, data=result.data)
+
+
+# ---- per-campaign agent runs + funnel (the cockpit Activity tab + header) ---
+
+
+class AgentStepOut(BaseModel):
+    seq: int
+    kind: str
+    tool_name: str | None
+    content: JsonObject
+
+
+class AgentRunOut(BaseModel):
+    id: str
+    role: str
+    trigger: str
+    status: str
+    summary: str
+    tokens: int
+    created_at: str
+    steps: list[AgentStepOut]
+
+
+class CampaignFunnelOut(BaseModel):
+    sourced: int
+    contacted: int
+    replied: int
+    handed_off: int
+
+
+async def _campaign_in_workspace(
+    session: AsyncSession, campaign_id: str, workspace_id: str
+) -> None:
+    campaign = await session.get(Campaign, campaign_id)
+    if campaign is None or campaign.workspace_id != workspace_id:
+        raise HTTPException(status_code=404, detail="campaign not found")
+
+
+@router.get("/runs", response_model=list[AgentRunOut])
+async def runs(
+    ctx: ContextDep, session: SessionDep, campaign_id: str, limit: int = 20
+) -> list[AgentRunOut]:
+    """The agent-episode trace feed for a campaign — the narrated activity tab."""
+    ws = require_workspace(ctx)
+    await _campaign_in_workspace(session, campaign_id, ws)
+    data = await recent_runs(session, campaign_id=campaign_id, limit=limit)
+    return [
+        AgentRunOut(
+            id=r.id,
+            role=r.role,
+            trigger=r.trigger,
+            status=r.status,
+            summary=r.summary,
+            tokens=r.tokens,
+            created_at=r.created_at,
+            steps=[
+                AgentStepOut(seq=s.seq, kind=s.kind, tool_name=s.tool_name, content=s.content)
+                for s in r.steps
+            ],
+        )
+        for r in data
+    ]
+
+
+@router.get("/funnel", response_model=CampaignFunnelOut)
+async def funnel(ctx: ContextDep, session: SessionDep, campaign_id: str) -> CampaignFunnelOut:
+    """The per-campaign funnel rollup — the cockpit header."""
+    ws = require_workspace(ctx)
+    await _campaign_in_workspace(session, campaign_id, ws)
+    f = await campaign_funnel(session, campaign_id=campaign_id)
+    return CampaignFunnelOut(
+        sourced=f.sourced, contacted=f.contacted, replied=f.replied, handed_off=f.handed_off
+    )
