@@ -1,14 +1,16 @@
 """Messaging HTTP layer: routes, schemas, serializers (approvals / inbox / webhooks)."""
 
+import hmac
 import json
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.outreach import handle_reply
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.config import get_settings
@@ -18,11 +20,14 @@ from app.core.types import JsonObject
 from app.models import (
     Campaign,
     Channel,
+    Connection,
+    ConnectionStatus,
     Contact,
     Enrollment,
     Message,
     MessageDirection,
     MessageStatus,
+    Workspace,
 )
 from app.services.insights import audit
 from app.services.outreach.messaging import (
@@ -461,3 +466,114 @@ async def inbound_webhook(
     if result is None:
         return InboundWebhookOut(status="ignored", intent=None)
     return InboundWebhookOut(status="ingested", intent=result[1])
+
+
+# --- Unipile inbound (LinkedIn + email replies, account lifecycle) -----------
+
+
+def _payload_str(obj: object, *keys: str) -> str | None:
+    """First non-empty string value among `keys` of a dict-ish payload, else None."""
+    if not isinstance(obj, dict):
+        return None
+    for key in keys:
+        value = obj.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+async def _resolve_enrollment(
+    session: AsyncSession, *, external_id: str | None, sender_email: str | None
+) -> Enrollment | None:
+    """Map a Unipile event to an enrollment: chat/thread id we sent on, else sender email."""
+    if external_id:
+        msg = (
+            (
+                await session.execute(
+                    select(Message)
+                    .where(Message.external_id == external_id)
+                    .order_by(Message.created_at.desc())
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if msg is not None:
+            return await session.get(Enrollment, msg.enrollment_id)
+    if sender_email:
+        return (
+            (
+                await session.execute(
+                    select(Enrollment)
+                    .join(Contact, Enrollment.contact_id == Contact.id)
+                    .where(func.lower(Contact.email) == sender_email.strip().lower())
+                    .order_by(Enrollment.created_at.desc())
+                )
+            )
+            .scalars()
+            .first()
+        )
+    return None
+
+
+@router.post("/webhooks/unipile", response_model=InboundWebhookOut)
+async def unipile_webhook(
+    request: Request, session: Annotated[AsyncSession, Depends(get_session)]
+) -> InboundWebhookOut:
+    """Public Unipile receiver (shared-secret): inbound messages → handle_reply, account events →
+    connection status. Verified by a token in the registered URL (?token=) or the X-Unipile-Token
+    header. The reply fires handle_reply synchronously; backgrounding it is a later refinement.
+    """
+    secret = get_settings().unipile_webhook_secret
+    if not secret:
+        raise HTTPException(status_code=503, detail="unipile webhook not configured")
+    token = request.query_params.get("token") or request.headers.get("X-Unipile-Token") or ""
+    if not hmac.compare_digest(token, secret):
+        raise HTTPException(status_code=401, detail="invalid token")
+    try:
+        parsed: object = json.loads(await request.body() or b"{}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="invalid JSON") from None
+    payload: JsonObject = parsed if isinstance(parsed, dict) else {}
+    now = datetime.now(UTC)
+
+    event = (_payload_str(payload, "event", "type", "status") or "").lower()
+    account_id = _payload_str(payload, "account_id", "account")
+
+    # Account lifecycle: a credentials / disconnect event flips the seat to needs-reauth.
+    if account_id and ("credential" in event or "disconnect" in event or "error" in event):
+        seat = (
+            (
+                await session.execute(
+                    select(Connection).where(Connection.external_id == account_id).limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if seat is not None:
+            seat.status = ConnectionStatus.needs_reauth
+            await session.flush()
+        return InboundWebhookOut(status="account_updated", intent=None)
+
+    # Inbound message: text + the chat/thread id (LinkedIn) or sender (email).
+    text = _payload_str(payload.get("message"), "text", "body") or _payload_str(
+        payload, "text", "body", "message"
+    )
+    chat_id = _payload_str(payload, "chat_id", "chat", "thread_id")
+    sender_email = _payload_str(payload.get("sender"), "email") or _payload_str(
+        payload, "from", "from_email"
+    )
+    if not text:
+        return InboundWebhookOut(status="ignored", intent=None)
+    enrollment = await _resolve_enrollment(session, external_id=chat_id, sender_email=sender_email)
+    if enrollment is None:
+        return InboundWebhookOut(status="ignored", intent=None)
+    ws = await session.get(Workspace, enrollment.workspace_id)
+    if ws is None:
+        return InboundWebhookOut(status="ignored", intent=None)
+    kind = await handle_reply(
+        session, enrollment=enrollment, text=text, now=now, organization_id=ws.organization_id
+    )
+    return InboundWebhookOut(status="ingested", intent=kind)

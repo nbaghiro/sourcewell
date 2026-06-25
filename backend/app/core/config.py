@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     unipile_api_key: str = ""
     unipile_dsn: str = ""  # e.g. https://apiXX.unipile.com:14XXX
     unipile_account_id: str = ""  # the connected LinkedIn account in Unipile
+    # Shared secret embedded in the registered webhook URL (?token=) / X-Unipile-Token header; blank
+    # disables the inbound Unipile receiver.
+    unipile_webhook_secret: str = ""
 
     # --- Signing + public links ---
     # HMAC key for unsubscribe links + inbound webhook verification (falls back to the cookie key).
