@@ -6,9 +6,12 @@ workspace on first login. The session is a Fernet-sealed cookie holding the loca
 dev-login bypass (header / cookie) is available when LinkedIn auth isn't configured (local / QA).
 """
 
+from functools import lru_cache
+
 from fastapi import Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from workos import WorkOSClient
 
 from app.core.config import get_settings
 from app.core.crypto import seal, unseal
@@ -24,7 +27,7 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
-from app.services.workspace.connections import provision_from_linkedin
+from app.services.workspace.connections import provision_from_linkedin, provision_user
 
 
 def _opt(payload: object, key: str) -> str | None:
@@ -32,6 +35,38 @@ def _opt(payload: object, key: str) -> str | None:
         value = payload.get(key)
         return value if isinstance(value, str) and value else None
     return None
+
+
+# --- WorkOS AuthKit (SSO: Google / Microsoft / email) ------------------------
+
+
+@lru_cache
+def _workos_client() -> WorkOSClient:
+    s = get_settings()
+    return WorkOSClient(api_key=s.workos_api_key, client_id=s.workos_client_id)
+
+
+def workos_login_url(state: str | None = None) -> str | None:
+    """The AuthKit authorization URL, or None if WorkOS isn't configured."""
+    s = get_settings()
+    if not s.workos_enabled:
+        return None
+    return _workos_client().user_management.get_authorization_url(
+        provider="authkit", redirect_uri=s.workos_redirect_uri, state=state
+    )
+
+
+async def complete_workos_login(session: AsyncSession, *, code: str) -> str | None:
+    """Exchange an AuthKit code → provision/find the local user → their id (None on failure)."""
+    try:
+        resp = _workos_client().user_management.authenticate_with_code(code=code)
+    except Exception:
+        return None
+    wos_user = resp.user
+    first = getattr(wos_user, "first_name", None) or ""
+    last = getattr(wos_user, "last_name", None) or ""
+    name = f"{first} {last}".strip() or wos_user.email
+    return (await provision_user(session, subject=wos_user.id, name=name, email=wos_user.email)).id
 
 
 # --- the sealed session ------------------------------------------------------

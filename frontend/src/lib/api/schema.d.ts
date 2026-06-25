@@ -30,9 +30,49 @@ export interface paths {
         };
         /**
          * Login
-         * @description Start a LinkedIn sign-in: redirect the browser to the Unipile hosted-auth wizard.
+         * @description Start WorkOS SSO (Google / Microsoft / email): redirect to AuthKit.
          */
         get: operations["login_auth_login_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/linkedin/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Linkedin Login
+         * @description Start a LinkedIn sign-in: redirect to the Unipile hosted-auth wizard.
+         */
+        get: operations["linkedin_login_auth_linkedin_login_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Options
+         * @description Which sign-in methods are configured, so the login screen renders the right buttons.
+         */
+        get: operations["options_auth_options_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -70,7 +110,7 @@ export interface paths {
         };
         /**
          * Callback
-         * @description Browser redirect after the wizard: mint the session once the notify provisioned the user.
+         * @description Shared callback: WorkOS sends `code`, LinkedIn sends `state`. Mint the unified session.
          */
         get: operations["callback_auth_callback_get"];
         put?: never;
@@ -1682,6 +1722,15 @@ export interface components {
             /** Created At */
             created_at: string | null;
         };
+        /** AuthOptions */
+        AuthOptions: {
+            /** Workos */
+            workos: boolean;
+            /** Linkedin */
+            linkedin: boolean;
+            /** Dev */
+            dev: boolean;
+        };
         /**
          * AutonomyMode
          * @enum {string}
@@ -3217,6 +3266,46 @@ export interface operations {
             };
         };
     };
+    linkedin_login_auth_linkedin_login_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    options_auth_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthOptions"];
+                };
+            };
+        };
+    };
     linkedin_notify_auth_linkedin_notify_post: {
         parameters: {
             query?: never;
@@ -3241,8 +3330,9 @@ export interface operations {
     };
     callback_auth_callback_get: {
         parameters: {
-            query: {
-                state: string;
+            query?: {
+                code?: string | null;
+                state?: string | null;
             };
             header?: never;
             path?: never;

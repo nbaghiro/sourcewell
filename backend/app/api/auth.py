@@ -21,12 +21,36 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/login")
-async def login(session: SessionDep) -> RedirectResponse:
-    """Start a LinkedIn sign-in: redirect the browser to the Unipile hosted-auth wizard."""
+async def login() -> RedirectResponse:
+    """Start WorkOS SSO (Google / Microsoft / email): redirect to AuthKit."""
+    url = auth_service.workos_login_url()
+    if url is None:
+        raise HTTPException(status_code=503, detail="SSO is not configured")
+    return RedirectResponse(url)
+
+
+@router.get("/linkedin/login")
+async def linkedin_login(session: SessionDep) -> RedirectResponse:
+    """Start a LinkedIn sign-in: redirect to the Unipile hosted-auth wizard."""
     url = await auth_service.start_linkedin_login(session)
     if url is None:
         raise HTTPException(status_code=503, detail="LinkedIn auth is not configured")
     return RedirectResponse(url)
+
+
+class AuthOptions(BaseModel):
+    workos: bool
+    linkedin: bool
+    dev: bool
+
+
+@router.get("/options", response_model=AuthOptions)
+async def options() -> AuthOptions:
+    """Which sign-in methods are configured, so the login screen renders the right buttons."""
+    s = get_settings()
+    return AuthOptions(
+        workos=s.workos_enabled, linkedin=s.linkedin_auth_enabled, dev=s.dev_login_enabled
+    )
 
 
 @router.post("/linkedin/notify")
@@ -49,10 +73,16 @@ async def linkedin_notify(request: Request, session: SessionDep) -> dict[str, st
 
 
 @router.get("/callback")
-async def callback(state: str, session: SessionDep) -> RedirectResponse:
-    """Browser redirect after the wizard: mint the session once the notify provisioned the user."""
+async def callback(
+    session: SessionDep, code: str | None = None, state: str | None = None
+) -> RedirectResponse:
+    """Shared callback: WorkOS sends `code`, LinkedIn sends `state`. Mint the unified session."""
     settings = get_settings()
-    user_id = await auth_service.finish_linkedin_login(session, state=state)
+    user_id: str | None = None
+    if code is not None:
+        user_id = await auth_service.complete_workos_login(session, code=code)
+    elif state is not None:
+        user_id = await auth_service.finish_linkedin_login(session, state=state)
     if user_id is None:
         return RedirectResponse(f"{settings.frontend_url}/login?error=auth_failed")
     redirect = RedirectResponse(settings.frontend_url)
@@ -79,14 +109,14 @@ class DevLoginResponse(BaseModel):
 async def dev_login(
     session: SessionDep, response: Response, body: DevLoginRequest | None = None
 ) -> DevLoginResponse:
-    """Demo sign-in that bypasses LinkedIn auth (local design/QA only).
+    """Demo sign-in that bypasses SSO (local design/QA only).
 
     With no body it's a one-click bypass; with email/password it validates the demo credentials.
     """
     settings = get_settings()
     if not settings.dev_login_enabled:
         raise HTTPException(
-            status_code=403, detail="dev login disabled (LinkedIn auth is configured)"
+            status_code=403, detail="dev login disabled (a sign-in provider is configured)"
         )
     if body is not None and (body.email or body.password):
         if body.email != settings.demo_admin_email or body.password != settings.demo_password:

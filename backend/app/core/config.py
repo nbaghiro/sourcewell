@@ -21,8 +21,14 @@ class Settings(BaseSettings):
     # Where the React app is served — used for CORS + post-auth redirects.
     frontend_url: str = "http://localhost:8900"
 
-    # --- Session (LinkedIn sign-in via Unipile hosted-auth) ---
-    # Fernet key used to seal the session cookie. Generate with:
+    # --- WorkOS AuthKit (SSO: Google / Microsoft / email) ---
+    workos_api_key: str = ""
+    workos_client_id: str = ""
+    workos_redirect_uri: str = "http://localhost:8901/auth/callback"
+
+    # --- Session ---
+    # Both WorkOS SSO and LinkedIn (Unipile hosted-auth) sign-in mint the SAME sealed session: a
+    # Fernet-encrypted cookie holding the local user id. Generate the key with:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     session_cookie_password: str = ""
     # Previous key kept during rotation so existing sealed secrets/cookies still decrypt.
@@ -65,13 +71,23 @@ class Settings(BaseSettings):
     demo_password: str = "pass"
 
     @property
-    def auth_enabled(self) -> bool:
-        """True when LinkedIn (Unipile hosted-auth) sign-in is configured; else dev-header auth."""
+    def workos_enabled(self) -> bool:
+        """WorkOS SSO (Google / Microsoft / email) is available."""
+        return bool(self.workos_api_key and self.workos_client_id and self.session_cookie_password)
+
+    @property
+    def linkedin_auth_enabled(self) -> bool:
+        """Sign in with LinkedIn (via Unipile hosted-auth) is available."""
         return bool(self.unipile_api_key and self.unipile_dsn and self.session_cookie_password)
 
     @property
+    def auth_enabled(self) -> bool:
+        """At least one real sign-in provider is configured; otherwise dev-header auth is used."""
+        return self.workos_enabled or self.linkedin_auth_enabled
+
+    @property
     def dev_login_enabled(self) -> bool:
-        """One-click demo sign-in is available only when LinkedIn auth is NOT configured."""
+        """One-click demo sign-in is available only when no real provider is configured."""
         return not self.auth_enabled
 
 

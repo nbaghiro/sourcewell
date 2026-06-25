@@ -21,9 +21,11 @@ type Status = "loading" | "authed" | "anon";
 interface AuthContextValue {
   status: Status;
   me: Me | null;
-  /** Redirect to WorkOS AuthKit to sign in. */
+  /** Redirect to WorkOS AuthKit (SSO: Google / Microsoft / email). */
   login: () => void;
-  /** Local-only: sign in as the demo admin, bypassing WorkOS (validates creds if given). */
+  /** Redirect to the LinkedIn hosted-auth (Unipile) sign-in. */
+  linkedinLogin: () => void;
+  /** Local-only: sign in as the demo admin, bypassing SSO (validates creds if given). */
   devLogin: (creds?: { email: string; password: string }) => Promise<void>;
   /** Clear the session and bounce through the WorkOS logout. */
   logout: () => Promise<void>;
@@ -78,6 +80,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.href = `${API_URL}/auth/login`;
   }, []);
 
+  const linkedinLogin = React.useCallback(() => {
+    window.location.href = `${API_URL}/auth/linkedin/login`;
+  }, []);
+
   const logout = React.useCallback(async () => {
     try {
       const { logout_url } = await api<{ logout_url: string }>("/auth/logout", { method: "POST" });
@@ -88,8 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = React.useMemo(
-    () => ({ status, me, login, devLogin, logout, refresh }),
-    [status, me, login, devLogin, logout, refresh],
+    () => ({ status, me, login, linkedinLogin, devLogin, logout, refresh }),
+    [status, me, login, linkedinLogin, devLogin, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -112,32 +112,17 @@ async def workspace_seat_account_id(
     )
 
 
-async def provision_from_linkedin(
-    session: AsyncSession,
-    *,
-    member_urn: str,
-    name: str,
-    email: str | None,
-    account_id: str,
-    seat_type: SeatType = SeatType.basic,
+async def provision_user(
+    session: AsyncSession, *, subject: str, name: str, email: str | None
 ) -> User:
-    """Find or create the local user for a LinkedIn member (keyed on `member_urn`), and (re)connect
-    their seat. First login provisions an org + default workspace + org-admin membership.
+    """Find or create a local user by federated identity `subject` (a WorkOS user id or a LinkedIn
+    `member_urn`). First sign-in provisions an org + default workspace + org-admin membership.
     """
     existing = (
-        await session.execute(select(User).where(User.sso_subject == member_urn))
+        await session.execute(select(User).where(User.sso_subject == subject))
     ).scalar_one_or_none()
     if existing is not None:
-        await upsert_seat(
-            session,
-            organization_id=existing.organization_id,
-            user_id=existing.id,
-            provider=ConnectionProvider.linkedin,
-            account_id=account_id,
-            seat_type=seat_type,
-        )
         return existing
-
     domain = email.split("@")[-1].split(".")[0] if email and "@" in email else "workspace"
     org = Organization(name=domain.capitalize(), slug=f"{domain}-{new_id()[:8].lower()}")
     session.add(org)
@@ -148,9 +133,9 @@ async def provision_from_linkedin(
     await session.flush()
     user = User(
         organization_id=org.id,
-        email=email or f"{member_urn}@linkedin.local",
-        name=name or "LinkedIn user",
-        sso_subject=member_urn,
+        email=email or f"{subject}@users.local",
+        name=name or "User",
+        sso_subject=subject,
     )
     session.add(user)
     await session.flush()
@@ -163,9 +148,25 @@ async def provision_from_linkedin(
         )
     )
     await session.flush()
+    return user
+
+
+async def provision_from_linkedin(
+    session: AsyncSession,
+    *,
+    member_urn: str,
+    name: str,
+    email: str | None,
+    account_id: str,
+    seat_type: SeatType = SeatType.basic,
+) -> User:
+    """Provision the local user for a LinkedIn member (keyed on `member_urn`) and (re)connect the
+    Unipile seat behind their Connection.
+    """
+    user = await provision_user(session, subject=member_urn, name=name, email=email)
     await upsert_seat(
         session,
-        organization_id=org.id,
+        organization_id=user.organization_id,
         user_id=user.id,
         provider=ConnectionProvider.linkedin,
         account_id=account_id,
