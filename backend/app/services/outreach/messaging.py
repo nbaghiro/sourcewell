@@ -261,6 +261,18 @@ async def draft_reply_text(contact: Contact, last_inbound: str | None) -> str:
     return await llm.complete(system, user, max_tokens=250) or baseline
 
 
+async def rewrite_message(original: str, instruction: str) -> str:
+    """One-off rewrite of a message per an instruction (Claude when enabled, else the original)."""
+    if not llm.is_enabled() or not original.strip():
+        return original
+    system = (
+        "Rewrite an outreach message per the instruction. Keep the rep's voice, stay concise, "
+        "don't fabricate facts. Return only the rewritten message."
+    )
+    user = f"Original:\n{original}\n\nInstruction: {instruction}\n\nRewritten message:"
+    return await llm.complete(system, user, max_tokens=400) or original
+
+
 async def summarize_thread(state: str, last_inbound: str | None) -> str:
     """One-line summary — Claude when enabled, else the deterministic summary."""
     baseline = summarize(state, last_inbound)

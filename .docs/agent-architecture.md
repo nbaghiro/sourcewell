@@ -86,3 +86,30 @@ CI runs all three; no live API in CI.
 
 ## 11 · Resolved decisions
 anthropic SDK · keyed memory (embedding‑ready, nullable column) · suggestions via notifications · recruiting vertical hardcoded in code · `Workspace.vertical` string pointer · stubbed Unipile pull · one migration · budgets 50k/episode + 500k/campaign‑day.
+
+## 12 · Chat‑entity contract (Main‑agent chat → embedded UI)
+The Main‑agent chat returns text **+ typed entities** the frontend renders with custom UI. Generalizes today's `ChatOut {reply, kind, data}` (one entity) into a list.
+
+```ts
+interface ChatOut { reply: string; entities: Entity[] }
+interface Entity { type: EntityType; id: string; data: unknown; action?: EntityAction }
+interface EntityAction { verb: "apply"|"dismiss"|"approve"|"confirm"|"edit";
+                         endpoint: string; params: Record<string, unknown>; confirm?: string }
+```
+
+**Mechanism — tool‑result‑driven.** Entities are the typed results of *presentational* tools the agent calls (catalog of presentational tools == catalog of entity types). Three tool classes:
+- **internal** (`read_funnel`, `estimate_audience`) → not shown
+- **presentational** (`show_funnel`, `show_candidates`, `preview_audience`, `draft_message`) → entity
+- **proposing** (`propose_change`, `propose_action`) → entity **+ action**
+
+The chat layer collects presentational tool results (in call order) into `entities[]`.
+
+**Catalog (the only types the chat returns):**
+
+*Display:* `funnel {sourced,contacted,replied,handed_off}` · `candidate {id,name,title,company,score,status,avatar,reason}` · `candidate_list {candidates[],total}` · `campaign {id,name,objective,status,autonomy,funnel}` · `metric {label,value,unit?,trend?}` · `activity_ref {run_id,summary,created_at}` · `thread_ref {enrollment_id,contact_name,snippet}` · `notice {level,text}`
+
+*Interactive (carry `action`):* `audience_preview {criteria,estimate,sample[]}` → Apply · `strategy_change {section,before,after,rationale,suggestion_id}` → Apply/Dismiss (a Phase‑5 suggestion) · `message_draft {channel,subject?,body,contact_ref?}` → Approve/Edit · `action {label,kind,params}` (kind: pause|resume|approve_candidates|set_autonomy|…) → Confirm
+
+**Autonomy note:** in `full`, an already‑applied change returns a `strategy_change` with `verb:"dismiss"` (a "did this, undo?" card).
+
+**Frontend contract:** one renderer per `type` via a registry keyed on `type`, a `GenericEntityCard` fallback for unknown types (forward‑compatible), and one `useEntityAction(action)` hook (actions are declarative `endpoint`+`params`). v1 renders entities after `reply`; v2 may splice inline via `⟦entity:id⟧` markers.
