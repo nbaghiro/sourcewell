@@ -3,6 +3,7 @@ import * as React from "react";
 import { useLocation } from "react-router-dom";
 
 import { ChatEntities } from "@/components/cockpit/entities";
+import { Markdown } from "@/components/markdown";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,7 +121,7 @@ export function AgentChatWidget() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-border bg-card px-3.5 py-2 text-sm text-foreground shadow-sm">
-                      {m.text}
+                      <Markdown>{m.text}</Markdown>
                     </div>
                   </div>
                   <ChatEntities entities={m.entities} className="pl-9" />

@@ -12,6 +12,7 @@ import * as React from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { ChatEntities } from "@/components/cockpit/entities";
+import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { PageLayout } from "@/components/page-layout";
 import { PersonCell } from "@/components/person-cell";
@@ -530,7 +531,7 @@ function ChatPanel({ campaignId }: { campaignId: string }) {
                   </AvatarFallback>
                 </Avatar>
                 <div className="max-w-[80%] rounded-2xl rounded-bl-sm border border-border bg-card px-3.5 py-2 text-sm text-foreground shadow-sm">
-                  {m.text}
+                  <Markdown>{m.text}</Markdown>
                 </div>
               </div>
               <ChatEntities entities={m.entities} className="pl-9" />
