@@ -1,4 +1,4 @@
-"""Phase 7: the Main-agent chat — text + typed entities + the interactive apply-audience loop."""
+"""The Main-agent chat — text + typed entities + the interactive apply-audience loop."""
 
 import pytest
 from httpx import AsyncClient

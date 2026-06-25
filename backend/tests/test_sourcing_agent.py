@@ -1,4 +1,4 @@
-"""Phase 3: the Sourcing agent + its tools (against the demo provider + a scripted LLM)."""
+"""The Sourcing agent + its tools (against the demo provider + a scripted LLM)."""
 
 import pytest
 from sqlalchemy import select

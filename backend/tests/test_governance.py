@@ -1,4 +1,4 @@
-"""Phase 0 safety gates: suppression blocks sends, transient failures retry, daily caps enforce."""
+"""Safety gates: suppression blocks sends, transient failures retry, daily caps enforce."""
 
 from datetime import UTC, datetime
 

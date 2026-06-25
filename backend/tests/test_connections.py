@@ -1,4 +1,4 @@
-"""Provider track · Phase 1: per-user channel seats — the Connection-based account resolver."""
+"""Per-user channel seats — the Connection-based account resolver."""
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession

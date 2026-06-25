@@ -1,4 +1,4 @@
-"""Phase 2: the bounded, traced agent tool-use loop + guardrails + the FakeLLM harness."""
+"""The bounded, traced agent tool-use loop + guardrails + the FakeLLM harness."""
 
 import asyncio
 from collections.abc import Awaitable, Callable

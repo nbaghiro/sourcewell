@@ -1,4 +1,4 @@
-"""Phase 9: full-autonomy lifecycle (design → source → auto-approve → send → reply) + budget cap."""
+"""Full-autonomy lifecycle (design → source → auto-approve → send → reply) + budget cap."""
 
 from datetime import UTC, datetime, timedelta
 

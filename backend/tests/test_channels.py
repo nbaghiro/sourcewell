@@ -1,4 +1,4 @@
-"""Phase 2: multichannel send dispatch (LinkedIn dry-run) + email-threaded inbound ingestion."""
+"""Multichannel send dispatch (LinkedIn dry-run) + email-threaded inbound ingestion."""
 
 from datetime import UTC, datetime
 

@@ -1,4 +1,4 @@
-"""Phase 5: the Main agent — brief intake, cold-start design, review, provenance enforcement."""
+"""The Main agent — brief intake, cold-start design, review, provenance enforcement."""
 
 import pytest
 from httpx import AsyncClient

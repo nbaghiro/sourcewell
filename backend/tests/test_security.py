@@ -1,4 +1,4 @@
-"""RBAC guards + signing/HMAC + unsubscribe token (Phase 5 hardening)."""
+"""RBAC guards + signing/HMAC + unsubscribe token hardening."""
 
 import hashlib
 import hmac

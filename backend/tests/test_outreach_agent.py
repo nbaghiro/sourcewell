@@ -1,4 +1,4 @@
-"""Phase 6: the Outreach agent — rewrite, live conversation (handoff / opt-out / reply), HITL."""
+"""The Outreach agent — rewrite, live conversation (handoff / opt-out / reply), HITL."""
 
 from datetime import UTC, datetime
 

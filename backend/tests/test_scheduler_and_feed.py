@@ -1,4 +1,4 @@
-"""Phase 4: the source_due scheduler + the cockpit read-models (runs feed + funnel)."""
+"""The source_due scheduler + the cockpit read-models (runs feed + funnel)."""
 
 from datetime import UTC, datetime, timedelta
 

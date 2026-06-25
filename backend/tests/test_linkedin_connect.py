@@ -1,4 +1,4 @@
-"""Provider track · Phase 2: Unipile connect — identity provisioning + the connection client."""
+"""Unipile connect — identity provisioning + the connection client."""
 
 import httpx
 import pytest

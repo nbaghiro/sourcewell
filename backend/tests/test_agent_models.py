@@ -1,4 +1,4 @@
-"""Integration tests: the agent-native schema persists + defaults apply (Phase 1)."""
+"""Integration tests: the agent-native schema persists + defaults apply."""
 
 from datetime import UTC, datetime
 

@@ -1,4 +1,4 @@
-"""Provider track · Phase 4: the Unipile channel client + Message reply-mapping fields."""
+"""The Unipile channel client + Message reply-mapping fields."""
 
 import httpx
 import pytest
