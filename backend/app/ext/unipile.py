@@ -200,3 +200,94 @@ def unipile_connection() -> UnipileConnection | None:
     if not (s.unipile_api_key and s.unipile_dsn):
         return None
     return UnipileConnection(s.unipile_api_key, s.unipile_dsn)
+
+
+class UnipileChannel:
+    """ChannelProvider role — send + reply on a channel (linkedin | email) from a seat.
+
+    LinkedIn sends are multipart `POST /chats` (first touch → returns the chat id) and
+    `POST /chats/{id}/messages` (reply); `attendees_ids` is the recipient's provider id, resolved
+    from their public identifier. Email is `POST /emails`.
+    """
+
+    def __init__(self, channel: str, api_key: str, dsn: str) -> None:
+        self.channel = channel
+        self._key = api_key
+        self._dsn = dsn.rstrip("/")
+
+    def _headers(self) -> dict[str, str]:
+        return {"X-API-KEY": self._key, "accept": "application/json"}
+
+    @staticmethod
+    def _form(fields: dict[str, str]) -> dict[str, tuple[None, str]]:
+        # multipart/form-data text parts: (filename=None, content) per field.
+        return {k: (None, v) for k, v in fields.items()}
+
+    async def _provider_id(self, *, account_id: str, identifier: str) -> str | None:
+        """Resolve a LinkedIn public identifier / URL → the provider internal id (attendees_ids)."""
+        ident = identifier.rstrip("/").rsplit("/", 1)[-1]
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(
+                f"{self._dsn}/api/v1/users/{ident}",
+                headers=self._headers(),
+                params={"account_id": account_id},
+            )
+        return opt_str(json_body(resp).get("provider_id")) if resp.status_code < 400 else None
+
+    async def send(
+        self, *, account_id: str, to: str, subject: str | None, body: str, inmail: bool = False
+    ) -> str | None:
+        """Send the first message; returns the provider thread/chat id (for reply mapping)."""
+        if self.channel == "linkedin":
+            provider_id = await self._provider_id(account_id=account_id, identifier=to)
+            if provider_id is None:
+                return None
+            fields = {
+                "account_id": account_id,
+                "attendees_ids": provider_id,
+                "text": body,
+                "linkedin[api]": "classic",
+            }
+            if inmail:
+                fields["linkedin[inmail]"] = "true"
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await client.post(
+                    f"{self._dsn}/api/v1/chats", headers=self._headers(), files=self._form(fields)
+                )
+            if resp.status_code >= 400:
+                return None
+            data = json_body(resp)
+            return opt_str(data.get("chat_id")) or opt_str(data.get("id"))
+        # email — `to` as the array form [{identifier}] in multipart bracket notation
+        email_fields = {
+            "account_id": account_id,
+            "subject": subject or "",
+            "body": body,
+            "to[0][identifier]": to,
+        }
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                f"{self._dsn}/api/v1/emails",
+                headers=self._headers(),
+                files=self._form(email_fields),
+            )
+        return opt_str(json_body(resp).get("id")) if resp.status_code < 400 else None
+
+    async def reply(self, *, account_id: str, thread_id: str, body: str) -> None:
+        """Reply into an existing thread (LinkedIn chat / email)."""
+        if self.channel == "linkedin":
+            url = f"{self._dsn}/api/v1/chats/{thread_id}/messages"
+            fields = {"text": body}
+        else:
+            url = f"{self._dsn}/api/v1/emails"
+            fields = {"account_id": account_id, "body": body, "reply_to": thread_id}
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            await client.post(url, headers=self._headers(), files=self._form(fields))
+
+
+def unipile_channel(channel: str) -> UnipileChannel | None:
+    """The platform Unipile channel client (linkedin | email), or None if unconfigured."""
+    s = get_settings()
+    if not (s.unipile_api_key and s.unipile_dsn):
+        return None
+    return UnipileChannel(channel, s.unipile_api_key, s.unipile_dsn)

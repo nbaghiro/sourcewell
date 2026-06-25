@@ -439,6 +439,9 @@ class Message(IdMixin, TimestampMixin, Base):
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Send attempts so far (for retry/backoff on transient send failures).
     attempts: Mapped[int] = mapped_column(default=0)
+    # Provider thread/chat id (maps an inbound reply back to this thread) + the seat that sent it.
+    external_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 # --- Suppression -------------------------------------------------------------
