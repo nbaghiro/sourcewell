@@ -1,5 +1,4 @@
-import ReactMarkdown, { type Components } from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { type Components, Streamdown } from "streamdown";
 
 // Style each element so the agent's markdown reads as native chat UI (no heavy typography plugin).
 const COMPONENTS: Components = {
@@ -27,11 +26,17 @@ const COMPONENTS: Components = {
   h3: ({ children }) => <p className="mb-1 mt-1 font-semibold text-foreground">{children}</p>,
 };
 
-/** Render an agent's markdown reply as styled inline UI (bold, lists, links, inline code). */
+/**
+ * Render an agent's markdown reply as styled inline UI (bold, lists, links, inline code).
+ *
+ * Uses `streamdown` (an AI-streaming-native markdown renderer) so half-streamed markdown — an
+ * unclosed `**` mid-token while the response streams — renders cleanly instead of flashing raw
+ * syntax. GFM is on by default; mermaid/code-highlighting are lazy-loaded only if they appear.
+ */
 export function Markdown({ children }: { children: string }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+    <Streamdown components={COMPONENTS} parseIncompleteMarkdown>
       {children}
-    </ReactMarkdown>
+    </Streamdown>
   );
 }
