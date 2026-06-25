@@ -28,8 +28,51 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Login */
+        /**
+         * Login
+         * @description Start a LinkedIn sign-in: redirect the browser to the Unipile hosted-auth wizard.
+         */
         get: operations["login_auth_login_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/linkedin/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Linkedin Notify
+         * @description Unipile server notify: provision the user for the connected account (token-gated).
+         */
+        post: operations["linkedin_notify_auth_linkedin_notify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Callback
+         * @description Browser redirect after the wizard: mint the session once the notify provisioned the user.
+         */
+        get: operations["callback_auth_callback_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -49,28 +92,11 @@ export interface paths {
         put?: never;
         /**
          * Dev Login
-         * @description Demo sign-in that bypasses WorkOS (local design/QA only).
+         * @description Demo sign-in that bypasses LinkedIn auth (local design/QA only).
          *
          *     With no body it's a one-click bypass; with email/password it validates the demo credentials.
          */
         post: operations["dev_login_auth_dev_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Callback */
-        get: operations["callback_auth_callback_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -788,6 +814,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/webhooks/unipile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unipile Webhook
+         * @description Public Unipile receiver (shared-secret): inbound messages → handle_reply, account events →
+         *     connection status. Verified by a token in the registered URL (?token=) or the X-Unipile-Token
+         *     header. The reply fires handle_reply synchronously; backgrounding it is a later refinement.
+         */
+        post: operations["unipile_webhook_webhooks_unipile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dashboard/summary": {
         parameters: {
             query?: never;
@@ -1354,7 +1402,7 @@ export interface paths {
         put?: never;
         /**
          * Chat
-         * @description Main-agent chat: text + typed entities (catalog §12); the legacy copilot when no LLM.
+         * @description Main-agent chat: text + typed entities (catalog §12). Requires an LLM.
          */
         post: operations["chat_agent_chat_post"];
         delete?: never;
@@ -3169,6 +3217,59 @@ export interface operations {
             };
         };
     };
+    linkedin_notify_auth_linkedin_notify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    callback_auth_callback_get: {
+        parameters: {
+            query: {
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     dev_login_auth_dev_login_post: {
         parameters: {
             query?: never;
@@ -3189,37 +3290,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DevLoginResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    callback_auth_callback_get: {
-        parameters: {
-            query: {
-                code: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -4566,6 +4636,26 @@ export interface operations {
         };
     };
     inbound_webhook_webhooks_inbound_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundWebhookOut"];
+                };
+            };
+        };
+    };
+    unipile_webhook_webhooks_unipile_post: {
         parameters: {
             query?: never;
             header?: never;
