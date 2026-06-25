@@ -476,8 +476,10 @@ export function useAgentState() {
 
 export function useAgentChat() {
   return useMutation({
-    mutationFn: async (message: string) =>
-      unwrap(await client.POST("/agent/chat", { body: { message } })),
+    // campaign_id is attached only when the chat is opened on a campaign route (campaign-scoped),
+    // omitted otherwise (general chat) — the two modes the agent distinguishes.
+    mutationFn: async (vars: { message: string; campaign_id?: string }) =>
+      unwrap(await client.POST("/agent/chat", { body: vars })),
   });
 }
 

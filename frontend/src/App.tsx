@@ -96,7 +96,7 @@ export default function App() {
             <Route path="/components" element={<ComponentsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-            <Toaster position="bottom-right" />
+            <Toaster position="top-right" />
           </TooltipProvider>
         </WorkspaceProvider>
       </AuthProvider>

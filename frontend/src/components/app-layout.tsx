@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Outlet, useNavigate } from "react-router-dom";
 
+import { AgentChatWidget } from "@/components/agent-chat-widget";
 import { AppSidebar, type NavItemDef } from "@/components/app-sidebar";
 import { AppShell } from "@/components/app-shell";
 import { CommandPalette } from "@/components/command-palette";
@@ -105,6 +106,7 @@ export function AppLayout() {
       topbar={topbar}
     >
       <Outlet />
+      <AgentChatWidget />
     </AppShell>
   );
 }
