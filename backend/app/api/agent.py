@@ -24,9 +24,15 @@ from app.core.db import SessionLocal
 from app.core.runtime import default_llm
 from app.core.types import JsonList, JsonObject
 from app.models import Campaign, Workspace
-from app.services.cockpit.activity import ActivityEventData, RefData, build_activity_stream
-from app.services.cockpit.runs import campaign_funnel, recent_runs
-from app.services.cockpit.state import StateData, aggregate_state
+from app.services.insights.agent import (
+    ActivityEventData,
+    RefData,
+    StateData,
+    aggregate_state,
+    build_activity_stream,
+    campaign_funnel,
+    recent_runs,
+)
 from app.services.sourcing.briefs import parse_brief
 
 router = APIRouter(prefix="/agent", tags=["agent"])

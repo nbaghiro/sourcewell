@@ -14,7 +14,7 @@ from app.agents.provenance import is_agent_owned
 from app.core.runtime import AgentLLM, AgentResult, Tool, run_episode
 from app.core.types import JsonList, JsonObject
 from app.models import AgentRole, AuditEvent, Campaign, Workspace
-from app.services.cockpit.runs import campaign_funnel
+from app.services.insights.agent import campaign_funnel
 from app.services.sourcing.briefs import parse_brief
 from app.services.sourcing.contacts import list_contacts
 from app.targeting import FIT_THRESHOLD, Targeting, as_targeting, evaluate

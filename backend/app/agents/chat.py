@@ -17,7 +17,7 @@ from app.core.db import new_id
 from app.core.runtime import AgentLLM, Tool, run_episode, stream_episode
 from app.core.types import JsonList, JsonObject
 from app.models import AgentRole, Contact, Enrollment, Workspace
-from app.services.cockpit.runs import campaign_funnel
+from app.services.insights.agent import campaign_funnel
 from app.services.sourcing.contacts import list_contacts
 from app.targeting import FIT_THRESHOLD, Targeting, evaluate
 
