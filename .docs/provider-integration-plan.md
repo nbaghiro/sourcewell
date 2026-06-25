@@ -43,17 +43,28 @@
 4. **Unipile enrich**: pass `public_identifier`, not the full URL.
 
 ## 3 · Build phases
+
+> **Status:** the data/channel/connection layer is ✅ built and CI‑green on `main` (143 tests). What
+> each phase shipped is noted inline. The **only** remaining work is the **auth/live‑send cutover**
+> (§6 below) — deliberately staged for when manual QA pauses, since it rewrites the live auth + send
+> paths. Everything else was built additively, so QA is unaffected.
+
 **Track A — Unipile MVP spine**
-1. **Seams + seat resolver** — role protocols in `ext/base.py`; `services/workspace/connections.py` resolves `account_id` from `Connection`; `UnipileProvider` takes `account_id`. *(unblocker)*
-2. **Auth = Unipile connect** — `hosted/accounts/link` → notify receiver (provision User via `member_urn` + Connection) → session; retire WorkOS.
-3. **Connection lifecycle** — account webhook (`CREDENTIALS`→needs‑reauth); health.
-4. **Channel send** — multipart LinkedIn `POST /chats` + reply `/chats/{id}/messages` (+InMail/invite); email `POST /emails`; persist `chat_id`/thread on `Message`; SMTP fallback.
-5. **Inbound webhooks** — register `messaging`+`email`; public signed receiver → map `account_id`+`chat_id`→Enrollment → `handle_reply`.
-6. **Sourcing finalize** — `linkedin/search?account_id=` (keyword now; `/parameters`+Sales‑Nav next); enrich by `public_identifier`; `fetch_job_postings` via `category:jobs` (best‑effort).
+1. ✅ **Seams + seat resolver** — `ChannelProvider`/`ConnectionProvider` protocols in `ext/base.py`; `services/workspace/connections.py` resolves `account_id` from `Connection`; `UnipileProvider` takes `account_id`.
+2. ◑ **Auth = Unipile connect** — `UnipileConnection.create_link`/`profile`/`register_webhooks` + `provision_from_linkedin` (identity via `member_urn`) **built**; the endpoints + session minting + WorkOS retirement are the **cutover** (§6).
+3. ✅ **Connection lifecycle** — account webhook (`CREDENTIALS`/disconnect → `needs_reauth`) in the inbound receiver.
+4. ◑ **Channel send** — `UnipileChannel` (multipart `POST /chats` + reply + InMail + email `POST /emails`) + `Message.external_id`/`account_id` **built**; wiring it into the live `send_via_channel` is the **cutover** (§6).
+5. ✅ **Inbound webhooks** — public token‑verified `POST /webhooks/unipile` → maps `account_id`+`chat_id`→Enrollment → `handle_reply`. (Webhook registration call happens at connect — cutover.)
+6. ✅ **Sourcing finalize** — `account_id` in query, `api`/`category` body + cursor; enrich by `public_identifier`. (`fetch_job_postings` stays a best‑effort stub.)
 
 **Track B — switch‑ready data providers**
-7. Fix **Apollo** · keep **PDL/Hunter** · add **Cognism** (Bearer + Search→Redeem; paths on portal).
-8. Provider selection + BYO key mgmt + cost controls (`ProviderUsage`).
+7. ✅ **Apollo** fixed (`/api/v1` + `x-api-key`) · **PDL/Hunter** verified · **Cognism** added (Bearer + Search→Redeem; paths `# TODO` on portal access).
+8. ✅ **Provider selection** (`Workspace.settings.providers`, ordered allow‑list) + BYO‑key mgmt (pre‑existing) + usage metering (`ProviderUsage`, now wired into the agent search path).
+
+## 3a · The remaining cutover (for when QA pauses)
+- **Auth endpoints** `/auth/linkedin/start → notify → callback`, mint the session, rewire `resolve_user_from_request`, retire WorkOS — uses the already‑built `create_link` + `provision_from_linkedin`.
+- **Live send**: route `send_via_channel` through the seat resolver → `UnipileChannel` (persist `external_id`), SMTP as fallback.
+- **Register webhooks on connect**: call `UnipileConnection.register_webhooks` with the public receiver URL.
 
 ## 4 · Model touches
 `Connection.external_id` = Unipile account_id (used at last) · `Message.external_id` + `account_id` (reply mapping) · `Workspace.settings.providers` (selection) · config: `unipile_*` only (retire `workos_*`).
