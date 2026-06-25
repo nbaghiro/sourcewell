@@ -24,6 +24,7 @@ class ConnectionOut(BaseModel):
     seat_type: str
     user_email: str
     external_id: str | None
+    display_name: str | None
 
 
 class DataProviderOut(BaseModel):
@@ -38,6 +39,7 @@ class DataProviderOut(BaseModel):
 
 
 def _dump_connection(c: Connection, email: str) -> ConnectionOut:
+    raw_name = (c.capabilities or {}).get("display_name")
     return ConnectionOut(
         id=c.id,
         provider=c.provider.value,
@@ -45,6 +47,7 @@ def _dump_connection(c: Connection, email: str) -> ConnectionOut:
         seat_type=c.seat_type.value,
         user_email=email,
         external_id=c.external_id,
+        display_name=raw_name if isinstance(raw_name, str) else None,
     )
 
 

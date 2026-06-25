@@ -3,6 +3,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.core.crypto import seal, unseal
 from app.ext.demo import DemoProvider
 from app.ext.registry import (
@@ -90,8 +91,13 @@ async def test_byo_credential_enables_real_provider(db_session: AsyncSession) ->
     db_session.add(org)
     await db_session.flush()
 
+    # Hermetic: ignore any platform keys in the developer's .env (e.g. a real Unipile key).
+    no_platform_keys = Settings(
+        pdl_api_key="", apollo_api_key="", hunter_api_key="", unipile_api_key=""
+    )
+
     # no credentials -> demo provider only
-    before = await build_providers_for_org(db_session, org.id)
+    before = await build_providers_for_org(db_session, org.id, no_platform_keys)
     assert [p.key for p in before] == ["demo"]
 
     # a BYO PDL key brings the real provider online (sealed at rest)
@@ -101,7 +107,7 @@ async def test_byo_credential_enables_real_provider(db_session: AsyncSession) ->
         )
     )
     await db_session.flush()
-    after = await build_providers_for_org(db_session, org.id)
+    after = await build_providers_for_org(db_session, org.id, no_platform_keys)
     assert "pdl" in [p.key for p in after]
 
 
