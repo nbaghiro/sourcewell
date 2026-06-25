@@ -4,6 +4,8 @@ Key-gated by Unipile config (api key + dsn + account). Returns empty results whe
 the registry simply falls back to other providers / the demo provider.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 
 from app.core.config import get_settings
@@ -143,3 +145,58 @@ class UnipileProvider:
             return resp.status_code < 400
         except Exception:
             return False
+
+
+class UnipileConnection:
+    """ConnectionProvider role — connect seats (hosted auth), read identity, register webhooks."""
+
+    def __init__(self, api_key: str, dsn: str) -> None:
+        self._key = api_key
+        self._dsn = dsn.rstrip("/")
+
+    def _headers(self) -> dict[str, str]:
+        return {"X-API-KEY": self._key, "accept": "application/json"}
+
+    async def create_link(self, *, user_ref: str, notify_url: str, redirect_url: str) -> str | None:
+        """Create a hosted-auth wizard link to connect a LinkedIn seat. Returns the URL."""
+        body: JsonObject = {
+            "type": "create",
+            "providers": ["LINKEDIN"],
+            "api_url": self._dsn,
+            "expiresOn": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            "notify_url": notify_url,
+            "success_redirect_url": redirect_url,
+            "name": user_ref,
+        }
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                f"{self._dsn}/api/v1/hosted/accounts/link", headers=self._headers(), json=body
+            )
+        return opt_str(json_body(resp).get("url")) if resp.status_code < 400 else None
+
+    async def profile(self, *, account_id: str) -> JsonObject | None:
+        """Read the connected account's own profile (identity incl. `member_urn`)."""
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(
+                f"{self._dsn}/api/v1/users/me",
+                headers=self._headers(),
+                params={"account_id": account_id},
+            )
+        return json_body(resp) if resp.status_code < 400 else None
+
+    async def register_webhooks(self, *, request_url: str, source: str) -> None:
+        """Subscribe the inbound receiver for a source (messaging | email | account)."""
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            await client.post(
+                f"{self._dsn}/api/v1/webhooks",
+                headers=self._headers(),
+                json={"request_url": request_url, "source": source},
+            )
+
+
+def unipile_connection() -> UnipileConnection | None:
+    """The platform Unipile connection client, or None if unconfigured."""
+    s = get_settings()
+    if not (s.unipile_api_key and s.unipile_dsn):
+        return None
+    return UnipileConnection(s.unipile_api_key, s.unipile_dsn)

@@ -8,12 +8,19 @@ setting, so every user operates on their own connected account. The unblocker fo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import new_id
 from app.models import (
     Connection,
     ConnectionProvider,
     ConnectionStatus,
     Membership,
+    MembershipRole,
+    MembershipScope,
+    Organization,
     SeatType,
+    User,
+    Workspace,
+    WorkspaceKind,
 )
 
 
@@ -103,3 +110,66 @@ async def workspace_seat_account_id(
         .scalars()
         .first()
     )
+
+
+async def provision_from_linkedin(
+    session: AsyncSession,
+    *,
+    member_urn: str,
+    name: str,
+    email: str | None,
+    account_id: str,
+    seat_type: SeatType = SeatType.basic,
+) -> User:
+    """Find or create the local user for a LinkedIn member (keyed on `member_urn`), and (re)connect
+    their seat. First login provisions an org + default workspace + org-admin membership — mirroring
+    the WorkOS path, so the Unipile connect flow can replace it without other code changing.
+    """
+    existing = (
+        await session.execute(select(User).where(User.sso_subject == member_urn))
+    ).scalar_one_or_none()
+    if existing is not None:
+        await upsert_seat(
+            session,
+            organization_id=existing.organization_id,
+            user_id=existing.id,
+            provider=ConnectionProvider.linkedin,
+            account_id=account_id,
+            seat_type=seat_type,
+        )
+        return existing
+
+    domain = email.split("@")[-1].split(".")[0] if email and "@" in email else "workspace"
+    org = Organization(name=domain.capitalize(), slug=f"{domain}-{new_id()[:8].lower()}")
+    session.add(org)
+    await session.flush()
+    session.add(
+        Workspace(organization_id=org.id, name="Default workspace", kind=WorkspaceKind.team)
+    )
+    await session.flush()
+    user = User(
+        organization_id=org.id,
+        email=email or f"{member_urn}@linkedin.local",
+        name=name or "LinkedIn user",
+        sso_subject=member_urn,
+    )
+    session.add(user)
+    await session.flush()
+    session.add(
+        Membership(
+            user_id=user.id,
+            organization_id=org.id,
+            scope=MembershipScope.organization,
+            role=MembershipRole.org_admin,
+        )
+    )
+    await session.flush()
+    await upsert_seat(
+        session,
+        organization_id=org.id,
+        user_id=user.id,
+        provider=ConnectionProvider.linkedin,
+        account_id=account_id,
+        seat_type=seat_type,
+    )
+    return user
