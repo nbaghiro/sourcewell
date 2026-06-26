@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sourcewell — Source the people you can't find</title>
+<meta name="description" content="A warm pipeline cockpit where AI agents find, rank, and reach passive candidates across email and LinkedIn — and every message waits for your approval." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f3f1ea; --ink:#122019; --card:#ffffff;
+    --primary:#0b5d4e; --primary-fg:#f2fbf7;
+    --secondary:#eae6da; --muted:#f0ece0; --muted-ink:#6b7a71;
+    --accent:#dcefe8; --accent-ink:#0b5d4e; --accent-line:#bfe0d4;
+    --success:#2c8c5a; --warning:#b8762a; --destructive:#b4422e;
+    --border:#e5e1d5; --ring:#0e7c66;
+    --sidebar:#07312b; --sidebar-2:#0c453b; --sidebar-ink:#8fb6ac; --sidebar-bright:#ebf7f1;
+    --score-from:#0e7c66; --score-to:#43b68f; --radius:14px;
+
+    --display:"Bricolage Grotesque", serif;
+    --sans:"Hanken Grotesk", -apple-system, sans-serif;
+    --mono:"Geist Mono", ui-monospace, monospace;
+
+    --maxw:1240px;
+    --gutter:clamp(20px,5vw,72px);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:17px;
+    line-height:1.55;
+    overflow-x:hidden;
+    position:relative;
+  }
+
+  /* grain / atmosphere overlay */
+  body::before{
+    content:"";
+    position:fixed;inset:0;
+    pointer-events:none;z-index:9999;
+    opacity:.045;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  ::selection{background:var(--primary);color:var(--primary-fg)}
+
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--gutter)}
+
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;font-weight:500;
+    letter-spacing:.18em;text-transform:uppercase;
+    color:var(--muted-ink);
+    display:inline-flex;align-items:center;gap:.7em;
+  }
+  .eyebrow .num{color:var(--primary)}
+  .eyebrow::before{
+    content:"";width:30px;height:1px;background:var(--accent-line);display:inline-block;
+  }
+
+  /* ---------- NAV ---------- */
+  header.nav{
+    position:fixed;top:0;left:0;right:0;z-index:100;
+    transition:background .4s ease, box-shadow .4s ease, border-color .4s ease;
+    border-bottom:1px solid transparent;
+  }
+  header.nav.scrolled{
+    background:rgba(243,241,234,.82);
+    backdrop-filter:saturate(140%) blur(14px);
+    -webkit-backdrop-filter:saturate(140%) blur(14px);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-inner{
+    max-width:var(--maxw);margin:0 auto;
+    padding:18px var(--gutter);
+    display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .brand{display:flex;align-items:center;gap:11px;font-family:var(--display);font-weight:700;font-size:21px;letter-spacing:-.01em}
+  .brand .mark{width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;
+    background:linear-gradient(150deg,var(--score-from),var(--score-to));color:var(--primary-fg);
+    box-shadow:0 6px 16px -5px rgba(11,93,78,.55)}
+  .brand .mark svg{width:18px;height:18px}
+  .nav-links{display:flex;align-items:center;gap:34px}
+  .nav-links a{font-size:14.5px;color:var(--ink);opacity:.72;transition:opacity .2s, color .2s}
+  .nav-links a:hover{opacity:1;color:var(--primary)}
+  .nav-cta{
+    font-family:var(--sans);font-weight:600;font-size:14.5px;
+    background:var(--primary);color:var(--primary-fg);
+    padding:11px 20px;border-radius:999px;
+    transition:transform .2s ease, box-shadow .3s ease;
+    box-shadow:0 1px 0 rgba(7,49,43,.4), 0 10px 22px -12px rgba(11,93,78,.7);
+  }
+  .nav-cta:hover{transform:translateY(-2px)}
+  @media(max-width:860px){.nav-links{display:none}}
+
+  /* ---------- BUTTONS ---------- */
+  .btn{
+    display:inline-flex;align-items:center;gap:.6em;
+    font-family:var(--sans);font-weight:600;font-size:16px;
+    padding:15px 26px;border-radius:999px;cursor:pointer;border:none;
+    transition:transform .22s cubic-bezier(.2,.7,.3,1), box-shadow .3s ease, background .3s;
+  }
+  .btn-primary{
+    background:var(--primary);color:var(--primary-fg);
+    box-shadow:0 1px 0 rgba(7,49,43,.5), 0 16px 30px -14px rgba(11,93,78,.85);
+  }
+  .btn-primary:hover{transform:translateY(-3px);box-shadow:0 1px 0 rgba(7,49,43,.5), 0 22px 38px -16px rgba(11,93,78,.95)}
+  .btn-primary .arr{transition:transform .25s ease}
+  .btn-primary:hover .arr{transform:translateX(4px)}
+  .btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--border)}
+  .btn-ghost:hover{border-color:var(--primary);color:var(--primary)}
+
+  /* ---------- HERO ---------- */
+  .hero{padding:152px 0 86px;position:relative}
+  .hero-head{position:relative;z-index:1;text-align:center;max-width:24ch;margin:0 auto}
+  .hero-head .eyebrow{justify-content:center}
+  .hero h1{
+    font-family:var(--display);
+    font-weight:800;
+    font-size:clamp(46px,8.6vw,88px);
+    line-height:.96;
+    letter-spacing:-.035em;
+    margin:22px 0 0;
+  }
+  .hero h1 .em{
+    color:var(--primary);
+    font-style:italic;
+    position:relative;
+    white-space:nowrap;
+  }
+  .hero h1 .em svg{
+    position:absolute;left:-1%;bottom:-.16em;width:102%;height:.3em;overflow:visible;
+  }
+  .hero h1 .em path{
+    fill:none;stroke:var(--score-to);stroke-width:7;stroke-linecap:round;
+    stroke-dasharray:680;stroke-dashoffset:680;
+    animation:draw 1.1s 1.05s cubic-bezier(.6,.1,.3,1) forwards;
+  }
+  @keyframes draw{to{stroke-dashoffset:0}}
+
+  .hero-sub{max-width:54ch;margin:26px auto 0;font-size:clamp(17px,2vw,20px);color:#33433b;line-height:1.6}
+  .hero-actions{display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;margin-top:30px}
+  .hero-note{font-family:var(--mono);font-size:12px;color:var(--muted-ink);letter-spacing:.04em}
+
+  /* ---------- GLOW STAGE (soft emerald halo behind product surfaces) ---------- */
+  .glow-stage{position:relative;z-index:1}
+  .glow-stage::before{
+    content:"";position:absolute;inset:4% 6%;z-index:-1;border-radius:40px;
+    background:radial-gradient(closest-side, rgba(67,182,143,.20), transparent 74%);
+    filter:blur(22px);
+  }
+
+  /* ---------- PIPELINE CONSOLE (hero centerpiece) ---------- */
+  .console-stage{margin:56px auto 0;max-width:1000px}
+  .console{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:calc(var(--radius) + 8px);overflow:hidden;
+    display:grid;grid-template-columns:86px 1fr;
+    box-shadow:0 70px 120px -64px rgba(18,32,25,.55), 0 26px 56px -48px rgba(11,93,78,.5);
+  }
+  .console-rail{
+    background:var(--sidebar);color:var(--sidebar-ink);
+    padding:18px 0;display:flex;flex-direction:column;align-items:center;gap:7px;
+  }
+  .console-rail .rail-mark{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;
+    background:linear-gradient(150deg,var(--score-from),var(--score-to));color:var(--primary-fg);
+    box-shadow:0 8px 18px -7px rgba(0,0,0,.55);margin-bottom:14px}
+  .console-rail .rail-mark svg{width:22px;height:22px}
+  .rail-item{width:48px;height:44px;border-radius:11px;display:grid;place-items:center;color:var(--sidebar-ink);
+    transition:background .25s,color .25s;position:relative}
+  .rail-item svg{width:20px;height:20px}
+  .rail-item.active{background:rgba(67,182,143,.16);color:var(--sidebar-bright)}
+  .rail-item.active::before{content:"";position:absolute;left:-18px;top:50%;transform:translateY(-50%);width:3px;height:20px;border-radius:0 3px 3px 0;background:var(--score-to)}
+  .rail-spacer{flex:1}
+
+  .console-main{min-width:0}
+  .console-top{display:flex;align-items:center;gap:11px;padding:16px 22px;border-bottom:1px solid var(--border)}
+  .console-top .ct-ttl{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.01em}
+  .console-top .ct-meta{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--muted-ink)}
+  .console-top .ct-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .console-top .dot{width:9px;height:9px;border-radius:50%;background:var(--border)}
+
+  .agent-strip{
+    display:flex;align-items:center;gap:12px;padding:13px 22px;
+    background:linear-gradient(90deg,var(--accent),rgba(220,239,232,.25) 70%,transparent);
+    border-bottom:1px solid var(--border);
+  }
+  .agent-strip .bot{width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;background:#fff;border:1px solid var(--accent-line);color:var(--primary)}
+  .agent-strip .bot svg{width:18px;height:18px}
+  .agent-strip b{font-weight:600;font-size:14px}
+  .agent-strip small{font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--muted-ink);display:block;margin-top:1px}
+  .agent-strip .live{margin-left:auto;display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--success)}
+  .agent-strip .live i{width:7px;height:7px;border-radius:50%;background:var(--success);animation:fpulse 1.6s ease-in-out infinite}
+
+  /* candidate rows w/ fit-score bars + stage badges */
+  .pl-row{display:grid;grid-template-columns:minmax(150px,1.1fr) minmax(120px,1.4fr) auto;gap:18px;align-items:center;
+    padding:14px 22px;border-bottom:1px solid var(--border);transition:background .25s}
+  .pl-row:last-child{border-bottom:none}
+  .pl-row:hover{background:rgba(220,239,232,.32)}
+  .pl-id{display:flex;align-items:center;gap:12px;min-width:0}
+  .pl-id .av{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:13px;color:#fff}
+  .pl-id .who{min-width:0}
+  .pl-id .who b{font-weight:600;font-size:14.5px;display:block;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pl-id .who small{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;color:var(--muted-ink);display:block;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .fit{display:flex;align-items:center;gap:11px}
+  .fit-track{position:relative;flex:1;min-width:70px;height:8px;border-radius:999px;background:var(--muted);overflow:hidden}
+  .fit-fill{position:absolute;left:0;top:0;bottom:0;border-radius:999px;
+    background:linear-gradient(90deg,var(--score-from),var(--score-to));width:0;transition:width 1.3s cubic-bezier(.2,.7,.3,1) .25s}
+  .reveal.in .fit-fill{width:var(--w)}
+  .fit-val{font-family:var(--mono);font-weight:500;font-size:13px;color:var(--primary);width:24px;text-align:right;flex:none}
+
+  /* stage / status tags */
+  .tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-weight:500;font-size:11px;
+    border-radius:8px;padding:4px 10px;white-space:nowrap;justify-self:end}
+  .tag i{width:6px;height:6px;border-radius:50%}
+  .tag.replied{color:var(--success);background:#e4f3ea;border:1px solid #bfe3cd}
+  .tag.replied i{background:var(--success)}
+  .tag.sent{color:var(--primary);background:var(--accent);border:1px solid var(--accent-line)}
+  .tag.sent i{background:var(--primary)}
+  .tag.queued{color:var(--warning);background:#f6ecdc;border:1px solid #e8d3b0}
+  .tag.queued i{background:var(--warning)}
+  .tag.sourced{color:var(--muted-ink);background:var(--muted);border:1px solid var(--border)}
+  .tag.sourced i{background:var(--muted-ink)}
+  @media(max-width:560px){
+    .pl-row{grid-template-columns:1fr auto;gap:10px 14px}
+    .pl-row .fit{grid-column:1 / -1;order:3}
+    .tag{order:2}
+  }
+
+  /* floating candidate cards — drift quietly in the BACKGROUND, around the console */
+  .float{
+    position:absolute;z-index:0;pointer-events:none;
+    background:rgba(255,255,255,.8);
+    border:1px solid rgba(229,225,213,.8);
+    border-radius:var(--radius);padding:11px 14px;display:flex;align-items:center;gap:11px;
+    box-shadow:0 20px 44px -38px rgba(18,32,25,.35);
+    opacity:0;animation:floatIn 1.1s ease forwards var(--in,.5s),drift var(--dur,20s) ease-in-out infinite var(--bd,0s);
+    will-change:transform;
+  }
+  .float .av{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;
+    font-family:var(--display);font-weight:700;font-size:13px;color:#fff}
+  .float .who b{font-weight:600;font-size:13.5px;display:block;white-space:nowrap}
+  .float .who small{font-family:var(--mono);font-size:10px;letter-spacing:.03em;color:var(--muted-ink);display:block;margin-top:2px;white-space:nowrap}
+  .float .pill{font-family:var(--mono);font-weight:500;font-size:12px;color:var(--primary);
+    background:var(--accent);border:1px solid var(--accent-line);border-radius:8px;padding:3px 8px;margin-left:2px}
+  .float .chan{display:grid;place-items:center;width:25px;height:25px;border-radius:7px;flex:none;background:#eaf1fb;border:1px solid #cfe0f6;color:#0a66c2}
+  .float .chan svg{width:13px;height:13px}
+  .float .stage{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--success);background:#e4f3ea;border:1px solid #bfe3cd;border-radius:8px;padding:3px 9px}
+  .float .stage i{width:6px;height:6px;border-radius:50%;background:var(--success)}
+  .float.agent{gap:12px}
+  .float .bot{width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;background:var(--accent);color:var(--primary)}
+  .float .bot svg{width:18px;height:18px}
+  .float .live{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--success);margin-left:2px}
+  .float .live i{width:6px;height:6px;border-radius:50%;background:var(--success);animation:fpulse 1.6s ease-in-out infinite}
+  .float .ring{width:50px;height:50px;border-radius:50%;flex:none;display:grid;place-items:center;position:relative;
+    background:conic-gradient(from -90deg,var(--score-from),var(--score-to) 340deg,var(--muted) 340deg)}
+  .float .ring::after{content:"";position:absolute;inset:5px;border-radius:50%;background:#fff}
+  .float .ring b{position:relative;font-family:var(--display);font-weight:700;font-size:16px;color:var(--primary)}
+  @keyframes floatIn{from{opacity:0}to{opacity:1}}
+  @keyframes drift{
+    0%{transform:translate(0,0) rotate(0deg)}
+    25%{transform:translate(11px,-15px) rotate(.5deg)}
+    50%{transform:translate(-8px,-7px) rotate(-.45deg)}
+    75%{transform:translate(-13px,11px) rotate(.3deg)}
+    100%{transform:translate(0,0) rotate(0deg)}
+  }
+  @keyframes fpulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @media(max-width:1080px){.float{display:none}}
+
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .9s cubic-bezier(.2,.7,.3,1),transform .9s cubic-bezier(.2,.7,.3,1)}
+  .reveal.in{opacity:1;transform:none}
+  .d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}.d4{transition-delay:.32s}
+
+  /* ---------- METRICS ---------- */
+  .metrics{padding:54px 0 86px;border-top:1px solid var(--border)}
+  .metrics-row{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;
+  }
+  .metric{background:var(--bg);padding:30px 28px 26px}
+  .metric .big{
+    font-family:var(--display);font-weight:700;
+    font-size:clamp(42px,6vw,68px);line-height:1;letter-spacing:-.03em;
+    color:var(--ink);display:flex;align-items:baseline;
+  }
+  .metric .big .suf{font-size:.46em;color:var(--primary);margin-left:.12em;font-weight:600}
+  .metric .lab{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--muted-ink);margin-top:14px;line-height:1.4;max-width:20ch}
+  @media(max-width:880px){.metrics-row{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:480px){.metrics-row{grid-template-columns:1fr}}
+
+  /* ---------- SECTION HEADERS ---------- */
+  .sec{padding:90px 0}
+  .sec-head{max-width:62ch;margin-bottom:46px}
+  .sec-head h2{
+    font-family:var(--display);font-weight:700;
+    font-size:clamp(34px,5vw,62px);line-height:1.02;letter-spacing:-.03em;margin-top:18px;
+  }
+  .sec-head h2 em{font-style:italic;color:var(--primary)}
+  .sec-head p{margin-top:20px;font-size:19px;color:#33433b;max-width:52ch}
+
+  /* ---------- PRODUCT TOUR (alternating splits) ---------- */
+  .split{
+    display:grid;grid-template-columns:1fr 1fr;gap:clamp(40px,6vw,86px);align-items:center;
+    padding:66px 0;border-top:1px solid var(--border);
+  }
+  .split.flip .split-copy{order:2}
+  .split.flip .split-art{order:1}
+  .split-copy h3{font-family:var(--display);font-weight:700;font-size:clamp(30px,4vw,46px);line-height:1.04;letter-spacing:-.028em;margin-top:16px}
+  .split-copy h3 em{font-style:italic;color:var(--primary)}
+  .split-copy p{margin-top:18px;font-size:18px;color:#33433b;max-width:46ch;line-height:1.6}
+  .feat{list-style:none;display:grid;gap:11px;margin-top:26px}
+  .feat li{display:flex;gap:11px;align-items:flex-start;font-size:15.5px;color:#33433b}
+  .feat .ck{width:23px;height:23px;border-radius:7px;background:var(--accent);color:var(--primary);display:grid;place-items:center;flex:none;margin-top:1px}
+  .feat .ck svg{width:13px;height:13px}
+  @media(max-width:900px){
+    .split{grid-template-columns:1fr;gap:34px;padding:54px 0}
+    .split.flip .split-copy{order:1}
+    .split.flip .split-art{order:2}
+  }
+
+  /* ---------- PRODUCT SURFACE (shared mock chrome) ---------- */
+  .surface{background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);
+    overflow:hidden;box-shadow:0 44px 84px -54px rgba(18,32,25,.5)}
+  .surface-bar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--muted)}
+  .surface-bar .dot{width:9px;height:9px;border-radius:50%;background:var(--border)}
+  .surface-bar .ttl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-ink);margin-left:8px}
+  .surface-bar .ttl b{color:var(--ink);font-weight:500}
+  .surface-bar .badge{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--primary);background:var(--accent);border:1px solid var(--accent-line);border-radius:8px;padding:3px 9px}
+
+  /* ---------- SEQUENCE TIMELINE (Reach) ---------- */
+  .seq{padding:8px 6px 12px}
+  .seq-step{display:grid;grid-template-columns:38px 1fr auto;gap:14px;align-items:start;padding:14px 14px;position:relative}
+  .seq-step::before{content:"";position:absolute;left:37px;top:46px;bottom:-14px;width:2px;background:var(--border)}
+  .seq-step:last-child::before{display:none}
+  .seq-node{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;position:relative;z-index:1;flex:none}
+  .seq-node svg{width:17px;height:17px}
+  .seq-node.email{background:var(--accent);color:var(--primary);border:1px solid var(--accent-line)}
+  .seq-node.li{background:#eaf1fb;color:#0a66c2;border:1px solid #cfe0f6}
+  .seq-content b{font-weight:600;font-size:15px;display:block;line-height:1.25}
+  .seq-content small{font-size:13px;color:var(--muted-ink);display:block;margin-top:4px;line-height:1.45}
+  .seq-meta{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+  .seq-day{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--muted-ink);background:var(--muted);border:1px solid var(--border);border-radius:7px;padding:3px 9px;white-space:nowrap}
+  @media(max-width:560px){.seq-step{grid-template-columns:34px 1fr}.seq-meta{grid-column:1 / -1;flex-direction:row;justify-content:flex-start;margin-left:48px}}
+
+  /* ---------- INBOX (Reply) ---------- */
+  .thread{padding:18px 18px 4px}
+  .thread-head{display:flex;align-items:center;gap:11px;margin-bottom:13px}
+  .thread-head .av{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:14px;color:#fff;background:linear-gradient(150deg,#0e7c66,#43b68f)}
+  .thread-head .who b{font-weight:600;font-size:14.5px;display:block}
+  .thread-head .who small{font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;color:var(--muted-ink);display:block;margin-top:2px}
+  .thread-head .tag{margin-left:auto;justify-self:auto}
+  .bubble{max-width:88%;padding:13px 16px;border-radius:14px;font-size:14.5px;line-height:1.55;
+    background:var(--muted);border:1px solid var(--border);border-top-left-radius:5px;color:#2a3a33}
+  .draft-card{margin:18px 18px;border:1px dashed var(--accent-line);background:var(--accent);border-radius:var(--radius);padding:16px 18px}
+  .draft-card .dh{display:flex;align-items:center;gap:9px;margin-bottom:11px}
+  .draft-card .dh .di{width:26px;height:26px;border-radius:7px;background:#fff;border:1px solid var(--accent-line);color:var(--primary);display:grid;place-items:center}
+  .draft-card .dh .di svg{width:15px;height:15px}
+  .draft-card .dh b{font-weight:600;font-size:14px}
+  .draft-card .dh .tag{margin-left:auto;justify-self:auto}
+  .draft-card .body{font-size:14.5px;color:#2a3a33;line-height:1.55}
+  .draft-actions{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
+  .mini-btn{font-family:var(--sans);font-weight:600;font-size:13px;padding:8px 16px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--ink);cursor:pointer;transition:transform .2s,box-shadow .25s,border-color .2s}
+  .mini-btn:hover{transform:translateY(-2px)}
+  .mini-btn.go{background:var(--primary);color:var(--primary-fg);border-color:transparent;box-shadow:0 10px 20px -12px rgba(11,93,78,.85)}
+
+  /* ---------- AUTONOMY DIAL + CAPS + AUDIT (Control) ---------- */
+  .dial-wrap{
+    background:var(--sidebar);color:var(--sidebar-bright);
+    border-radius:calc(var(--radius) + 8px);padding:clamp(26px,4vw,40px);
+    position:relative;overflow:hidden;
+  }
+  .dial-wrap::before{
+    content:"";position:absolute;inset:0;opacity:.5;
+    background:radial-gradient(900px 380px at 85% -10%, rgba(67,182,143,.28), transparent 60%);
+  }
+  .dial-wrap > *{position:relative}
+  .lvl-eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--score-to)}
+  .dial-title{font-family:var(--display);font-weight:700;font-size:clamp(24px,3.4vw,34px);letter-spacing:-.02em;color:var(--sidebar-bright);margin:12px 0 0;line-height:1.05}
+  .dial-title em{font-style:italic;color:var(--score-to)}
+  .dial-segcontrol{
+    display:inline-flex;gap:6px;background:rgba(7,49,43,.55);border:1px solid rgba(143,182,172,.22);
+    padding:6px;border-radius:999px;margin:26px 0 22px;position:relative;flex-wrap:wrap;
+  }
+  .dial-seg{
+    font-family:var(--mono);font-size:13px;letter-spacing:.04em;
+    padding:10px 22px;border-radius:999px;cursor:pointer;color:var(--sidebar-ink);
+    border:none;background:transparent;transition:color .3s ease;position:relative;z-index:2;
+  }
+  .dial-seg.active{color:var(--sidebar)}
+  .dial-pill{
+    position:absolute;z-index:1;top:6px;height:calc(100% - 12px);
+    background:var(--sidebar-bright);border-radius:999px;
+    transition:left .45s cubic-bezier(.5,.1,.2,1), width .45s cubic-bezier(.5,.1,.2,1);
+  }
+  .dial-panel{position:relative;min-height:84px}
+  .dial-state{position:absolute;inset:0;opacity:0;transform:translateY(10px);transition:opacity .4s ease, transform .4s ease;pointer-events:none}
+  .dial-state.show{opacity:1;transform:none;position:relative}
+  .dial-state .lvl{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--score-to);margin-bottom:10px}
+  .dial-state p{font-size:clamp(16px,2vw,19px);line-height:1.5;color:var(--sidebar-bright)}
+  .dial-state p b{color:#fff;font-weight:600}
+
+  .caps{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:28px 0 0}
+  .cap .lab{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--sidebar-ink)}
+  .cap .num2{font-family:var(--display);font-weight:700;font-size:26px;color:var(--sidebar-bright);margin:5px 0 9px;line-height:1}
+  .cap .num2 span{font-size:.5em;color:var(--score-to);margin-left:4px;font-weight:600}
+  .cap-track{height:7px;border-radius:999px;background:rgba(7,49,43,.6);overflow:hidden}
+  .cap-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--score-from),var(--score-to));width:0;transition:width 1.2s cubic-bezier(.2,.7,.3,1) .35s}
+  .reveal.in .cap-fill{width:var(--w)}
+
+  .auditlog{margin-top:26px;border-top:1px solid rgba(143,182,172,.2);padding-top:16px;display:grid;gap:1px}
+  .auditlog .arow{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
+    font-family:var(--mono);font-size:11.5px;color:var(--sidebar-ink);padding:7px 0}
+  .auditlog .arow b{color:var(--sidebar-bright);font-weight:500}
+  .auditlog .arow .when{color:var(--score-to);white-space:nowrap}
+
+  /* ---------- LOOP (compact strip) ---------- */
+  .loopstrip{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px}
+  .loopstep{flex:1;min-width:170px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:24px 22px 26px;position:relative;transition:transform .3s,box-shadow .3s,border-color .3s}
+  .loopstep:hover{transform:translateY(-5px);box-shadow:0 28px 46px -30px rgba(18,32,25,.42);border-color:var(--accent-line)}
+  .loopstep .n{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--primary)}
+  .loopstep h4{font-family:var(--display);font-weight:700;font-size:21px;letter-spacing:-.01em;margin:14px 0 8px}
+  .loopstep p{font-size:14px;color:#3a4a42;line-height:1.5}
+  .loopstep:not(:last-child)::after{content:"\2192";position:absolute;right:-13px;top:50%;transform:translateY(-50%);font-family:var(--mono);color:var(--accent-line);font-size:18px;z-index:2}
+  @media(max-width:880px){.loopstep:not(:last-child)::after{display:none}}
+
+  /* ---------- AGENTS ---------- */
+  .agents-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .agent-card{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:30px 28px 34px;position:relative;overflow:hidden;
+    transition:transform .35s ease, box-shadow .35s ease, border-color .35s;
+  }
+  .agent-card:hover{transform:translateY(-6px);box-shadow:0 34px 56px -34px rgba(18,32,25,.4);border-color:var(--accent-line)}
+  .agent-card .badge{
+    width:46px;height:46px;border-radius:12px;display:grid;place-items:center;margin-bottom:24px;
+    background:linear-gradient(140deg,var(--score-from),var(--score-to));color:var(--primary-fg);
+  }
+  .agent-card .badge svg{width:24px;height:24px}
+  .agent-card h4{font-family:var(--display);font-weight:700;font-size:23px;letter-spacing:-.01em}
+  .agent-card .role{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-ink);margin:6px 0 16px}
+  .agent-card p{font-size:15.5px;color:#3a4a42;line-height:1.58}
+  .agent-card .glow{position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,var(--accent),transparent 70%);opacity:.7;transition:opacity .4s}
+  .agent-card:hover .glow{opacity:1}
+  @media(max-width:880px){.agents-grid{grid-template-columns:1fr}}
+
+  /* ---------- FINAL CTA ---------- */
+  .final{padding:120px 0 130px;text-align:center;position:relative;overflow:hidden}
+  .final::before{
+    content:"";position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);
+    width:120vw;height:120vw;max-width:1100px;max-height:1100px;border-radius:50%;z-index:-1;
+    background:radial-gradient(circle, rgba(220,239,232,.9), rgba(243,241,234,0) 62%);
+  }
+  .final h2{
+    font-family:var(--display);font-weight:800;
+    font-size:clamp(44px,9vw,104px);line-height:.95;letter-spacing:-.035em;
+    max-width:16ch;margin:0 auto;
+  }
+  .final h2 em{font-style:italic;color:var(--primary)}
+  .final p{margin:26px auto 38px;font-size:20px;color:#33433b;max-width:46ch}
+  .final .hero-note{margin-top:20px}
+
+  /* ---------- FOOTER ---------- */
+  footer{background:var(--sidebar);color:var(--sidebar-ink);padding:74px 0 40px}
+  .foot-top{display:flex;justify-content:space-between;gap:48px;flex-wrap:wrap;padding-bottom:54px;border-bottom:1px solid rgba(143,182,172,.18)}
+  .foot-brand{max-width:30ch}
+  .foot-brand .brand{color:var(--sidebar-bright);margin-bottom:18px}
+  .foot-brand p{font-size:15px;line-height:1.6}
+  .foot-cols{display:flex;gap:64px;flex-wrap:wrap}
+  .foot-col h5{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--sidebar-ink);margin-bottom:18px;opacity:.8}
+  .foot-col a{display:block;color:var(--sidebar-bright);opacity:.78;font-size:15px;margin-bottom:11px;transition:opacity .2s,transform .2s}
+  .foot-col a:hover{opacity:1;transform:translateX(3px)}
+  .foot-bottom{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-top:28px;font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--sidebar-ink)}
+
+  @media(prefers-reduced-motion:reduce){
+    *{animation-duration:.001s !important;transition-duration:.001s !important}
+    .reveal{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top" aria-label="Sourcewell home">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.3" stroke-opacity=".34"/>
+        <circle cx="12" cy="12" r="5.6" stroke="currentColor" stroke-width="1.7" stroke-opacity=".75"/>
+        <circle cx="12" cy="12" r="2" fill="currentColor"/>
+        <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M12 1.4V4M12 20v2.6M1.4 12H4M20 12h2.6"/></g>
+      </svg></span>
+      Sourcewell
+    </a>
+    <nav class="nav-links">
+      <a href="#source">Source</a>
+      <a href="#reach">Reach</a>
+      <a href="#reply">Reply</a>
+      <a href="#control">Control</a>
+    </nav>
+    <a class="nav-cta" href="#start">Book a walkthrough</a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============ HERO + CONSOLE ============ -->
+<section class="hero">
+  <!-- background candidate field — drifting around the console, behind the text -->
+  <div class="float" style="top:150px;left:var(--gutter);--in:.5s;--bd:0s;--dur:21s" aria-hidden="true">
+    <span class="ring"><b>96</b></span>
+    <span class="who"><b>Maya Okonkwo</b><small>Fit score · matched</small></span>
+  </div>
+  <div class="float agent" style="top:138px;right:var(--gutter);--in:.65s;--bd:.8s;--dur:24s" aria-hidden="true">
+    <span class="bot"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.4" stroke-opacity=".4"/><circle cx="12" cy="12" r="4.6" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/></svg></span>
+    <span class="who"><b>Sourcing agent</b><small>Scored 25 · 12 qualified</small></span>
+    <span class="live"><i></i>live</span>
+  </div>
+  <div class="float" style="top:486px;left:calc(var(--gutter) - 6px);--in:.85s;--bd:.4s;--dur:23s" aria-hidden="true">
+    <span class="av" style="background:linear-gradient(150deg,#0e7c66,#43b68f)">DR</span>
+    <span class="who"><b>Daniel Reyes</b><small>Senior Backend · Northwind</small></span>
+    <span class="pill">91</span>
+  </div>
+  <div class="float" style="top:430px;right:calc(var(--gutter) - 6px);--in:1s;--bd:1.4s;--dur:19s" aria-hidden="true">
+    <span class="av" style="background:linear-gradient(150deg,#15614f,#4bb89a)">LF</span>
+    <span class="who"><b>Lena Fischer</b><small>Product Designer · Atlas</small></span>
+    <span class="chan" title="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg></span>
+  </div>
+  <div class="float" style="top:702px;right:calc(var(--gutter) + 14px);--in:1.15s;--bd:2s;--dur:22s" aria-hidden="true">
+    <span class="av" style="background:linear-gradient(150deg,#1f6f5c,#5cc0a4)">KA</span>
+    <span class="who"><b>Kwame Asante</b><small>Security · Bastion</small></span>
+    <span class="stage"><i></i>Replied</span>
+  </div>
+
+  <div class="wrap">
+    <div class="hero-head">
+      <span class="eyebrow reveal"><span class="num">00</span>&nbsp;/&nbsp;THE AGENTIC RECRUITER</span>
+      <h1 class="reveal d1">Source the people you <span class="em">can't&nbsp;find<svg viewBox="0 0 320 16" preserveAspectRatio="none" aria-hidden="true"><path d="M3 11C70 4 250 2 317 8"/></svg></span>.</h1>
+      <p class="hero-sub reveal d2">AI agents find, rank, and reach passive candidates across email and LinkedIn — and every message waits for your approval. The agent does the work. You stay in control.</p>
+      <div class="hero-actions reveal d3">
+        <a class="btn btn-primary" href="#start">Start sourcing <span class="arr">→</span></a>
+        <a class="btn btn-ghost" href="#source">Take the tour</a>
+      </div>
+    </div>
+
+    <!-- LARGE warm pipeline console centerpiece -->
+    <div class="glow-stage console-stage reveal d2">
+      <div class="console">
+        <!-- slim deep-emerald rail -->
+        <aside class="console-rail" aria-hidden="true">
+          <span class="rail-mark"><svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.3" stroke-opacity=".34"/>
+            <circle cx="12" cy="12" r="5.6" stroke="currentColor" stroke-width="1.7" stroke-opacity=".75"/>
+            <circle cx="12" cy="12" r="2" fill="currentColor"/>
+            <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M12 1.4V4M12 20v2.6M1.4 12H4M20 12h2.6"/></g>
+          </svg></span>
+          <span class="rail-item active" title="Pipeline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg></span>
+          <span class="rail-item" title="Inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg></span>
+          <span class="rail-item" title="Sequences"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M4 7l3-3M4 7l3 3"/><path d="M20 17H10M20 17l-3-3M20 17l-3 3"/></svg></span>
+          <span class="rail-item" title="Agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9" stroke-opacity=".4"/><circle cx="12" cy="12" r="4.4"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></span>
+          <span class="rail-spacer"></span>
+          <span class="rail-item" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L16.2 2h-4l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.5h4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"/></svg></span>
+        </aside>
+
+        <!-- main pipeline view -->
+        <div class="console-main">
+          <div class="console-top">
+            <span class="ct-ttl">Pipeline</span>
+            <span class="ct-meta">Senior Backend · Berlin · remote</span>
+            <span class="ct-right"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
+          </div>
+
+          <div class="agent-strip">
+            <span class="bot"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.4" stroke-opacity=".4"/><circle cx="12" cy="12" r="4.6" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/></svg></span>
+            <div><b>Sourcing agent</b><small>Scored 25 · 12 qualified · 0 sent</small></div>
+            <span class="live"><i></i>working</span>
+          </div>
+
+          <div class="pl-row">
+            <div class="pl-id"><span class="av" style="background:linear-gradient(150deg,#0b5d4e,#43b68f)">MO</span><span class="who"><b>Maya Okonkwo</b><small>Staff ML Engineer · Lumen Robotics</small></span></div>
+            <div class="fit"><span class="fit-track"><span class="fit-fill" style="--w:96%"></span></span><span class="fit-val">96</span></div>
+            <span class="tag replied"><i></i>Replied</span>
+          </div>
+          <div class="pl-row">
+            <div class="pl-id"><span class="av" style="background:linear-gradient(150deg,#1f6f5c,#5cc0a4)">KA</span><span class="who"><b>Kwame Asante</b><small>Security Engineer · Bastion</small></span></div>
+            <div class="fit"><span class="fit-track"><span class="fit-fill" style="--w:95%"></span></span><span class="fit-val">95</span></div>
+            <span class="tag sent"><i></i>Sent</span>
+          </div>
+          <div class="pl-row">
+            <div class="pl-id"><span class="av" style="background:linear-gradient(150deg,#127a64,#4bb89a)">TL</span><span class="who"><b>Theo Lindqvist</b><small>Infra SRE · Halcyon Cloud</small></span></div>
+            <div class="fit"><span class="fit-track"><span class="fit-fill" style="--w:93%"></span></span><span class="fit-val">93</span></div>
+            <span class="tag queued"><i></i>Queued</span>
+          </div>
+          <div class="pl-row">
+            <div class="pl-id"><span class="av" style="background:linear-gradient(150deg,#0e7c66,#43b68f)">DR</span><span class="who"><b>Daniel Reyes</b><small>Senior Backend · Northwind</small></span></div>
+            <div class="fit"><span class="fit-track"><span class="fit-fill" style="--w:91%"></span></span><span class="fit-val">91</span></div>
+            <span class="tag sourced"><i></i>Sourced</span>
+          </div>
+          <div class="pl-row">
+            <div class="pl-id"><span class="av" style="background:linear-gradient(150deg,#15614f,#4bb89a)">LF</span><span class="who"><b>Lena Fischer</b><small>Product Designer · Atlas</small></span></div>
+            <div class="fit"><span class="fit-track"><span class="fit-fill" style="--w:88%"></span></span><span class="fit-val">88</span></div>
+            <span class="tag sourced"><i></i>Sourced</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="hero-note reveal d4" style="text-align:center;margin-top:30px">SOURCE&nbsp;→&nbsp;RANK&nbsp;→&nbsp;REACH&nbsp;→&nbsp;REPLY&nbsp;→&nbsp;HAND OFF</p>
+  </div>
+</section>
+
+<!-- ============ METRICS ============ -->
+<section class="metrics">
+  <div class="wrap">
+    <div class="metrics-row">
+      <div class="metric reveal">
+        <div class="big"><span class="cu" data-target="3.2" data-dec="1">0</span><span class="suf">×</span></div>
+        <div class="lab">MORE REPLIES THAN MANUAL OUTREACH</div>
+      </div>
+      <div class="metric reveal d1">
+        <div class="big"><span class="cu" data-target="12">0</span><span class="suf">hrs</span></div>
+        <div class="lab">SAVED PER RECRUITER, EVERY WEEK</div>
+      </div>
+      <div class="metric reveal d2">
+        <div class="big"><span class="cu" data-target="100">0</span><span class="suf">%</span></div>
+        <div class="lab">OF SENDS YOU APPROVED FIRST</div>
+      </div>
+      <div class="metric reveal d3">
+        <div class="big"><span class="cu" data-target="48">0</span><span class="suf">hrs</span></div>
+        <div class="lab">MEDIAN TIME TO FIRST REPLY</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRODUCT TOUR INTRO ============ -->
+<section class="sec" id="tour" style="padding-bottom:24px">
+  <div class="wrap">
+    <div class="sec-head reveal" style="margin-bottom:8px">
+      <span class="eyebrow"><span class="num">01</span>&nbsp;/&nbsp;THE PRODUCT TOUR</span>
+      <h2>Four surfaces. <em>One quiet loop.</em></h2>
+      <p>Walk the same cockpit your team lives in — source, reach, reply, control — each a calm, warm surface with your hand on every send.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ---- SOURCE ---- -->
+<section class="sec" id="source" style="padding:0">
+  <div class="wrap">
+    <div class="split">
+      <div class="split-copy reveal">
+        <span class="eyebrow"><span class="num">02</span>&nbsp;/&nbsp;SOURCE</span>
+        <h3>Find the people who'd never <em>answer a job post.</em></h3>
+        <p>The Sourcing agent sweeps your sources, enriches every contact, and scores fit 0–100 with a written rationale — so the pipeline fills with passive candidates, ranked before you ever look.</p>
+        <ul class="feat">
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>0–100 fit score with the reasoning behind it.</li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Contacts enriched and de-duplicated automatically.</li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>The shortlist enrolls into the loop in one click.</li>
+        </ul>
+      </div>
+      <div class="glow-stage split-art reveal d1">
+        <div class="surface">
+          <div class="surface-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="ttl">Pipeline · <b>Ranked</b></span><span class="badge">142 sourced</span></div>
+          <div class="pl-row">
+            <div class="pl-id"><span class="av" style="background:linear-gradient(150deg,#0b5d4e,#43b68f)">MO</span><span class="who"><b>Maya Okonkwo</b><small>Rust payments rewrite · Lumen</small></span></div>
+            <div class="fit"><span class="fit-track"><span class="fit-fill" style="--w:96%"></span></span><span class="fit-val">96</span></div>
+            <span class="tag sent"><i></i>Top</span>
+          </div>
+          <div class="pl-row">
+            <div class="pl-id"><span class="av" style="background:linear-gradient(150deg,#127a64,#4bb89a)">TL</span><span class="who"><b>Theo Lindqvist</b><small>6y Go · fintech infra · Halcyon</small></span></div>
+            <div class="fit"><span class="fit-track"><span class="fit-fill" style="--w:93%"></span></span><span class="fit-val">93</span></div>
+            <span class="tag sourced"><i></i>Match</span>
+          </div>
+          <div class="pl-row">
+            <div class="pl-id"><span class="av" style="background:linear-gradient(150deg,#0e7c66,#43b68f)">DR</span><span class="who"><b>Daniel Reyes</b><small>Liked 3 remote-first posts · Northwind</small></span></div>
+            <div class="fit"><span class="fit-track"><span class="fit-fill" style="--w:91%"></span></span><span class="fit-val">91</span></div>
+            <span class="tag sourced"><i></i>Match</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ---- REACH ---- -->
+<section class="sec" id="reach" style="padding:0">
+  <div class="wrap">
+    <div class="split flip">
+      <div class="split-copy reveal">
+        <span class="eyebrow"><span class="num">03</span>&nbsp;/&nbsp;REACH</span>
+        <h3>An email-to-LinkedIn sequence, <em>tuned to their work.</em></h3>
+        <p>The Outreach agent drafts a multi-touch sequence with sensible day delays across email and LinkedIn. Every touchpoint opens on what the candidate actually built — never a template — and every send waits for your approval.</p>
+        <ul class="feat">
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Email and LinkedIn in one woven cadence.</li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Day delays the agent paces for you.</li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Nothing sends until you release it.</li>
+        </ul>
+      </div>
+      <div class="glow-stage split-art reveal d1">
+        <div class="surface">
+          <div class="surface-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="ttl">Sequence · <b>Maya Okonkwo</b></span><span class="badge">4 touches</span></div>
+          <div class="seq">
+            <div class="seq-step">
+              <span class="seq-node email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
+              <div class="seq-content"><b>Intro email</b><small>"Your Rust payments rewrite caught our eye —"</small></div>
+              <div class="seq-meta"><span class="seq-day">DAY 0</span><span class="tag sent"><i></i>Sent</span></div>
+            </div>
+            <div class="seq-step">
+              <span class="seq-node li"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg></span>
+              <div class="seq-content"><b>Connection request</b><small>A short, personal note — no pitch.</small></div>
+              <div class="seq-meta"><span class="seq-day">DAY +3</span><span class="tag sent"><i></i>Sent</span></div>
+            </div>
+            <div class="seq-step">
+              <span class="seq-node email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
+              <div class="seq-content"><b>Follow-up email</b><small>"Remote, Go or Rust — worth a 20-min chat?"</small></div>
+              <div class="seq-meta"><span class="seq-day">DAY +6</span><span class="tag queued"><i></i>Queued</span></div>
+            </div>
+            <div class="seq-step">
+              <span class="seq-node li"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg></span>
+              <div class="seq-content"><b>LinkedIn message</b><small>"Quick question about your next move —"</small></div>
+              <div class="seq-meta"><span class="seq-day">DAY +9</span><span class="tag queued"><i></i>Awaiting</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ---- REPLY ---- -->
+<section class="sec" id="reply" style="padding:0">
+  <div class="wrap">
+    <div class="split">
+      <div class="split-copy reveal">
+        <span class="eyebrow"><span class="num">04</span>&nbsp;/&nbsp;REPLY</span>
+        <h3>Replies land in one <em>calm Inbox.</em></h3>
+        <p>When someone writes back, the thread surfaces in your unified Inbox with a draft reply already waiting — flagged for approval. Read it, edit it, release it, then hand the warm conversation to your team.</p>
+        <ul class="feat">
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Every channel's replies in a single thread.</li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>A draft reply waiting, never auto-sent.</li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Hand off the warm thread to your team.</li>
+        </ul>
+      </div>
+      <div class="glow-stage split-art reveal d1">
+        <div class="surface">
+          <div class="surface-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="ttl">Inbox · <b>Replies</b></span><span class="badge">1 new</span></div>
+          <div class="thread">
+            <div class="thread-head">
+              <span class="av">MO</span>
+              <span class="who"><b>Maya Okonkwo</b><small>replied · 2h ago</small></span>
+              <span class="tag replied"><i></i>Replied</span>
+            </div>
+            <div class="bubble">This is timely — we just kicked off a payments rebuild and I'm open to the right remote role. Happy to chat next week.</div>
+          </div>
+          <div class="draft-card">
+            <div class="dh">
+              <span class="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+              <b>Draft reply</b>
+              <span class="tag queued"><i></i>Awaiting approval</span>
+            </div>
+            <div class="body">Wonderful, Maya — congrats on kicking that off. Would Thursday at 2pm CET suit a 20-minute call? I'd love to share what the team is building and hear what'd make a move worth it for you.</div>
+            <div class="draft-actions">
+              <button class="mini-btn go" type="button">Approve &amp; send</button>
+              <button class="mini-btn" type="button">Edit</button>
+              <button class="mini-btn" type="button">Hold</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ---- CONTROL ---- -->
+<section class="sec" id="control" style="padding:0 0 40px">
+  <div class="wrap">
+    <div class="split flip">
+      <div class="split-copy reveal">
+        <span class="eyebrow"><span class="num">05</span>&nbsp;/&nbsp;CONTROL</span>
+        <h3>Dial in how much it does <em>on its own.</em></h3>
+        <p>Manual, Assisted, or Autopilot — you set the autonomy. Governed daily send caps protect your domain reputation, and a full audit log records who sourced whom, what was sent, and when.</p>
+        <ul class="feat">
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Approve before anything sends — always.</li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Per-seat, per-channel daily send caps.</li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>A full audit log for team and compliance.</li>
+        </ul>
+      </div>
+      <div class="glow-stage split-art reveal d1">
+        <div class="dial-wrap">
+          <span class="lvl-eyebrow">Autonomy dial</span>
+          <h3 class="dial-title">How much runs <em>on its own.</em></h3>
+
+          <div class="dial-segcontrol" role="tablist" aria-label="Autonomy level">
+            <span class="dial-pill" id="dialPill"></span>
+            <button class="dial-seg" data-i="0" role="tab" type="button">Manual</button>
+            <button class="dial-seg active" data-i="1" role="tab" type="button">Assisted</button>
+            <button class="dial-seg" data-i="2" role="tab" type="button">Autopilot</button>
+          </div>
+
+          <div class="dial-panel">
+            <div class="dial-state" data-i="0">
+              <div class="lvl">Hands on the wheel</div>
+              <p>You drive. The agent waits — <b>sourcing, drafting, and sending happen only when you ask.</b></p>
+            </div>
+            <div class="dial-state show" data-i="1">
+              <div class="lvl">The default</div>
+              <p>The agent <b>sources and drafts</b>, then queues every message — <b>you approve each send.</b></p>
+            </div>
+            <div class="dial-state" data-i="2">
+              <div class="lvl">Guardrails, then go</div>
+              <p>The agent <b>sends within your caps</b> — governed limits, full audit log, replies routed to your Inbox.</p>
+            </div>
+          </div>
+
+          <div class="caps">
+            <div class="cap">
+              <div class="lab">Email / day</div>
+              <div class="num2">40<span>/ 50</span></div>
+              <div class="cap-track"><span class="cap-fill" style="--w:80%"></span></div>
+            </div>
+            <div class="cap">
+              <div class="lab">LinkedIn / day</div>
+              <div class="num2">18<span>/ 25</span></div>
+              <div class="cap-track"><span class="cap-fill" style="--w:72%"></span></div>
+            </div>
+          </div>
+
+          <div class="auditlog">
+            <div class="arow"><span>09:14</span><span><b>You</b> approved 3 drafts</span><span class="when">just now</span></div>
+            <div class="arow"><span>09:02</span><span><b>Outreach agent</b> sent intro · Theo L.</span><span class="when">12m</span></div>
+            <div class="arow"><span>08:47</span><span><b>Sourcing agent</b> enrolled 12 candidates</span><span class="when">39m</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ THE LOOP (compact strip) ============ -->
+<section class="sec" id="loop">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow"><span class="num">06</span>&nbsp;/&nbsp;THE LOOP</span>
+      <h2>One loop, run by the agent — <em>supervised by you.</em></h2>
+      <p>Five moves repeat until the right person replies. The agent never sends a thing you haven't seen.</p>
+    </div>
+    <div class="loopstrip">
+      <div class="loopstep reveal">
+        <div class="n">01</div><h4>Source</h4>
+        <p>Sweeps your sources and enriches passive candidates who'd never answer a post.</p>
+      </div>
+      <div class="loopstep reveal d1">
+        <div class="n">02</div><h4>Rank</h4>
+        <p>Scores fit 0–100 with a written rationale — you see why, not just who.</p>
+      </div>
+      <div class="loopstep reveal d2">
+        <div class="n">03</div><h4>Reach</h4>
+        <p>Drafts an email → LinkedIn sequence, each touch on their real work.</p>
+      </div>
+      <div class="loopstep reveal d3">
+        <div class="n">04</div><h4>Reply</h4>
+        <p>Replies land in your Inbox with a draft waiting for your approval.</p>
+      </div>
+      <div class="loopstep reveal d4">
+        <div class="n">05</div><h4>Hand off</h4>
+        <p>You approve, then pass the warm thread to your team to close.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AGENTS ============ -->
+<section class="sec" id="agents" style="background:linear-gradient(180deg,transparent,rgba(234,230,218,.5),transparent)">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow"><span class="num">07</span>&nbsp;/&nbsp;THE AGENTS</span>
+      <h2>Three agents. <em>One mandate.</em></h2>
+      <p>A team that works the pipeline around the clock — and reports to you in plain language.</p>
+    </div>
+
+    <div class="agents-grid">
+      <div class="agent-card reveal">
+        <div class="glow"></div>
+        <div class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>
+        <h4>Sourcing agent</h4>
+        <div class="role">Searches · Scores · Enriches · Enrolls</div>
+        <p>Sweeps your sources for passive candidates, scores fit against the role, enriches every contact, and enrolls the shortlist into the loop.</p>
+      </div>
+      <div class="agent-card reveal d1">
+        <div class="glow"></div>
+        <div class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H7l-3 3V4Z"/><path d="M8 9h8M8 12h5"/></svg>
+        </div>
+        <h4>Outreach agent</h4>
+        <div class="role">Drafts · Personalizes · Sequences</div>
+        <p>Writes each personalized touchpoint across email and LinkedIn — built on the candidate's real work, queued for your approval.</p>
+      </div>
+      <div class="agent-card reveal d2">
+        <div class="glow"></div>
+        <div class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        </div>
+        <h4>Main agent</h4>
+        <div class="role">Orchestrates · Answers · Supervises</div>
+        <p>Coordinates the others, keeps the loop moving, and answers you in chat — your single calm point of contact for the whole search.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section class="final" id="start">
+  <div class="wrap">
+    <span class="eyebrow reveal" style="justify-content:center;margin-bottom:6px"><span class="num">08</span>&nbsp;/&nbsp;THE WELLSPRING AWAITS</span>
+    <h2 class="reveal d1">Let the agent do the<br><em>sourcing.</em></h2>
+    <p class="reveal d2">Point Sourcewell at a role and watch the pipeline fill — every message still waiting for your yes.</p>
+    <div class="hero-actions reveal d3" style="justify-content:center">
+      <a class="btn btn-primary" href="#" onclick="return false">Book a walkthrough <span class="arr">→</span></a>
+      <a class="btn btn-ghost" href="#" onclick="return false">See a live source run</a>
+    </div>
+    <p class="hero-note reveal d4">NO CREDIT CARD · SOURCE YOUR FIRST 50 IN MINUTES</p>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a class="brand" href="#top">
+          <span class="mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.3" stroke-opacity=".34"/>
+            <circle cx="12" cy="12" r="5.6" stroke="currentColor" stroke-width="1.7" stroke-opacity=".75"/>
+            <circle cx="12" cy="12" r="2" fill="currentColor"/>
+            <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M12 1.4V4M12 20v2.6M1.4 12H4M20 12h2.6"/></g>
+          </svg></span>
+          Sourcewell
+        </a>
+        <p>The agentic recruiter. Source the people you can't find — and stay in control of every message.</p>
+      </div>
+      <div class="foot-cols">
+        <div class="foot-col">
+          <h5>Product</h5>
+          <a href="#source">Source</a>
+          <a href="#reach">Reach</a>
+          <a href="#reply">Reply</a>
+          <a href="#control">Control</a>
+        </div>
+        <div class="foot-col">
+          <h5>For teams</h5>
+          <a href="#">In-house recruiters</a>
+          <a href="#">Agency &amp; RPO</a>
+          <a href="#">Talent leaders</a>
+          <a href="#">Pricing</a>
+        </div>
+        <div class="foot-col">
+          <h5>Company</h5>
+          <a href="#">About</a>
+          <a href="#">Careers</a>
+          <a href="#">Security</a>
+          <a href="#">Contact</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 SOURCEWELL LABS · ALL RIGHTS RESERVED</span>
+      <span>THE AGENT DOES THE WORK · YOU STAY IN CONTROL</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- nav scrolled state ---------- */
+  var nav = document.getElementById("nav");
+  function onScroll(){
+    if(window.scrollY > 24){ nav.classList.add("scrolled"); }
+    else { nav.classList.remove("scrolled"); }
+  }
+  onScroll();
+  window.addEventListener("scroll", onScroll, {passive:true});
+
+  /* ---------- scroll reveal (also arms fit-score + cap bars) ---------- */
+  var revs = document.querySelectorAll(".reveal");
+  if("IntersectionObserver" in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); }
+      });
+    }, {threshold:.16, rootMargin:"0px 0px -8% 0px"});
+    revs.forEach(function(el){ io.observe(el); });
+  } else {
+    revs.forEach(function(el){ el.classList.add("in"); });
+  }
+
+  /* ---------- count-up ---------- */
+  function easeOut(t){ return 1 - Math.pow(1 - t, 3); }
+  function countUp(el){
+    var target = parseFloat(el.getAttribute("data-target"));
+    var dec = parseInt(el.getAttribute("data-dec")||"0", 10);
+    var dur = 1500, start = null;
+    function step(ts){
+      if(!start) start = ts;
+      var p = Math.min((ts - start)/dur, 1);
+      var v = target * easeOut(p);
+      el.textContent = dec ? v.toFixed(dec) : Math.round(v).toString();
+      if(p < 1){ requestAnimationFrame(step); }
+      else { el.textContent = dec ? target.toFixed(dec) : Math.round(target).toString(); }
+    }
+    requestAnimationFrame(step);
+  }
+  var nums = document.querySelectorAll(".cu");
+  if("IntersectionObserver" in window){
+    var io2 = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ countUp(e.target); io2.unobserve(e.target); }
+      });
+    }, {threshold:.6});
+    nums.forEach(function(el){ io2.observe(el); });
+  } else {
+    nums.forEach(function(el){ el.textContent = el.getAttribute("data-target"); });
+  }
+
+  /* ---------- autonomy dial ---------- */
+  var segs = Array.prototype.slice.call(document.querySelectorAll(".dial-seg"));
+  var states = Array.prototype.slice.call(document.querySelectorAll(".dial-state"));
+  var pill = document.getElementById("dialPill");
+  function movePill(btn){
+    if(!pill || !btn) return;
+    pill.style.left = btn.offsetLeft + "px";
+    pill.style.width = btn.offsetWidth + "px";
+  }
+  function selectSeg(i){
+    segs.forEach(function(s){ s.classList.toggle("active", parseInt(s.getAttribute("data-i"),10)===i); });
+    states.forEach(function(s){ s.classList.toggle("show", parseInt(s.getAttribute("data-i"),10)===i); });
+    movePill(segs[i]);
+  }
+  segs.forEach(function(s){
+    s.addEventListener("click", function(){ selectSeg(parseInt(s.getAttribute("data-i"),10)); });
+  });
+  window.addEventListener("load", function(){ movePill(document.querySelector(".dial-seg.active")); });
+  window.addEventListener("resize", function(){ movePill(document.querySelector(".dial-seg.active")); });
+  setTimeout(function(){ movePill(document.querySelector(".dial-seg.active")); }, 400);
+})();
+</script>
+</body>
+</html>

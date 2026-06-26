@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sourcewell — Source the people you can't find</title>
+<meta name="description" content="AI agents that find, rank, and reach passive candidates across email and LinkedIn — and every message waits for your approval." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f3f1ea; --ink:#122019; --card:#ffffff;
+    --primary:#0b5d4e; --primary-fg:#f2fbf7;
+    --secondary:#eae6da; --muted:#f0ece0; --muted-ink:#6b7a71;
+    --accent:#dcefe8; --accent-ink:#0b5d4e; --accent-line:#bfe0d4;
+    --success:#2c8c5a; --warning:#b8762a; --destructive:#b4422e;
+    --border:#e5e1d5; --ring:#0e7c66;
+    --sidebar:#07312b; --sidebar-2:#0c453b; --sidebar-ink:#8fb6ac; --sidebar-bright:#ebf7f1;
+    --score-from:#0e7c66; --score-to:#43b68f; --radius:14px;
+
+    --display:"Bricolage Grotesque", serif;
+    --sans:"Hanken Grotesk", -apple-system, sans-serif;
+    --mono:"Geist Mono", ui-monospace, monospace;
+
+    --maxw:1240px;
+    --gutter:clamp(20px,5vw,72px);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:17px;
+    line-height:1.55;
+    overflow-x:hidden;
+    position:relative;
+  }
+
+  /* grain / atmosphere overlay */
+  body::before{
+    content:"";
+    position:fixed;inset:0;
+    pointer-events:none;z-index:9999;
+    opacity:.045;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  ::selection{background:var(--primary);color:var(--primary-fg)}
+
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--gutter)}
+
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;font-weight:500;
+    letter-spacing:.18em;text-transform:uppercase;
+    color:var(--muted-ink);
+    display:inline-flex;align-items:center;gap:.7em;
+  }
+  .eyebrow .num{color:var(--primary)}
+  .eyebrow::before{
+    content:"";width:30px;height:1px;background:var(--accent-line);display:inline-block;
+  }
+
+  /* ---------- NAV ---------- */
+  header.nav{
+    position:fixed;top:0;left:0;right:0;z-index:100;
+    transition:background .4s ease, box-shadow .4s ease, border-color .4s ease;
+    border-bottom:1px solid transparent;
+  }
+  header.nav.scrolled{
+    background:rgba(243,241,234,.82);
+    backdrop-filter:saturate(140%) blur(14px);
+    -webkit-backdrop-filter:saturate(140%) blur(14px);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-inner{
+    max-width:var(--maxw);margin:0 auto;
+    padding:18px var(--gutter);
+    display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .brand{display:flex;align-items:center;gap:11px;font-family:var(--display);font-weight:700;font-size:21px;letter-spacing:-.01em}
+  .brand .mark{width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;
+    background:linear-gradient(150deg,var(--score-from),var(--score-to));color:var(--primary-fg);
+    box-shadow:0 6px 16px -5px rgba(11,93,78,.55)}
+  .brand .mark svg{width:18px;height:18px}
+  .nav-links{display:flex;align-items:center;gap:34px}
+  .nav-links a{font-size:14.5px;color:var(--ink);opacity:.72;transition:opacity .2s, color .2s}
+  .nav-links a:hover{opacity:1;color:var(--primary)}
+  .nav-cta{
+    font-family:var(--sans);font-weight:600;font-size:14.5px;
+    background:var(--primary);color:var(--primary-fg);
+    padding:11px 20px;border-radius:999px;
+    transition:transform .2s ease, box-shadow .3s ease;
+    box-shadow:0 1px 0 rgba(7,49,43,.4), 0 10px 22px -12px rgba(11,93,78,.7);
+  }
+  .nav-cta:hover{transform:translateY(-2px)}
+  @media(max-width:860px){.nav-links{display:none}}
+
+  /* ---------- BUTTONS ---------- */
+  .btn{
+    display:inline-flex;align-items:center;gap:.6em;
+    font-family:var(--sans);font-weight:600;font-size:16px;
+    padding:15px 26px;border-radius:999px;cursor:pointer;border:none;
+    transition:transform .22s cubic-bezier(.2,.7,.3,1), box-shadow .3s ease, background .3s;
+  }
+  .btn-primary{
+    background:var(--primary);color:var(--primary-fg);
+    box-shadow:0 1px 0 rgba(7,49,43,.5), 0 16px 30px -14px rgba(11,93,78,.85);
+  }
+  .btn-primary:hover{transform:translateY(-3px);box-shadow:0 1px 0 rgba(7,49,43,.5), 0 22px 38px -16px rgba(11,93,78,.95)}
+  .btn-primary .arr{transition:transform .25s ease}
+  .btn-primary:hover .arr{transform:translateX(4px)}
+  .btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--border)}
+  .btn-ghost:hover{border-color:var(--primary);color:var(--primary)}
+
+  /* ---------- HERO ---------- */
+  .hero{padding:170px 0 96px;position:relative}
+  .hero-grid{display:grid;grid-template-columns:1fr;gap:0;position:relative;z-index:1}
+  .hero h1{
+    font-family:var(--display);
+    font-weight:800;
+    font-size:clamp(54px,11.2vw,116px);
+    line-height:.94;
+    letter-spacing:-.035em;
+    max-width:14ch;
+    margin:26px 0 0;
+  }
+  .hero h1 .em{
+    color:var(--primary);
+    font-style:italic;
+    position:relative;
+    white-space:nowrap;
+  }
+  .hero h1 .em svg{
+    position:absolute;left:-1%;bottom:-.16em;width:102%;height:.3em;overflow:visible;
+  }
+  .hero h1 .em path{
+    fill:none;stroke:var(--score-to);stroke-width:7;stroke-linecap:round;
+    stroke-dasharray:680;stroke-dashoffset:680;
+    animation:draw 1.1s 1.05s cubic-bezier(.6,.1,.3,1) forwards;
+  }
+  @keyframes draw{to{stroke-dashoffset:0}}
+
+  .hero-lower{
+    display:flex;align-items:flex-end;justify-content:space-between;gap:48px;flex-wrap:wrap;
+    margin-top:46px;
+  }
+  .hero-sub{max-width:46ch;font-size:clamp(17px,2vw,20px);color:#33433b;line-height:1.6}
+  .hero-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .hero-note{font-family:var(--mono);font-size:12px;color:var(--muted-ink);letter-spacing:.04em}
+
+  /* floating candidate cards — drift quietly in the BACKGROUND, behind the text */
+  .float{
+    position:absolute;z-index:0;pointer-events:none;
+    background:rgba(255,255,255,.8);
+    border:1px solid rgba(229,225,213,.8);
+    border-radius:var(--radius);padding:11px 14px;display:flex;align-items:center;gap:11px;
+    box-shadow:0 20px 44px -38px rgba(18,32,25,.35);
+    opacity:0;animation:floatIn 1.1s ease forwards var(--in,.5s),drift var(--dur,20s) ease-in-out infinite var(--bd,0s);
+    will-change:transform;
+  }
+  .float .av{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;
+    font-family:var(--display);font-weight:700;font-size:13px;color:#fff}
+  .float .who b{font-weight:600;font-size:13.5px;display:block;white-space:nowrap}
+  .float .who small{font-family:var(--mono);font-size:10px;letter-spacing:.03em;color:var(--muted-ink);display:block;margin-top:2px;white-space:nowrap}
+  .float .pill{font-family:var(--mono);font-weight:500;font-size:12px;color:var(--primary);
+    background:var(--accent);border:1px solid var(--accent-line);border-radius:8px;padding:3px 8px;margin-left:2px}
+  .float .chan{display:grid;place-items:center;width:25px;height:25px;border-radius:7px;flex:none;background:#eaf1fb;border:1px solid #cfe0f6;color:#0a66c2}
+  .float .chan svg{width:13px;height:13px}
+  .float .stage{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--success);background:#e4f3ea;border:1px solid #bfe3cd;border-radius:8px;padding:3px 9px}
+  .float .stage i{width:6px;height:6px;border-radius:50%;background:var(--success)}
+  .float.agent{gap:12px}
+  .float .bot{width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;background:var(--accent);color:var(--primary)}
+  .float .bot svg{width:18px;height:18px}
+  .float .live{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--success);margin-left:2px}
+  .float .live i{width:6px;height:6px;border-radius:50%;background:var(--success);animation:fpulse 1.6s ease-in-out infinite}
+  /* fit-score ring format */
+  .float .ring{width:50px;height:50px;border-radius:50%;flex:none;display:grid;place-items:center;position:relative;
+    background:conic-gradient(from -90deg,var(--score-from),var(--score-to) 340deg,var(--muted) 340deg)}
+  .float .ring::after{content:"";position:absolute;inset:5px;border-radius:50%;background:#fff}
+  .float .ring b{position:relative;font-family:var(--display);font-weight:700;font-size:16px;color:var(--primary)}
+  @keyframes floatIn{from{opacity:0}to{opacity:1}}
+  @keyframes drift{
+    0%{transform:translate(0,0) rotate(0deg)}
+    25%{transform:translate(11px,-15px) rotate(.5deg)}
+    50%{transform:translate(-8px,-7px) rotate(-.45deg)}
+    75%{transform:translate(-13px,11px) rotate(.3deg)}
+    100%{transform:translate(0,0) rotate(0deg)}
+  }
+  @keyframes fpulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @media(max-width:980px){.float{display:none}}
+
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .9s cubic-bezier(.2,.7,.3,1),transform .9s cubic-bezier(.2,.7,.3,1)}
+  .reveal.in{opacity:1;transform:none}
+  .d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}.d4{transition-delay:.32s}
+
+  /* ---------- METRICS ---------- */
+  .metrics{padding:40px 0 96px;border-top:1px solid var(--border)}
+  .metrics-row{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;
+  }
+  .metric{background:var(--bg);padding:30px 28px 26px}
+  .metric .big{
+    font-family:var(--display);font-weight:700;
+    font-size:clamp(42px,6vw,68px);line-height:1;letter-spacing:-.03em;
+    color:var(--ink);display:flex;align-items:baseline;
+  }
+  .metric .big .suf{font-size:.46em;color:var(--primary);margin-left:.12em;font-weight:600}
+  .metric .lab{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--muted-ink);margin-top:14px;line-height:1.4;max-width:20ch}
+  @media(max-width:880px){.metrics-row{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:480px){.metrics-row{grid-template-columns:1fr}}
+
+  /* ---------- SECTION HEADERS ---------- */
+  .sec{padding:96px 0}
+  .sec-head{max-width:62ch;margin-bottom:54px}
+  .sec-head h2{
+    font-family:var(--display);font-weight:700;
+    font-size:clamp(34px,5vw,62px);line-height:1.02;letter-spacing:-.03em;margin-top:18px;
+  }
+  .sec-head h2 em{font-style:italic;color:var(--primary)}
+  .sec-head p{margin-top:20px;font-size:19px;color:#33433b;max-width:52ch}
+
+  /* ---------- MARQUEE ---------- */
+  .marquee-sec{padding:24px 0 96px;overflow:hidden}
+  .marquee-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:34px}
+  .marquee-head h3{font-family:var(--display);font-weight:700;font-size:clamp(24px,3vw,34px);letter-spacing:-.02em}
+  .marquee-mask{
+    position:relative;width:100vw;margin-left:calc(-1*var(--gutter));
+  }
+  .marquee-mask::before,.marquee-mask::after{
+    content:"";position:absolute;top:0;bottom:0;width:14vw;z-index:3;pointer-events:none;
+  }
+  .marquee-mask::before{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
+  .marquee-mask::after{right:0;background:linear-gradient(270deg,var(--bg),transparent)}
+  .marquee-track{display:flex;width:max-content;gap:18px;padding:6px var(--gutter);animation:scroll 48s linear infinite}
+  .marquee-mask:hover .marquee-track{animation-play-state:paused}
+  @keyframes scroll{to{transform:translateX(calc(-50% - 9px))}}
+
+  .cand{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;width:312px;flex:none;display:flex;align-items:center;gap:15px;
+    transition:transform .3s ease, box-shadow .3s ease, border-color .3s;
+  }
+  .cand:hover{transform:translateY(-5px);box-shadow:0 26px 44px -28px rgba(18,32,25,.45);border-color:var(--accent-line)}
+  .av{
+    width:48px;height:48px;border-radius:50%;flex:none;display:grid;place-items:center;
+    font-family:var(--display);font-weight:700;font-size:18px;color:var(--primary-fg);
+  }
+  .cand .info{flex:1;min-width:0}
+  .cand .info b{font-weight:600;font-size:15.5px;display:block;line-height:1.2}
+  .cand .info span{font-size:12.5px;color:var(--muted-ink);display:block;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .score{
+    font-family:var(--mono);font-weight:500;font-size:14px;flex:none;
+    width:42px;height:42px;border-radius:11px;display:grid;place-items:center;
+    background:var(--accent);color:var(--accent-ink);border:1px solid var(--accent-line);
+  }
+
+  /* ---------- LOOP ---------- */
+  .loop-list{border-top:1px solid var(--border)}
+  .loop-item{
+    display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:36px;
+    padding:38px 8px;border-bottom:1px solid var(--border);
+    position:relative;transition:padding .35s ease;
+  }
+  .loop-item:hover{padding-left:24px;padding-right:24px}
+  .loop-item::after{content:"";position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);z-index:-1;transition:width .4s ease;opacity:.5}
+  .loop-item:hover::after{width:100%}
+  .loop-num{font-family:var(--mono);font-size:13px;color:var(--primary);letter-spacing:.08em;align-self:flex-start;padding-top:10px}
+  .loop-main h4{font-family:var(--display);font-weight:700;font-size:clamp(28px,4vw,46px);letter-spacing:-.025em;line-height:1}
+  .loop-main p{margin-top:12px;font-size:17px;color:#3a4a42;max-width:54ch}
+  .loop-art{font-family:var(--mono);font-size:12px;color:var(--muted-ink);text-align:right;align-self:flex-start;padding-top:12px;white-space:nowrap}
+  @media(max-width:760px){
+    .loop-item{grid-template-columns:auto 1fr;gap:18px}
+    .loop-art{display:none}
+  }
+
+  /* ---------- TRANSCRIPT ---------- */
+  .transcript-sec{position:relative}
+  .transcript{
+    background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius) + 6px);
+    box-shadow:0 50px 90px -54px rgba(18,32,25,.55);
+    overflow:hidden;max-width:920px;margin:0 auto;
+  }
+  .ts-bar{
+    display:flex;align-items:center;gap:10px;padding:16px 22px;
+    background:var(--sidebar);color:var(--sidebar-bright);
+  }
+  .ts-bar .dot{width:9px;height:9px;border-radius:50%;background:var(--sidebar-ink);opacity:.55}
+  .ts-bar .title{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin-left:8px;color:var(--sidebar-ink)}
+  .ts-bar .live{margin-left:auto;display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--sidebar-bright)}
+  .ts-bar .live i{width:7px;height:7px;border-radius:50%;background:var(--score-to);box-shadow:0 0 0 0 rgba(67,182,143,.7);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(67,182,143,.6)}70%{box-shadow:0 0 0 8px rgba(67,182,143,0)}100%{box-shadow:0 0 0 0 rgba(67,182,143,0)}}
+
+  .ts-body{padding:14px 0}
+  .turn{display:grid;grid-template-columns:118px 1fr;gap:8px;padding:20px 30px;border-bottom:1px solid var(--border)}
+  .turn:last-child{border-bottom:none}
+  .turn .who{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-ink);padding-top:4px}
+  .turn.agent .who{color:var(--primary)}
+  .turn .msg{font-size:17px;line-height:1.62;color:var(--ink)}
+  .turn.you .msg{color:#2a3a33}
+  .turn .msg strong{color:var(--primary);font-weight:600}
+  .turn .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.02em;
+    background:var(--accent);color:var(--accent-ink);border:1px solid var(--accent-line);
+    padding:6px 11px;border-radius:8px;
+  }
+  .chip.warn{background:#f6ecdc;color:var(--warning);border-color:#e8d3b0}
+  @media(max-width:620px){.turn{grid-template-columns:1fr;gap:6px}.turn .who{padding-top:0}}
+
+  /* ---------- AGENTS ---------- */
+  .agents-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .agent-card{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:30px 28px 34px;position:relative;overflow:hidden;
+    transition:transform .35s ease, box-shadow .35s ease, border-color .35s;
+  }
+  .agent-card:hover{transform:translateY(-6px);box-shadow:0 34px 56px -34px rgba(18,32,25,.4);border-color:var(--accent-line)}
+  .agent-card .badge{
+    width:46px;height:46px;border-radius:12px;display:grid;place-items:center;margin-bottom:24px;
+    background:linear-gradient(140deg,var(--score-from),var(--score-to));color:var(--primary-fg);
+  }
+  .agent-card .badge svg{width:24px;height:24px}
+  .agent-card h4{font-family:var(--display);font-weight:700;font-size:23px;letter-spacing:-.01em}
+  .agent-card .role{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-ink);margin:6px 0 16px}
+  .agent-card p{font-size:15.5px;color:#3a4a42;line-height:1.58}
+  .agent-card .glow{position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,var(--accent),transparent 70%);opacity:.7;transition:opacity .4s}
+  .agent-card:hover .glow{opacity:1}
+  @media(max-width:880px){.agents-grid{grid-template-columns:1fr}}
+
+  /* ---------- AUTONOMY DIAL ---------- */
+  .dial-wrap{
+    background:var(--sidebar);color:var(--sidebar-bright);
+    border-radius:calc(var(--radius) + 8px);padding:clamp(34px,5vw,64px);
+    position:relative;overflow:hidden;
+  }
+  .dial-wrap::before{
+    content:"";position:absolute;inset:0;opacity:.5;
+    background:radial-gradient(900px 380px at 85% -10%, rgba(67,182,143,.28), transparent 60%);
+  }
+  .dial-wrap .eyebrow{color:var(--sidebar-ink)}
+  .dial-wrap .eyebrow::before{background:rgba(143,182,172,.5)}
+  .dial-wrap .eyebrow .num{color:var(--score-to)}
+  .dial-wrap h2{font-family:var(--display);font-weight:700;font-size:clamp(30px,4.4vw,52px);letter-spacing:-.025em;margin:16px 0 8px;position:relative}
+  .dial-wrap h2 em{color:var(--score-to);font-style:italic}
+  .dial-segcontrol{
+    display:inline-flex;gap:6px;background:rgba(7,49,43,.55);border:1px solid rgba(143,182,172,.22);
+    padding:6px;border-radius:999px;margin:34px 0 30px;position:relative;flex-wrap:wrap;
+  }
+  .dial-seg{
+    font-family:var(--mono);font-size:13px;letter-spacing:.04em;
+    padding:11px 24px;border-radius:999px;cursor:pointer;color:var(--sidebar-ink);
+    border:none;background:transparent;transition:color .3s ease;position:relative;z-index:2;
+  }
+  .dial-seg.active{color:var(--sidebar)}
+  .dial-pill{
+    position:absolute;z-index:1;top:6px;height:calc(100% - 12px);
+    background:var(--sidebar-bright);border-radius:999px;
+    transition:left .45s cubic-bezier(.5,.1,.2,1), width .45s cubic-bezier(.5,.1,.2,1);
+  }
+  .dial-panel{position:relative;max-width:60ch;min-height:96px}
+  .dial-state{position:absolute;inset:0;opacity:0;transform:translateY(10px);transition:opacity .4s ease, transform .4s ease;pointer-events:none}
+  .dial-state.show{opacity:1;transform:none;position:relative}
+  .dial-state .lvl{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--score-to);margin-bottom:12px}
+  .dial-state p{font-size:clamp(18px,2.3vw,24px);line-height:1.5;color:var(--sidebar-bright)}
+  .dial-state p b{color:#fff;font-weight:600}
+
+  /* ---------- GOVERNANCE ---------- */
+  .gov-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--card)}
+  .gov-cell{padding:34px 30px;border-right:1px solid var(--border)}
+  .gov-cell:last-child{border-right:none}
+  .gov-cell .ic{width:40px;height:40px;border-radius:10px;background:var(--accent);color:var(--primary);display:grid;place-items:center;margin-bottom:20px}
+  .gov-cell .ic svg{width:21px;height:21px}
+  .gov-cell h4{font-family:var(--display);font-weight:700;font-size:20px;margin-bottom:9px;letter-spacing:-.01em}
+  .gov-cell p{font-size:15px;color:#3a4a42;line-height:1.56}
+  @media(max-width:780px){.gov-grid{grid-template-columns:1fr}.gov-cell{border-right:none;border-bottom:1px solid var(--border)}.gov-cell:last-child{border-bottom:none}}
+
+  /* ---------- FINAL CTA ---------- */
+  .final{padding:120px 0 130px;text-align:center;position:relative;overflow:hidden}
+  .final::before{
+    content:"";position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);
+    width:120vw;height:120vw;max-width:1100px;max-height:1100px;border-radius:50%;z-index:-1;
+    background:radial-gradient(circle, rgba(220,239,232,.9), rgba(243,241,234,0) 62%);
+  }
+  .final h2{
+    font-family:var(--display);font-weight:800;
+    font-size:clamp(44px,9vw,104px);line-height:.95;letter-spacing:-.035em;
+    max-width:16ch;margin:0 auto;
+  }
+  .final h2 em{font-style:italic;color:var(--primary)}
+  .final p{margin:26px auto 38px;font-size:20px;color:#33433b;max-width:46ch}
+  .final .hero-note{margin-top:20px}
+
+  /* ---------- FOOTER ---------- */
+  footer{background:var(--sidebar);color:var(--sidebar-ink);padding:74px 0 40px}
+  .foot-top{display:flex;justify-content:space-between;gap:48px;flex-wrap:wrap;padding-bottom:54px;border-bottom:1px solid rgba(143,182,172,.18)}
+  .foot-brand{max-width:30ch}
+  .foot-brand .brand{color:var(--sidebar-bright);margin-bottom:18px}
+  .foot-brand p{font-size:15px;line-height:1.6}
+  .foot-cols{display:flex;gap:64px;flex-wrap:wrap}
+  .foot-col h5{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--sidebar-ink);margin-bottom:18px;opacity:.8}
+  .foot-col a{display:block;color:var(--sidebar-bright);opacity:.78;font-size:15px;margin-bottom:11px;transition:opacity .2s,transform .2s}
+  .foot-col a:hover{opacity:1;transform:translateX(3px)}
+  .foot-bottom{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-top:28px;font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--sidebar-ink)}
+
+  @media(prefers-reduced-motion:reduce){
+    *{animation-duration:.001s !important;transition-duration:.001s !important}
+    .reveal{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top" aria-label="Sourcewell home">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.3" stroke-opacity=".34"/>
+        <circle cx="12" cy="12" r="5.6" stroke="currentColor" stroke-width="1.7" stroke-opacity=".75"/>
+        <circle cx="12" cy="12" r="2" fill="currentColor"/>
+        <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M12 1.4V4M12 20v2.6M1.4 12H4M20 12h2.6"/></g>
+      </svg></span>
+      Sourcewell
+    </a>
+    <nav class="nav-links">
+      <a href="#loop">The Loop</a>
+      <a href="#agents">Agents</a>
+      <a href="#autonomy">Autonomy</a>
+      <a href="#trust">Trust</a>
+    </nav>
+    <a class="nav-cta" href="#start">Book a walkthrough</a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <!-- background candidate field — behind the text, drifting slowly -->
+  <div class="float" style="top:122px;right:var(--gutter);--in:.5s;--bd:0s;--dur:21s" aria-hidden="true">
+    <span class="ring"><b>96</b></span>
+    <span class="who"><b>Maya Okonkwo</b><small>Fit score · matched</small></span>
+  </div>
+  <div class="float" style="top:198px;left:var(--gutter);--in:.7s;--bd:1.4s;--dur:18s" aria-hidden="true">
+    <span class="av" style="background:linear-gradient(150deg,#1f6f5c,#5cc0a4)">KA</span>
+    <span class="who"><b>Kwame Asante</b><small>Security · Bastion</small></span>
+    <span class="stage"><i></i>Replied</span>
+  </div>
+  <div class="float" style="top:438px;left:calc(var(--gutter) + 28px);--in:.85s;--bd:.4s;--dur:23s" aria-hidden="true">
+    <span class="av" style="background:linear-gradient(150deg,#0e7c66,#43b68f)">DR</span>
+    <span class="who"><b>Daniel Reyes</b><small>Senior Backend · Northwind</small></span>
+    <span class="pill">91</span>
+  </div>
+  <div class="float" style="top:488px;right:calc(var(--gutter) + 22px);--in:1s;--bd:2s;--dur:19s" aria-hidden="true">
+    <span class="av" style="background:linear-gradient(150deg,#15614f,#4bb89a)">LF</span>
+    <span class="who"><b>Lena Fischer</b><small>Product Designer · Atlas</small></span>
+    <span class="chan" title="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg></span>
+  </div>
+  <div class="float agent" style="top:672px;left:calc(var(--gutter) + 58px);--in:1.15s;--bd:.8s;--dur:24s" aria-hidden="true">
+    <span class="bot"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.4" stroke-opacity=".4"/><circle cx="12" cy="12" r="4.6" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/></svg></span>
+    <span class="who"><b>Sourcing agent</b><small>Scored 25 · 12 qualified</small></span>
+    <span class="live"><i></i>live</span>
+  </div>
+  <div class="wrap hero-grid">
+    <span class="eyebrow reveal"><span class="num">00</span>&nbsp;/&nbsp;THE AGENTIC RECRUITER</span>
+    <h1 class="reveal d1">Source the people you <span class="em">can't&nbsp;find<svg viewBox="0 0 320 16" preserveAspectRatio="none" aria-hidden="true"><path d="M3 11C70 4 250 2 317 8"/></svg></span>.</h1>
+    <div class="hero-lower">
+      <p class="hero-sub reveal d2">AI agents that find, rank, and reach passive candidates across email and LinkedIn — and every message waits for your approval. The agent does the work. You stay in control.</p>
+      <div class="hero-actions reveal d3">
+        <a class="btn btn-primary" href="#start">Start sourcing <span class="arr">→</span></a>
+        <a class="btn btn-ghost" href="#loop">See the loop</a>
+      </div>
+    </div>
+    <p class="hero-note reveal d4" style="margin-top:34px">SOURCE&nbsp;→&nbsp;RANK&nbsp;→&nbsp;REACH&nbsp;→&nbsp;REPLY&nbsp;→&nbsp;HAND OFF</p>
+  </div>
+</section>
+
+<!-- ============ METRICS ============ -->
+<section class="metrics">
+  <div class="wrap">
+    <div class="metrics-row">
+      <div class="metric reveal">
+        <div class="big"><span class="cu" data-target="3.2" data-dec="1">0</span><span class="suf">×</span></div>
+        <div class="lab">MORE REPLIES THAN MANUAL OUTREACH</div>
+      </div>
+      <div class="metric reveal d1">
+        <div class="big"><span class="cu" data-target="12">0</span><span class="suf">hrs</span></div>
+        <div class="lab">SAVED PER RECRUITER, EVERY WEEK</div>
+      </div>
+      <div class="metric reveal d2">
+        <div class="big"><span class="cu" data-target="100">0</span><span class="suf">%</span></div>
+        <div class="lab">OF SENDS YOU APPROVED FIRST</div>
+      </div>
+      <div class="metric reveal d3">
+        <div class="big"><span class="cu" data-target="48">0</span><span class="suf">hrs</span></div>
+        <div class="lab">MEDIAN TIME TO FIRST REPLY</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MARQUEE ============ -->
+<section class="marquee-sec" id="pipeline">
+  <div class="wrap marquee-head">
+    <div>
+      <span class="eyebrow reveal"><span class="num">01</span>&nbsp;/&nbsp;THE WELLSPRING</span>
+      <h3 class="reveal d1" style="margin-top:14px">Talent flowing past, scored as it goes.</h3>
+    </div>
+    <span class="hero-note reveal d2" style="white-space:nowrap;align-self:flex-end">142 sourced today</span>
+  </div>
+  <div class="marquee-mask">
+    <div class="marquee-track" id="marquee"><!-- cards injected --></div>
+  </div>
+</section>
+
+<!-- ============ THE LOOP ============ -->
+<section class="sec" id="loop">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow"><span class="num">02</span>&nbsp;/&nbsp;THE LOOP</span>
+      <h2>One loop, run by the agent — <em>supervised by you.</em></h2>
+      <p>Four moves repeat until the right person replies. The agent never sends a thing you haven't seen.</p>
+    </div>
+
+    <div class="loop-list">
+      <div class="loop-item reveal">
+        <div class="loop-num">01</div>
+        <div class="loop-main">
+          <h4>Source</h4>
+          <p>The Sourcing agent searches your sources, enriches contacts, and pulls passive candidates who would never answer a job post.</p>
+        </div>
+        <div class="loop-art">SCANS · ENRICHES · ENROLLS</div>
+      </div>
+      <div class="loop-item reveal">
+        <div class="loop-num">02</div>
+        <div class="loop-main">
+          <h4>Rank</h4>
+          <p>Every candidate gets a 0–100 fit score with a written rationale — so you see <em>why</em> they made the shortlist, not just that they did.</p>
+        </div>
+        <div class="loop-art">0–100 · WITH RATIONALE</div>
+      </div>
+      <div class="loop-item reveal">
+        <div class="loop-num">03</div>
+        <div class="loop-main">
+          <h4>Reach</h4>
+          <p>The Outreach agent drafts a multi-touch email → LinkedIn sequence, each touchpoint personalized to their actual work.</p>
+        </div>
+        <div class="loop-art">EMAIL → LINKEDIN · 4 TOUCH</div>
+      </div>
+      <div class="loop-item reveal">
+        <div class="loop-num">04</div>
+        <div class="loop-main">
+          <h4>Approve</h4>
+          <p>Replies land in your Inbox. Every outbound message can wait for your approval, then you hand the warm thread to your team.</p>
+        </div>
+        <div class="loop-art">YOU APPROVE · TEAM CLOSES</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRANSCRIPT ============ -->
+<section class="sec transcript-sec" id="chat">
+  <div class="wrap">
+    <div class="sec-head reveal" style="margin:0 auto 48px;text-align:center;max-width:54ch">
+      <span class="eyebrow" style="justify-content:center"><span class="num">03</span>&nbsp;/&nbsp;IN CONVERSATION</span>
+      <h2 style="margin-top:16px">You ask. The agent reports back.</h2>
+    </div>
+
+    <div class="transcript reveal d1">
+      <div class="ts-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="title">Main agent · session</span>
+        <span class="live"><i></i>WORKING</span>
+      </div>
+      <div class="ts-body">
+        <div class="turn you">
+          <div class="who">You</div>
+          <div class="msg">Find me senior backend engineers in Berlin open to remote — Go or Rust, ideally a fintech background. Don't send anything yet.</div>
+        </div>
+        <div class="turn agent">
+          <div class="who">Agent</div>
+          <div class="msg">
+            Sourced <strong>142 passive candidates</strong> across LinkedIn and email. Ranked the field and surfaced <strong>18 above an 85 fit</strong>. I drafted a 4-touch sequence for the top 9 — each one opens on their work, not a template. Nothing sends until you say so.
+            <div class="chips">
+              <span class="chip">142 sourced</span>
+              <span class="chip">18 ≥ 85 fit</span>
+              <span class="chip">9 sequences drafted</span>
+              <span class="chip warn">0 sent · awaiting approval</span>
+            </div>
+          </div>
+        </div>
+        <div class="turn you">
+          <div class="who">You</div>
+          <div class="msg">Show me the top three and why they ranked.</div>
+        </div>
+        <div class="turn agent">
+          <div class="who">Agent</div>
+          <div class="msg">
+            <strong>Maya Okonkwo · 96</strong> — Staff ML Engineer at Lumen Robotics; led their Rust payments rewrite, two ex-colleagues already on your team. <strong>Daniel Reyes · 91</strong> — Senior Backend at Northwind; six years Go in fintech, recently liked three remote-first posts. <strong>Kwame Asante · 95</strong> — Security Engineer at Bastion; deep Rust, public talk on ledger integrity. Approve the drafts and I'll begin the sequence within your daily caps.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AGENTS ============ -->
+<section class="sec" id="agents" style="background:linear-gradient(180deg,transparent,rgba(234,230,218,.5),transparent)">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow"><span class="num">04</span>&nbsp;/&nbsp;THE AGENTS</span>
+      <h2>Three agents. <em>One mandate.</em></h2>
+      <p>A team that works the pipeline around the clock — and reports to you in plain language.</p>
+    </div>
+
+    <div class="agents-grid">
+      <div class="agent-card reveal">
+        <div class="glow"></div>
+        <div class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>
+        <h4>Sourcing agent</h4>
+        <div class="role">Searches · Scores · Enriches · Enrolls</div>
+        <p>Sweeps your sources for passive candidates, scores fit against the role, enriches every contact, and enrolls the shortlist into the loop.</p>
+      </div>
+      <div class="agent-card reveal d1">
+        <div class="glow"></div>
+        <div class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H7l-3 3V4Z"/><path d="M8 9h8M8 12h5"/></svg>
+        </div>
+        <h4>Outreach agent</h4>
+        <div class="role">Drafts · Personalizes · Sequences</div>
+        <p>Writes each personalized touchpoint across email and LinkedIn — built on the candidate's real work, queued for your approval.</p>
+      </div>
+      <div class="agent-card reveal d2">
+        <div class="glow"></div>
+        <div class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        </div>
+        <h4>Main agent</h4>
+        <div class="role">Orchestrates · Answers · Supervises</div>
+        <p>Coordinates the others, keeps the loop moving, and answers you in chat — your single calm point of contact for the whole search.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AUTONOMY DIAL ============ -->
+<section class="sec" id="autonomy">
+  <div class="wrap">
+    <div class="dial-wrap reveal">
+      <span class="eyebrow"><span class="num">05</span>&nbsp;/&nbsp;THE AUTONOMY DIAL</span>
+      <h2>You decide how much it does <em>on its own.</em></h2>
+
+      <div class="dial-segcontrol" role="tablist" aria-label="Autonomy level">
+        <span class="dial-pill" id="dialPill"></span>
+        <button class="dial-seg" data-i="0" role="tab">Manual</button>
+        <button class="dial-seg active" data-i="1" role="tab">Assisted</button>
+        <button class="dial-seg" data-i="2" role="tab">Autopilot</button>
+      </div>
+
+      <div class="dial-panel">
+        <div class="dial-state" data-i="0">
+          <div class="lvl">Hands on the wheel</div>
+          <p>You drive. The agent waits for instructions — <b>sourcing, drafting, and sending happen only when you ask.</b> Nothing moves on its own.</p>
+        </div>
+        <div class="dial-state show" data-i="1">
+          <div class="lvl">The default</div>
+          <p>The agent <b>sources and drafts</b> on its own, then queues every message — <b>you approve each send.</b> Momentum, with your hand on every outbound.</p>
+        </div>
+        <div class="dial-state" data-i="2">
+          <div class="lvl">Set the guardrails, let it run</div>
+          <p>The agent <b>sends within your caps</b> — governed daily limits, full audit log, replies routed to your Inbox. Supervision by exception.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GOVERNANCE / TRUST ============ -->
+<section class="sec" id="trust">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow"><span class="num">06</span>&nbsp;/&nbsp;STAY IN CONTROL</span>
+      <h2>Autonomy you can <em>account for.</em></h2>
+      <p>Speed is only useful if you can trust it. Every send is governed, logged, and yours to approve.</p>
+    </div>
+
+    <div class="gov-grid reveal d1">
+      <div class="gov-cell">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <h4>Approve before it sends</h4>
+        <p>Every outbound message can wait in an approval queue. Read it, edit it, release it — or hold it. The agent never goes around you.</p>
+      </div>
+      <div class="gov-cell">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+        </div>
+        <h4>Governed send caps</h4>
+        <p>Set daily limits per seat and per channel. Even on Autopilot, the agent throttles to your caps — your domain reputation stays intact.</p>
+      </div>
+      <div class="gov-cell">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>
+        </div>
+        <h4>Full audit log</h4>
+        <p>Who sourced whom, what was sent, when, and by which agent. Every action is recorded — for your team, your client, and compliance.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section class="final" id="start">
+  <div class="wrap">
+    <span class="eyebrow reveal" style="justify-content:center;margin-bottom:6px"><span class="num">07</span>&nbsp;/&nbsp;THE WELLSPRING AWAITS</span>
+    <h2 class="reveal d1">Let the agent do the<br><em>sourcing.</em></h2>
+    <p class="reveal d2">Point Sourcewell at a role and watch the pipeline fill — every message still waiting for your yes.</p>
+    <div class="hero-actions reveal d3" style="justify-content:center">
+      <a class="btn btn-primary" href="#" onclick="return false">Book a walkthrough <span class="arr">→</span></a>
+      <a class="btn btn-ghost" href="#" onclick="return false">See a live source run</a>
+    </div>
+    <p class="hero-note reveal d4">NO CREDIT CARD · SOURCE YOUR FIRST 50 IN MINUTES</p>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a class="brand" href="#top">
+          <span class="mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.3" stroke-opacity=".34"/>
+            <circle cx="12" cy="12" r="5.6" stroke="currentColor" stroke-width="1.7" stroke-opacity=".75"/>
+            <circle cx="12" cy="12" r="2" fill="currentColor"/>
+            <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M12 1.4V4M12 20v2.6M1.4 12H4M20 12h2.6"/></g>
+          </svg></span>
+          Sourcewell
+        </a>
+        <p>The agentic recruiter. Source the people you can't find — and stay in control of every message.</p>
+      </div>
+      <div class="foot-cols">
+        <div class="foot-col">
+          <h5>Product</h5>
+          <a href="#loop">The Loop</a>
+          <a href="#agents">Agents</a>
+          <a href="#autonomy">Autonomy dial</a>
+          <a href="#trust">Trust &amp; audit</a>
+        </div>
+        <div class="foot-col">
+          <h5>For teams</h5>
+          <a href="#">In-house recruiters</a>
+          <a href="#">Agency &amp; RPO</a>
+          <a href="#">Talent leaders</a>
+          <a href="#">Pricing</a>
+        </div>
+        <div class="foot-col">
+          <h5>Company</h5>
+          <a href="#">About</a>
+          <a href="#">Careers</a>
+          <a href="#">Security</a>
+          <a href="#">Contact</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 SOURCEWELL LABS · ALL RIGHTS RESERVED</span>
+      <span>THE AGENT DOES THE WORK · YOU STAY IN CONTROL</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- candidate marquee ---------- */
+  var people = [
+    ["Maya Okonkwo","Staff ML Engineer · Lumen Robotics",96,"#0b5d4e"],
+    ["Daniel Reyes","Senior Backend Eng · Northwind",91,"#127a64"],
+    ["Priya Nair","Product Design Lead · Cartograph",88,"#1a6b8a"],
+    ["Theo Lindqvist","Infra SRE · Halcyon Cloud",93,"#0b5d4e"],
+    ["Kwame Asante","Security Engineer · Bastion",95,"#2c8c5a"],
+    ["Amara Bello","Growth PM · Tidewater",85,"#b8762a"],
+    ["Jonas Weber","iOS Engineer · Foldspace",90,"#127a64"],
+    ["Sofia Marchetti","Data Scientist · Meridian Health",89,"#1a6b8a"],
+    ["Lena Petrova","Frontend Engineer · Northwind",87,"#0b5d4e"],
+    ["Hiro Tanaka","Engineering Manager · Lumen Robotics",92,"#2c8c5a"]
+  ];
+  function card(p){
+    var initials = p[0].split(" ").map(function(s){return s[0];}).join("").slice(0,2);
+    return '<div class="cand">'
+      + '<div class="av" style="background:linear-gradient(140deg,'+p[3]+',#43b68f)">'+initials+'</div>'
+      + '<div class="info"><b>'+p[0]+'</b><span>'+p[1]+'</span></div>'
+      + '<div class="score">'+p[2]+'</div>'
+      + '</div>';
+  }
+  var html = people.map(card).join("");
+  var track = document.getElementById("marquee");
+  if(track){ track.innerHTML = html + html; } // duplicate for seamless loop
+
+  /* ---------- nav scrolled state ---------- */
+  var nav = document.getElementById("nav");
+  function onScroll(){
+    if(window.scrollY > 24){ nav.classList.add("scrolled"); }
+    else { nav.classList.remove("scrolled"); }
+  }
+  onScroll();
+  window.addEventListener("scroll", onScroll, {passive:true});
+
+  /* ---------- scroll reveal ---------- */
+  var revs = document.querySelectorAll(".reveal");
+  if("IntersectionObserver" in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); }
+      });
+    }, {threshold:.16, rootMargin:"0px 0px -8% 0px"});
+    revs.forEach(function(el){ io.observe(el); });
+  } else {
+    revs.forEach(function(el){ el.classList.add("in"); });
+  }
+
+  /* ---------- count-up ---------- */
+  function easeOut(t){ return 1 - Math.pow(1 - t, 3); }
+  function countUp(el){
+    var target = parseFloat(el.getAttribute("data-target"));
+    var dec = parseInt(el.getAttribute("data-dec")||"0", 10);
+    var dur = 1500, start = null;
+    function step(ts){
+      if(!start) start = ts;
+      var p = Math.min((ts - start)/dur, 1);
+      var v = target * easeOut(p);
+      el.textContent = dec ? v.toFixed(dec) : Math.round(v).toString();
+      if(p < 1){ requestAnimationFrame(step); }
+      else { el.textContent = dec ? target.toFixed(dec) : Math.round(target).toString(); }
+    }
+    requestAnimationFrame(step);
+  }
+  var nums = document.querySelectorAll(".cu");
+  if("IntersectionObserver" in window){
+    var io2 = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ countUp(e.target); io2.unobserve(e.target); }
+      });
+    }, {threshold:.6});
+    nums.forEach(function(el){ io2.observe(el); });
+  } else {
+    nums.forEach(function(el){ el.textContent = el.getAttribute("data-target"); });
+  }
+
+  /* ---------- autonomy dial ---------- */
+  var segs = Array.prototype.slice.call(document.querySelectorAll(".dial-seg"));
+  var states = Array.prototype.slice.call(document.querySelectorAll(".dial-state"));
+  var pill = document.getElementById("dialPill");
+  function movePill(btn){
+    if(!pill || !btn) return;
+    pill.style.left = btn.offsetLeft + "px";
+    pill.style.width = btn.offsetWidth + "px";
+  }
+  function selectSeg(i){
+    segs.forEach(function(s){ s.classList.toggle("active", parseInt(s.getAttribute("data-i"),10)===i); });
+    states.forEach(function(s){ s.classList.toggle("show", parseInt(s.getAttribute("data-i"),10)===i); });
+    movePill(segs[i]);
+  }
+  segs.forEach(function(s){
+    s.addEventListener("click", function(){ selectSeg(parseInt(s.getAttribute("data-i"),10)); });
+  });
+  // init pill on the active (Assisted) once fonts/layout settle
+  window.addEventListener("load", function(){ movePill(document.querySelector(".dial-seg.active")); });
+  window.addEventListener("resize", function(){ movePill(document.querySelector(".dial-seg.active")); });
+  setTimeout(function(){ movePill(document.querySelector(".dial-seg.active")); }, 400);
+})();
+</script>
+</body>
+</html>

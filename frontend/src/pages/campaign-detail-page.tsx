@@ -300,7 +300,13 @@ export function CampaignDetailPage() {
               <Button variant="outline" size="sm" onClick={() => setActivityOpen(true)}>
                 <ScrollText /> Activity
               </Button>
-              <Button variant="outline" size="sm" disabled={busy || sourcing} onClick={() => void rank()}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || sourcing || selected.size === 0}
+                title={selected.size === 0 ? "Select candidates to rank" : undefined}
+                onClick={() => void rank()}
+              >
                 {rankCampaign.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Rank
               </Button>
               <Button size="sm" disabled={sourcing || sourceNow.isPending} onClick={startSourcing}>

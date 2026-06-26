@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sourcewell — Marketing site explorations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f3f1ea; --ink:#122019; --card:#ffffff;
+    --primary:#0b5d4e; --primary-fg:#f2fbf7;
+    --secondary:#eae6da; --muted:#f0ece0; --muted-ink:#6b7a71;
+    --accent:#dcefe8; --accent-ink:#0b5d4e; --accent-line:#bfe0d4;
+    --border:#e5e1d5; --ring:#0e7c66;
+    --sidebar:#07312b; --sidebar-2:#0c453b; --sidebar-bright:#ebf7f1;
+    --score-from:#0e7c66; --score-to:#43b68f; --radius:14px;
+    --display:"Bricolage Grotesque",sans-serif; --sans:"Hanken Grotesk",sans-serif; --mono:"Geist Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(900px 520px at 88% -6%, rgba(67,182,143,.14), transparent 60%),
+      radial-gradient(760px 520px at 6% 4%, rgba(11,93,78,.08), transparent 58%),
+      var(--bg);
+    color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; min-height:100vh;
+  }
+  .wrap{max-width:1240px; margin:0 auto; padding:56px 32px 80px;}
+
+  header{display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap;}
+  .brand{display:flex; align-items:center; gap:11px;}
+  .logo{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+    background:linear-gradient(150deg,var(--score-from),var(--score-to)); color:var(--primary-fg);
+    box-shadow:0 6px 18px rgba(11,93,78,.28);}
+  .logo svg{width:21px;height:21px;}
+  .wordmark{font-family:var(--display); font-weight:800; font-size:20px; letter-spacing:-.01em;}
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--muted-ink);}
+  h1{font-family:var(--display); font-weight:800; font-size:clamp(30px,4.2vw,46px); line-height:1.04; letter-spacing:-.02em; margin-top:22px; max-width:18ch;}
+  h1 em{font-style:normal; background:linear-gradient(120deg,var(--score-from),var(--score-to)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .lede{margin-top:16px; max-width:62ch; font-size:17px; line-height:1.6; color:#3a4a42;}
+  .note{margin-top:14px; display:inline-flex; align-items:center; gap:9px; font-size:13px; color:var(--muted-ink);
+    background:var(--card); border:1px solid var(--border); border-radius:999px; padding:7px 14px;}
+  .note b{color:var(--primary); font-weight:600;}
+
+  .grid{margin-top:48px; display:grid; grid-template-columns:repeat(2,1fr); gap:28px;}
+  @media (max-width:880px){ .grid{grid-template-columns:1fr;} }
+
+  .card{display:block; text-decoration:none; color:inherit; background:var(--card); border:1px solid var(--border);
+    border-radius:20px; overflow:hidden; box-shadow:0 1px 0 rgba(18,32,25,.03), 0 18px 40px -28px rgba(18,32,25,.35);
+    transition:transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s, border-color .35s;}
+  .card:hover{transform:translateY(-6px); border-color:var(--accent-line);
+    box-shadow:0 1px 0 rgba(18,32,25,.03), 0 34px 60px -30px rgba(11,93,78,.45);}
+
+  .shot{position:relative; height:300px; overflow:hidden; background:var(--secondary); border-bottom:1px solid var(--border);}
+  .shot iframe{position:absolute; top:0; left:0; width:1320px; height:990px; border:0; transform:scale(.455); transform-origin:top left; pointer-events:none;}
+  .shot::after{content:""; position:absolute; inset:0; box-shadow:inset 0 -40px 50px -30px rgba(18,32,25,.18);}
+  .tag{position:absolute; top:14px; left:14px; z-index:2; font-family:var(--mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
+    background:rgba(255,255,255,.86); backdrop-filter:blur(6px); border:1px solid var(--border); color:var(--primary);
+    padding:5px 10px; border-radius:8px;}
+
+  .body{padding:22px 24px 24px;}
+  .ttl{font-family:var(--display); font-weight:700; font-size:22px; letter-spacing:-.01em; display:flex; align-items:center; gap:10px;}
+  .ttl .arrow{margin-left:auto; color:var(--muted-ink); transition:transform .3s, color .3s;}
+  .card:hover .ttl .arrow{transform:translateX(4px); color:var(--primary);}
+  .desc{margin-top:9px; font-size:14.5px; line-height:1.55; color:#46554d;}
+  .fx{margin-top:14px; display:flex; flex-wrap:wrap; gap:7px;}
+  .chip{font-family:var(--mono); font-size:10.5px; letter-spacing:.04em; color:var(--accent-ink);
+    background:var(--accent); border:1px solid var(--accent-line); border-radius:7px; padding:4px 8px;}
+
+  footer{margin-top:54px; padding-top:22px; border-top:1px solid var(--border); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    font-size:13px; color:var(--muted-ink);}
+  footer code{font-family:var(--mono); background:var(--card); border:1px solid var(--border); padding:2px 7px; border-radius:6px; color:var(--ink);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 2c0 5-4 7-4 11a4 4 0 0 0 8 0c0-4-4-6-4-11Z" fill="currentColor"/><circle cx="12" cy="13.5" r="2.1" fill="#07312b"/></svg>
+        </span>
+        <span class="wordmark">Sourcewell</span>
+      </div>
+      <p class="eyebrow" style="margin-top:24px;">Design exploration · Marketing site</p>
+      <h1>One look, four <em>layouts</em>.</h1>
+      <p class="lede">The chosen Wellspring style — warm sand, deep emerald, Bricolage display type, the reticle mark, and the drifting candidate cards — applied across four different page layouts. The design language stays identical; only the composition changes. Click a card to open it full‑screen.</p>
+      <span class="note"><b>Tip</b> · open the files directly in a browser for the full motion (live canvas, streaming feeds, scroll reveals).</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <a class="card" href="option-1-wellspring.html">
+      <div class="shot"><span class="tag">01 · Centered story</span><iframe src="option-1-wellspring.html" loading="lazy" scrolling="no" tabindex="-1" title="Centered story preview"></iframe></div>
+      <div class="body">
+        <div class="ttl">Centered &amp; symmetric <span class="arrow">→</span></div>
+        <p class="desc">The symmetric counterpart — a centered hero with mirrored drifting cards, then the loop unfolds as a vertical centered scroll‑story down a single spine. Calm and narrative.</p>
+        <div class="fx"><span class="chip">centered hero</span><span class="chip">vertical loop story</span><span class="chip">mirrored cards</span><span class="chip">spine timeline</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="option-2-bento.html">
+      <div class="shot"><span class="tag">02 · Bento / modular</span><iframe src="option-2-bento.html" loading="lazy" scrolling="no" tabindex="-1" title="Bento preview"></iframe></div>
+      <div class="body">
+        <div class="ttl">Bento / modular <span class="arrow">→</span></div>
+        <p class="desc">Product‑rich and modular — the hero is a bento of real surfaces (pipeline, activity feed, autonomy dial, sequence), with more tile grids below. The warm style, grid‑composed.</p>
+        <div class="fx"><span class="chip">bento grid</span><span class="chip">product tiles</span><span class="chip">hover lifts</span><span class="chip">gradient borders</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="option-3-editorial.html">
+      <div class="shot"><span class="tag">03 · Editorial · base</span><iframe src="option-3-editorial.html" loading="lazy" scrolling="no" tabindex="-1" title="Editorial preview"></iframe></div>
+      <div class="body">
+        <div class="ttl">Editorial statement <span class="arrow">→</span></div>
+        <p class="desc">The chosen base — type‑led and left‑aligned, with giant Bricolage headlines, count‑up metrics, a candidate marquee, an agent transcript, and the drifting cards. Maximum story.</p>
+        <div class="fx"><span class="chip">huge type</span><span class="chip">count-up metrics</span><span class="chip">candidate marquee</span><span class="chip">the base look</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="option-4-cockpit.html">
+      <div class="shot"><span class="tag">04 · Product tour</span><iframe src="option-4-cockpit.html" loading="lazy" scrolling="no" tabindex="-1" title="Product tour preview"></iframe></div>
+      <div class="body">
+        <div class="ttl">Product tour <span class="arrow">→</span></div>
+        <p class="desc">Screenshot‑led — opens on a large warm pipeline console, then walks the product as alternating split sections (Source · Reach · Reply · Control). Shows the UI the most.</p>
+        <div class="fx"><span class="chip">console hero</span><span class="chip">split sections</span><span class="chip">product surfaces</span><span class="chip">guided tour</span></div>
+      </div>
+    </a>
+  </main>
+
+  <footer>
+    <span>Standalone mockups · no build step · open with any browser</span>
+    <span><code>.docs/design/marketing/</code></span>
+  </footer>
+</div>
+</body>
+</html>
