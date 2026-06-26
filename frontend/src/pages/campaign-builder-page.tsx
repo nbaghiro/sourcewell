@@ -7,7 +7,7 @@ import { CampaignComposer, type Step } from "@/components/campaign-composer";
 import { CampaignIntake, type IntakeResult } from "@/components/campaign-intake";
 import { PageLayout } from "@/components/page-layout";
 import { Button } from "@/components/ui/button";
-import { Segmented } from "@/components/ui/segmented";
+import { AutonomyDial } from "@/components/autonomy-dial";
 import { useContacts, useCreateCampaign, useDraftSequence } from "@/lib/api/queries";
 import { emptyTargeting, type Targeting } from "@/lib/targeting";
 import { useWorkspaceId } from "@/lib/workspace";
@@ -101,11 +101,11 @@ function CampaignBuilderInner() {
         seed_contact_ids: seedContactIds,
       },
       {
-        onSuccess: () => {
+        onSuccess: (c) => {
           toast.success("Campaign created", {
             description: `${name} · ${steps.length} touchpoints`,
           });
-          navigate("/campaigns");
+          navigate(`/campaigns/${(c as { id: string }).id}`);
         },
         onError: () => toast.error("Couldn't save the campaign"),
       },
@@ -150,29 +150,17 @@ function CampaignBuilderInner() {
             )
           )}
         </div>
-        <span
-          className="flex items-center gap-1.5"
-          title="How much the agent sources and enrolls on its own"
-        >
+        <span className="flex items-center gap-1.5" title="How autonomously the agent sources, drafts, and sends">
           <span className="text-xs text-muted-foreground">Autonomy</span>
-          <Segmented
-            value={autonomyLevel}
-            onChange={(v) => setAutonomyLevel(v as "manual" | "assisted" | "full")}
-            options={[
-              { value: "manual", label: "Manual" },
-              { value: "assisted", label: "Assisted" },
-              { value: "full", label: "Full" },
-            ]}
+          <AutonomyDial
+            level={autonomyLevel}
+            mode={autonomy}
+            onChange={({ autonomy_level, autonomy_mode }) => {
+              setAutonomyLevel(autonomy_level);
+              setAutonomy(autonomy_mode);
+            }}
           />
         </span>
-        <Segmented
-          value={autonomy}
-          onChange={(v) => setAutonomy(v as "approve_each" | "auto")}
-          options={[
-            { value: "approve_each", label: "Approve each" },
-            { value: "auto", label: "Auto-send" },
-          ]}
-        />
         <Button variant="ghost" size="sm" onClick={() => setPhase("brief")}>
           Start over
         </Button>

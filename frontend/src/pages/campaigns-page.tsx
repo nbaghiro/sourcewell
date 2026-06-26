@@ -1,6 +1,7 @@
 import { Plus, Send } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+import { AUTONOMY, stopFrom } from "@/components/autonomy-dial";
 import { DataError } from "@/components/data-error";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -55,7 +56,7 @@ export function CampaignsPage() {
                     <StateBadge state={c.status} />
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {c.autonomy_mode === "auto" ? "Auto-send" : "Approve each"}
+                    {AUTONOMY[stopFrom(c.autonomy_level, c.autonomy_mode)].label}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
