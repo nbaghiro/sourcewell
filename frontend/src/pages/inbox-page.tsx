@@ -2,19 +2,19 @@ import { Inbox, Mail, Search, Send, Sparkles } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
 
+import { ApprovalDetail, type Approval } from "@/components/approval-detail";
 import { ChannelIcon, LinkedInIcon, LINKEDIN_BLUE as LI_BLUE } from "@/components/brand-icons";
 import { clockTime as timeLabel, dayLabel, initials, shortAgo as relTime } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
 import { PageLayout } from "@/components/page-layout";
-import { Segmented } from "@/components/ui/segmented";
-import { ApprovalsTab } from "@/pages/approvals-page";
 import { ScoreBar } from "@/components/score-bar";
-import { StateBadge } from "@/components/state-badge";
+import { StateBadge, STATE_MAP } from "@/components/state-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  useApprovals,
   useConversation,
   useDraftReply,
   useHandoff,
@@ -52,6 +52,47 @@ interface Conversation {
   channel: string;
   messages: Message[];
 }
+interface InboxItem {
+  enrollment_id: string;
+  contact_name: string | null;
+  contact_avatar: string | null;
+  channel: string;
+  state: string | null;
+  unread: boolean;
+  last_at: string | null;
+  last_message: { body: string };
+}
+/** One row in the unified message list — either an inbound conversation or an outbound draft. */
+interface Row {
+  kind: "conversation" | "approval";
+  enrollmentId: string;
+  approval?: Approval;
+  name: string;
+  avatar?: string | null;
+  channel: string;
+  preview: string;
+  at: string | null;
+  state: string;
+  unread: boolean;
+}
+
+// Order the filter chips actionable-first; unknown states fall to the end.
+const STATE_ORDER = [
+  "awaiting_approval",
+  "awaiting_reply",
+  "neutral",
+  "interested",
+  "scheduled",
+  "active",
+  "handed_off",
+  "opted_out",
+  "completed",
+];
+const stateRank = (s: string) => {
+  const i = STATE_ORDER.indexOf(s);
+  return i === -1 ? STATE_ORDER.length : i;
+};
+const stateLabel = (s: string) => STATE_MAP[s]?.label ?? s.replace(/_/g, " ");
 
 // ---------- helpers ----------
 function summaryFor(state: string) {
@@ -86,6 +127,41 @@ function ChannelTag({ channel, detail }: { channel: string; detail?: string | nu
   );
 }
 
+function FilterChip({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-card text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+      <span
+        className={cn(
+          "font-mono tabular-nums",
+          active ? "text-primary-foreground/80" : "text-muted-foreground/70",
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
 const QUICK = [
   { label: "Propose a call", body: "Would you be open to a quick 20-minute call this week? Happy to work around your schedule." },
   { label: "Share comp range", body: "Happy to share specifics — the range is €120–150k base + equity, depending on level." },
@@ -95,28 +171,98 @@ const QUICK = [
 
 // ---------- page ----------
 export function InboxPage() {
-  const { data: items } = useInbox();
-  const [selected, setSelected] = React.useState<string | null>(null);
+  const { data: inboxData } = useInbox();
+  const { data: approvalsData } = useApprovals();
+  const [selected, setSelected] = React.useState<string | null>(null); // enrollment id
   const [draft, setDraft] = React.useState("");
   const [query, setQuery] = React.useState("");
-  const [tab, setTab] = React.useState<"replies" | "approvals">("replies");
-  const { data: conv } = useConversation(selected);
+  const [filter, setFilter] = React.useState<string>("all");
+
   const sendReplyM = useSendReply();
   const handoffM = useHandoff();
   const optOutM = useOptOut();
   const markRead = useMarkRead();
   const draftAI = useDraftReply();
   const busy = sendReplyM.isPending || handoffM.isPending || optOutM.isPending;
+
+  const loading = !inboxData || !approvalsData;
+
+  // Unified message list: outbound drafts awaiting approval + inbound conversations,
+  // one row per enrollment, each tagged with a state we can filter on.
+  const rows = React.useMemo<Row[]>(() => {
+    const approvals = (approvalsData ?? []) as Approval[];
+    const inbox = (inboxData ?? []) as InboxItem[];
+    const apprEnrollments = new Set(approvals.map((a) => a.enrollment_id));
+    return [
+      ...approvals.map(
+        (a): Row => ({
+          kind: "approval",
+          enrollmentId: a.enrollment_id,
+          approval: a,
+          name: a.contact_name,
+          avatar: a.contact_avatar,
+          channel: a.channel,
+          preview: a.subject || a.body,
+          at: a.created_at,
+          state: "awaiting_approval",
+          unread: true,
+        }),
+      ),
+      ...inbox
+        .filter((it) => !apprEnrollments.has(it.enrollment_id))
+        .map(
+          (it): Row => ({
+            kind: "conversation",
+            enrollmentId: it.enrollment_id,
+            name: it.contact_name ?? "Unknown",
+            avatar: it.contact_avatar,
+            channel: it.channel,
+            preview: it.last_message.body,
+            at: it.last_at,
+            state: it.state ?? "active",
+            unread: it.unread,
+          }),
+        ),
+    ];
+  }, [approvalsData, inboxData]);
+
+  const counts = React.useMemo(() => {
+    const c: Record<string, number> = {};
+    rows.forEach((r) => {
+      c[r.state] = (c[r.state] ?? 0) + 1;
+    });
+    return c;
+  }, [rows]);
+  const states = React.useMemo(
+    () => Object.keys(counts).sort((a, b) => stateRank(a) - stateRank(b)),
+    [counts],
+  );
+
+  const visible = rows.filter(
+    (r) =>
+      (filter === "all" || r.state === filter) &&
+      r.name.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  const selectedRow = rows.find((r) => r.enrollmentId === selected) ?? null;
+  const { data: conv } = useConversation(
+    selectedRow?.kind === "conversation" ? selected : null,
+  );
   const aiDraft = () => selected && draftAI.mutate(selected, { onSuccess: (r) => setDraft(r.text) });
 
+  // Keep a sensible selection: when the current row isn't in view, pick the first visible one.
+  const visibleKeys = visible.map((r) => r.enrollmentId).join(",");
   React.useEffect(() => {
-    if (items && items.length > 0 && !selected) setSelected(items[0].enrollment_id);
-  }, [items, selected]);
+    if (visible.length > 0 && !visible.some((r) => r.enrollmentId === selected)) {
+      setSelected(visible[0].enrollmentId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleKeys]);
 
   // Opening a conversation clears the composer and marks it read.
   React.useEffect(() => {
     setDraft("");
-    if (selected) markRead.mutate(selected);
+    if (selected && selectedRow?.kind === "conversation") markRead.mutate(selected);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
@@ -125,97 +271,109 @@ export function InboxPage() {
   const handoff = () => selected && handoffM.mutate(selected);
   const optOut = () => selected && optOutM.mutate(selected);
 
-  const filtered = (items ?? []).filter((it) =>
-    (it.contact_name ?? "").toLowerCase().includes(query.toLowerCase()),
-  );
+  // After approving/sending a draft, advance to the next item in view.
+  const onApproved = () => {
+    const idx = visible.findIndex((r) => r.enrollmentId === selected);
+    const next = visible[idx + 1] ?? visible[idx - 1] ?? null;
+    setSelected(next?.enrollmentId ?? null);
+  };
 
   return (
     <PageLayout width="wide" fill>
-      <Segmented
-        value={tab}
-        onChange={(v) => setTab(v as "replies" | "approvals")}
-        options={[
-          { value: "replies", label: "Replies" },
-          { value: "approvals", label: "Approvals" },
-        ]}
-      />
-      {tab === "approvals" ? (
-        <ApprovalsTab />
-      ) : items && items.length === 0 ? (
-        <EmptyState icon={Inbox} title="No conversations yet" description="Replies appear here once messages go out." />
+      {/* generic message filter — any state becomes a chip; approvals are just "Awaiting approval" */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <FilterChip active={filter === "all"} label="All" count={rows.length} onClick={() => setFilter("all")} />
+        {states.map((s) => (
+          <FilterChip
+            key={s}
+            active={filter === s}
+            label={stateLabel(s)}
+            count={counts[s]}
+            onClick={() => setFilter(s)}
+          />
+        ))}
+      </div>
+
+      {!loading && rows.length === 0 ? (
+        <EmptyState icon={Inbox} title="No messages yet" description="Replies and drafts to approve appear here." />
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-[300px_1fr] overflow-hidden rounded-xl border border-border bg-card shadow-sm xl:grid-cols-[300px_1fr_300px]">
-        {/* ---- list ---- */}
-        <div className="flex min-h-0 flex-col border-r border-border">
-          <div className="border-b border-border px-4 py-3">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="font-display text-base font-semibold">Inbox</h2>
-              <span className="font-mono text-xs text-muted-foreground">{filtered.length}</span>
+          {/* ---- list ---- */}
+          <div className="flex min-h-0 flex-col border-r border-border">
+            <div className="border-b border-border px-4 py-3">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="font-display text-base font-semibold">Inbox</h2>
+                <span className="font-mono text-xs text-muted-foreground">{visible.length}</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/40 px-2.5 py-1.5 text-sm text-muted-foreground">
+                <Search className="size-4" />
+                <input
+                  className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
+                  placeholder="Search messages"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/40 px-2.5 py-1.5 text-sm text-muted-foreground">
-              <Search className="size-4" />
-              <input
-                className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
-                placeholder="Search conversations"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {loading
+                ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="m-3 h-14" />)
+                : visible.map((r) => (
+                    <button
+                      key={r.enrollmentId}
+                      onClick={() => setSelected(r.enrollmentId)}
+                      className={cn(
+                        "flex w-full gap-3 border-b border-border/50 px-4 py-3.5 text-left transition-colors",
+                        selected === r.enrollmentId ? "bg-accent/60" : "hover:bg-secondary/40",
+                      )}
+                    >
+                      <Avatar className="size-9">
+                        {r.avatar && <AvatarImage src={r.avatar} alt="" />}
+                        <AvatarFallback>{initials(r.name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={cn("truncate text-sm", r.unread ? "font-bold" : "font-semibold")}>
+                            {r.name}
+                          </span>
+                          <span className="shrink-0 text-[0.65rem] text-muted-foreground">
+                            {r.at ? relTime(r.at) : ""}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          <ChannelIcon channel={r.channel} className="size-3 shrink-0" />
+                          <span className="truncate text-xs text-muted-foreground">
+                            {r.preview.replace(/\n/g, " ")}
+                          </span>
+                        </div>
+                        <div className="mt-1.5">
+                          <StateBadge state={r.state} />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {!items
-              ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="m-3 h-14" />)
-              : filtered.map((it) => (
-                  <button
-                    key={it.enrollment_id}
-                    onClick={() => setSelected(it.enrollment_id)}
-                    className={cn(
-                      "flex w-full gap-3 border-b border-border/50 px-4 py-3.5 text-left transition-colors",
-                      selected === it.enrollment_id ? "bg-accent/60" : "hover:bg-secondary/40",
-                    )}
-                  >
-                    <Avatar className="size-9">
-                      {it.contact_avatar && <AvatarImage src={it.contact_avatar} alt="" />}
-                      <AvatarFallback>{initials(it.contact_name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={cn("truncate text-sm", it.unread ? "font-bold" : "font-semibold")}>
-                          {it.contact_name}
-                        </span>
-                        <span className="shrink-0 text-[0.65rem] text-muted-foreground">{relTime(it.last_at)}</span>
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-1.5">
-                        <ChannelIcon
-                          channel={it.channel}
-                          className="size-3 shrink-0"
-                        />
-                        <span className="truncate text-xs text-muted-foreground">
-                          {it.last_message.body.replace(/\n/g, " ")}
-                        </span>
-                      </div>
-                      <div className="mt-1.5">
-                        {it.state && <StateBadge state={it.state} />}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-          </div>
-        </div>
 
-        {/* ---- thread ---- */}
-        {!conv ? (
-          <div className="space-y-4 p-6">
-            <Skeleton className="h-12" />
-            <Skeleton className="ml-auto h-20 w-2/3" />
-            <Skeleton className="h-24 w-2/3" />
-          </div>
-        ) : (
-          <Thread conv={conv} draft={draft} setDraft={setDraft} onSend={sendReply} busy={busy} onAiDraft={aiDraft} aiDrafting={draftAI.isPending} />
-        )}
-
-        {/* ---- context rail ---- */}
-        {conv && <ContextRail conv={conv} onHandoff={handoff} onOptOut={optOut} busy={busy} />}
+          {/* ---- detail: approval editor or conversation thread ---- */}
+          {selectedRow?.kind === "approval" && selectedRow.approval ? (
+            <ApprovalDetail
+              approval={selectedRow.approval}
+              onApproved={onApproved}
+              className="xl:col-span-2"
+            />
+          ) : !conv ? (
+            <div className="space-y-4 p-6">
+              <Skeleton className="h-12" />
+              <Skeleton className="ml-auto h-20 w-2/3" />
+              <Skeleton className="h-24 w-2/3" />
+            </div>
+          ) : (
+            <>
+              <Thread conv={conv} draft={draft} setDraft={setDraft} onSend={sendReply} busy={busy} onAiDraft={aiDraft} aiDrafting={draftAI.isPending} />
+              <ContextRail conv={conv} onHandoff={handoff} onOptOut={optOut} busy={busy} />
+            </>
+          )}
         </div>
       )}
     </PageLayout>
