@@ -1,12 +1,10 @@
 import {
-  CheckCircle2,
   Columns3,
   Inbox,
   LayoutDashboard,
   LogOut,
   Send,
   Settings,
-  UserSearch,
   Users,
 } from "lucide-react";
 import { Outlet, useNavigate } from "react-router-dom";
@@ -29,11 +27,9 @@ import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
 
 const NAV: NavItemDef[] = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/" },
-  { label: "Contacts", icon: Users, href: "/contacts" },
-  { label: "Find people", icon: UserSearch, href: "/people" },
+  { label: "Home", icon: LayoutDashboard, href: "/" },
+  { label: "People", icon: Users, href: "/contacts" },
   { label: "Campaigns", icon: Send, href: "/campaigns" },
-  { label: "Approvals", icon: CheckCircle2, href: "/approvals" },
   { label: "Inbox", icon: Inbox, href: "/inbox" },
   { label: "Pipeline", icon: Columns3, href: "/pipeline" },
   { label: "Settings", icon: Settings, href: "/settings" },

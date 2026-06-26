@@ -1,4 +1,4 @@
-import { Plus, Users } from "lucide-react";
+import { Plus, UserSearch, Users } from "lucide-react";
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -33,10 +33,13 @@ export function ContactsPage() {
   return (
     <PageLayout>
       <PageHeader
-        eyebrow="Sourcing"
-        title="Contacts"
+        eyebrow="People"
+        title="People"
         description="People sourced into this workspace. Rank them into a campaign to start outreach."
       >
+        <Button variant="outline" size="sm" onClick={() => navigate("/people")}>
+          <UserSearch /> Find people
+        </Button>
         <ImportDialog />
       </PageHeader>
 

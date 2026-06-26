@@ -4,8 +4,6 @@ import { toast } from "sonner";
 
 import { ChannelIcon } from "@/components/brand-icons";
 import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/page-header";
-import { PageLayout } from "@/components/page-layout";
 import { PersonCell } from "@/components/person-cell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -16,7 +14,8 @@ import { useApprovals, useApproveMessage, useEditMessage } from "@/lib/api/queri
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export function ApprovalsPage() {
+/** The draft-approval queue — rendered as a tab inside the Inbox. */
+export function ApprovalsTab() {
   const { data: items } = useApprovals();
   const editMessage = useEditMessage();
   const approveMessage = useApproveMessage();
@@ -70,20 +69,12 @@ export function ApprovalsPage() {
 
   if (items && items.length === 0) {
     return (
-      <PageLayout width="narrow">
-        <EmptyState icon={CheckCircle2} title="All caught up" description="No drafts waiting for approval." />
-      </PageLayout>
+      <EmptyState icon={CheckCircle2} title="All caught up" description="No drafts waiting for approval." />
     );
   }
 
   return (
-    <PageLayout width="wide" fill>
-      <PageHeader
-        eyebrow="Review queue"
-        title="Approvals"
-        description="Every drafted message waits here until you approve it. Edit inline, then send."
-      />
-      <div className="grid min-h-0 flex-1 grid-cols-[320px_1fr] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="grid min-h-0 flex-1 grid-cols-[320px_1fr] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         {/* list */}
         <div className="min-h-0 overflow-y-auto border-r border-border">
           {!items
@@ -157,7 +148,6 @@ export function ApprovalsPage() {
             </div>
           </div>
         )}
-      </div>
-    </PageLayout>
+    </div>
   );
 }

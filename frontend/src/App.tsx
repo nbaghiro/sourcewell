@@ -9,7 +9,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorkspaceProvider } from "@/components/workspace-provider";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { ApprovalsPage } from "@/pages/approvals-page";
 import { CampaignBuilderPage } from "@/pages/campaign-builder-page";
 import { CampaignDetailPage } from "@/pages/campaign-detail-page";
 import { CampaignsPage } from "@/pages/campaigns-page";
@@ -78,7 +77,6 @@ export default function App() {
               <Route path="/campaigns" element={<CampaignsPage />} />
               <Route path="/campaigns/new" element={<CampaignBuilderPage />} />
               <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
-              <Route path="/approvals" element={<ApprovalsPage />} />
               <Route path="/inbox" element={<InboxPage />} />
               <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/settings" element={<SettingsPage />} />

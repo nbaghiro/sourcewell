@@ -6,6 +6,8 @@ import { ChannelIcon, LinkedInIcon, LINKEDIN_BLUE as LI_BLUE } from "@/component
 import { clockTime as timeLabel, dayLabel, initials, shortAgo as relTime } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
 import { PageLayout } from "@/components/page-layout";
+import { Segmented } from "@/components/ui/segmented";
+import { ApprovalsTab } from "@/pages/approvals-page";
 import { ScoreBar } from "@/components/score-bar";
 import { StateBadge } from "@/components/state-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -97,6 +99,7 @@ export function InboxPage() {
   const [selected, setSelected] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState("");
   const [query, setQuery] = React.useState("");
+  const [tab, setTab] = React.useState<"replies" | "approvals">("replies");
   const { data: conv } = useConversation(selected);
   const sendReplyM = useSendReply();
   const handoffM = useHandoff();
@@ -126,17 +129,22 @@ export function InboxPage() {
     (it.contact_name ?? "").toLowerCase().includes(query.toLowerCase()),
   );
 
-  if (items && items.length === 0) {
-    return (
-      <PageLayout width="narrow">
-        <EmptyState icon={Inbox} title="No conversations yet" description="Replies appear here once messages go out." />
-      </PageLayout>
-    );
-  }
-
   return (
     <PageLayout width="wide" fill>
-      <div className="grid min-h-0 flex-1 grid-cols-[300px_1fr] overflow-hidden rounded-xl border border-border bg-card shadow-sm xl:grid-cols-[300px_1fr_300px]">
+      <Segmented
+        value={tab}
+        onChange={(v) => setTab(v as "replies" | "approvals")}
+        options={[
+          { value: "replies", label: "Replies" },
+          { value: "approvals", label: "Approvals" },
+        ]}
+      />
+      {tab === "approvals" ? (
+        <ApprovalsTab />
+      ) : items && items.length === 0 ? (
+        <EmptyState icon={Inbox} title="No conversations yet" description="Replies appear here once messages go out." />
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-[300px_1fr] overflow-hidden rounded-xl border border-border bg-card shadow-sm xl:grid-cols-[300px_1fr_300px]">
         {/* ---- list ---- */}
         <div className="flex min-h-0 flex-col border-r border-border">
           <div className="border-b border-border px-4 py-3">
@@ -208,7 +216,8 @@ export function InboxPage() {
 
         {/* ---- context rail ---- */}
         {conv && <ContextRail conv={conv} onHandoff={handoff} onOptOut={optOut} busy={busy} />}
-      </div>
+        </div>
+      )}
     </PageLayout>
   );
 }
