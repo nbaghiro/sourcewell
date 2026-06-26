@@ -112,7 +112,7 @@ function ChannelTag({ channel, detail }: { channel: string; detail?: string | nu
   const li = channel === "linkedin";
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium"
+      className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium"
       style={
         li
           ? { color: LI_BLUE, borderColor: `${LI_BLUE}33`, backgroundColor: `${LI_BLUE}0d` }
@@ -120,9 +120,9 @@ function ChannelTag({ channel, detail }: { channel: string; detail?: string | nu
       }
       data-email={!li}
     >
-      <ChannelIcon channel={channel} className="size-3.5" />
+      <ChannelIcon channel={channel} className="size-3.5 shrink-0" />
       {li ? "LinkedIn" : "Email"}
-      {detail && <span className="opacity-70">· {detail}</span>}
+      {detail && <span className="truncate opacity-70">· {detail}</span>}
     </span>
   );
 }
@@ -400,7 +400,12 @@ function Thread({
   const sent = conv.messages.filter((m) => m.status !== "draft");
   const suggestion = conv.messages.find((m) => m.status === "draft");
   const channelLabel = conv.channel === "linkedin" ? "LinkedIn" : "Email";
-  const detail = conv.channel === "linkedin" ? conv.contact.linkedin_url?.replace(/^https?:\/\//, "") : conv.contact.email;
+  const detail =
+    conv.channel === "linkedin"
+      ? conv.contact.linkedin_url
+          ?.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, "")
+          .replace(/\/+$/, "")
+      : conv.contact.email;
 
   let lastDay = "";
   let lastChannel = "";
