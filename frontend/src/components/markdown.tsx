@@ -21,9 +21,23 @@ const COMPONENTS: Components = {
   code: ({ children }) => (
     <code className="rounded bg-secondary px-1 py-0.5 font-mono text-[0.85em]">{children}</code>
   ),
-  h1: ({ children }) => <p className="mb-1 mt-1 font-semibold text-foreground">{children}</p>,
-  h2: ({ children }) => <p className="mb-1 mt-1 font-semibold text-foreground">{children}</p>,
-  h3: ({ children }) => <p className="mb-1 mt-1 font-semibold text-foreground">{children}</p>,
+  h1: ({ children }) => <p className="mb-1 mt-2 font-semibold text-foreground first:mt-0">{children}</p>,
+  h2: ({ children }) => <p className="mb-1 mt-2 font-semibold text-foreground first:mt-0">{children}</p>,
+  h3: ({ children }) => <p className="mb-1 mt-2 font-semibold text-foreground first:mt-0">{children}</p>,
+  hr: () => <hr className="my-3 border-border" />,
+  table: ({ children }) => (
+    <div className="my-2 overflow-x-auto rounded-md border border-border">
+      <table className="w-full border-collapse text-left text-xs">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border-b border-border bg-secondary/50 px-2.5 py-1.5 font-semibold text-foreground">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="border-b border-border/40 px-2.5 py-1.5 align-top">{children}</td>
+  ),
 };
 
 /**

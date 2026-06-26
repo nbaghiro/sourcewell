@@ -1,6 +1,20 @@
-import { Bot, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  Gauge,
+  Mail,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  UserPlus,
+  Users,
+  Wrench,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import * as React from "react";
 
+import { Markdown } from "@/components/markdown";
 import { StateBadge } from "@/components/state-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +36,44 @@ interface Run {
   summary: string;
   created_at: string;
   steps: RunStep[];
+}
+
+// Friendly label + icon for each sourcing-agent tool.
+const TOOL: Record<string, { label: string; Icon: LucideIcon }> = {
+  search: { label: "Searched candidate sources", Icon: Search },
+  list_existing: { label: "Checked your workspace", Icon: Users },
+  score: { label: "Scored & ranked candidates", Icon: Gauge },
+  enrich: { label: "Enriched contact details", Icon: Mail },
+  check_suppressed: { label: "Ran suppression checks", Icon: ShieldCheck },
+  import: { label: "Imported & enrolled", Icon: UserPlus },
+};
+const toolMeta = (tool: string) =>
+  TOOL[tool] ?? { label: tool.replace(/_/g, " "), Icon: Wrench };
+
+interface Action {
+  type: "tool" | "thought";
+  tool: string;
+  count: number;
+}
+
+// Collapse the raw step stream into grouped actions: consecutive calls to the same
+// tool become one row with a count, and reasoning turns fold into a "thought" row.
+function groupSteps(steps: RunStep[]): Action[] {
+  const out: Action[] = [];
+  for (const s of steps) {
+    if (s.kind === "thought") {
+      const last = out[out.length - 1];
+      if (last && last.type === "thought") last.count++;
+      else out.push({ type: "thought", tool: "", count: 1 });
+      continue;
+    }
+    if (s.kind !== "tool_call") continue; // results are implied by their call
+    const tool = s.tool_name ?? "tool";
+    const last = out[out.length - 1];
+    if (last && last.type === "tool" && last.tool === tool) last.count++;
+    else out.push({ type: "tool", tool, count: 1 });
+  }
+  return out;
 }
 
 /** Per-campaign agent run feed — the sourcing/main/outreach agent's episodes as a timeline. */
@@ -73,7 +125,8 @@ export function CampaignActivity({ campaignId }: { campaignId: string }) {
 
 function RunRow({ run }: { run: Run }) {
   const [open, setOpen] = React.useState(false);
-  const hasSteps = run.steps.length > 0;
+  const actions = React.useMemo(() => groupSteps(run.steps), [run.steps]);
+  const summary = run.summary?.trim();
 
   return (
     <li className="relative">
@@ -89,35 +142,67 @@ function RunRow({ run }: { run: Run }) {
             </Badge>
             <StateBadge state={run.status} />
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">{run.summary}</p>
-          {hasSteps && (
-            <button
-              type="button"
-              onClick={() => setOpen((o) => !o)}
-              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-              {run.steps.length} step{run.steps.length === 1 ? "" : "s"}
-            </button>
+
+          {summary && (
+            <div className="mt-2 rounded-lg border border-border bg-secondary/30 px-3.5 py-2.5 text-sm leading-relaxed">
+              <Markdown>{summary}</Markdown>
+            </div>
           )}
-          {open && (
-            <ol className="mt-2 space-y-1 border-l border-border pl-3">
-              {run.steps.map((s) => (
-                <li key={s.seq} className="flex items-center gap-2 text-xs">
-                  <span className="font-mono tabular-nums text-muted-foreground">{s.seq}</span>
-                  <span className="font-medium text-foreground">{s.kind}</span>
-                  {s.tool_name && (
-                    <span className="font-mono text-muted-foreground">{s.tool_name}</span>
+
+          {actions.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                {open ? "Hide" : "Show"} what the agent did
+                <span className="text-muted-foreground/60">· {run.steps.length} steps</span>
+              </button>
+              {open && (
+                <ol className="mt-2.5 space-y-2">
+                  {actions.map((a, i) =>
+                    a.type === "thought" ? (
+                      <li key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="grid size-6 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
+                          <Sparkles className="size-3.5" />
+                        </span>
+                        <span className="italic">
+                          Reasoned about next steps
+                          {a.count > 1 && <span className="not-italic"> · {a.count}×</span>}
+                        </span>
+                      </li>
+                    ) : (
+                      <ActionRow key={i} tool={a.tool} count={a.count} />
+                    ),
                   )}
-                </li>
-              ))}
-            </ol>
+                </ol>
+              )}
+            </>
           )}
         </div>
         <time className="shrink-0 whitespace-nowrap font-mono text-xs text-muted-foreground">
           {longAgo(run.created_at)}
         </time>
       </div>
+    </li>
+  );
+}
+
+function ActionRow({ tool, count }: { tool: string; count: number }) {
+  const { label, Icon } = toolMeta(tool);
+  return (
+    <li className="flex items-center gap-2 text-xs">
+      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-accent text-accent-foreground">
+        <Icon className="size-3.5" />
+      </span>
+      <span className="font-medium text-foreground">{label}</span>
+      {count > 1 && (
+        <Badge variant="secondary" className="px-1.5 font-mono text-[0.6rem] tabular-nums">
+          ×{count}
+        </Badge>
+      )}
     </li>
   );
 }
