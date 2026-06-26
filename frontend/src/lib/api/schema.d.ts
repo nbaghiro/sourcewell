@@ -1550,6 +1550,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agent/draft-sequence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Sequence Endpoint
+         * @description Draft a tailored outreach sequence from the objective + audience (the AI starter).
+         */
+        post: operations["draft_sequence_endpoint_agent_draft_sequence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agent/design": {
         parameters: {
             query?: never;
@@ -2307,6 +2327,20 @@ export interface components {
         DraftOut: {
             /** Text */
             text: string;
+        };
+        /** DraftSequenceIn */
+        DraftSequenceIn: {
+            /**
+             * Objective
+             * @default
+             */
+            objective: string;
+            /** @default {} */
+            criteria: components["schemas"]["JsonObject"];
+        };
+        /** DraftSequenceOut */
+        DraftSequenceOut: {
+            steps: components["schemas"]["JsonList"];
         };
         /** EditMessageRequest */
         EditMessageRequest: {
@@ -5967,6 +6001,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntakeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_sequence_endpoint_agent_draft_sequence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftSequenceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftSequenceOut"];
                 };
             };
             /** @description Validation Error */

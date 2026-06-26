@@ -33,6 +33,7 @@ from app.services.insights.agent import (
     campaign_funnel,
     recent_runs,
 )
+from app.services.outreach.messaging import draft_sequence
 from app.services.sourcing.briefs import parse_brief
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -305,6 +306,22 @@ async def intake(body: IntakeIn, ctx: ContextDep, session: SessionDep) -> Intake
     return IntakeOut(
         objective=brief.objective, criteria=brief.targeting.model_dump(), facts=brief.facts
     )
+
+
+class DraftSequenceIn(BaseModel):
+    objective: str = ""
+    criteria: JsonObject = {}
+
+
+class DraftSequenceOut(BaseModel):
+    steps: JsonList
+
+
+@router.post("/draft-sequence", response_model=DraftSequenceOut)
+async def draft_sequence_endpoint(body: DraftSequenceIn, ctx: ContextDep) -> DraftSequenceOut:
+    """Draft a tailored outreach sequence from the objective + audience (the AI starter)."""
+    require_workspace(ctx)
+    return DraftSequenceOut(steps=await draft_sequence(body.objective, body.criteria))
 
 
 class DesignIn(BaseModel):

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm
 from app.core.config import get_settings
-from app.core.types import JsonObject
+from app.core.types import JsonList, JsonObject
 from app.models import (
     Channel,
     Contact,
@@ -271,6 +271,59 @@ async def rewrite_message(original: str, instruction: str) -> str:
     )
     user = f"Original:\n{original}\n\nInstruction: {instruction}\n\nRewritten message:"
     return await llm.complete(system, user, max_tokens=400) or original
+
+
+_DEFAULT_SEQUENCE: JsonList = [
+    {
+        "channel": "email",
+        "delay_days": 0,
+        "subject": "Quick question, {first_name}",
+        "body": "Came across your work at {company} — open to a quick chat?",
+    },
+    {
+        "channel": "linkedin",
+        "delay_days": 3,
+        "subject": "",
+        "body": "Following up here, {first_name} — still worth a conversation?",
+    },
+]
+
+
+def _coerce_step(s: object) -> JsonObject | None:
+    if not isinstance(s, dict):
+        return None
+    delay = s.get("delay_days")
+    return {
+        "channel": "linkedin" if str(s.get("channel")) == "linkedin" else "email",
+        "delay_days": int(delay)
+        if isinstance(delay, int | float) and not isinstance(delay, bool)
+        else 0,
+        "subject": str(s.get("subject") or ""),
+        "body": str(s.get("body") or ""),
+    }
+
+
+async def draft_sequence(objective: str, criteria: JsonObject) -> JsonList:
+    """Draft a tailored 2-3 step sequence from the brief (Claude when on, else a default)."""
+    if not llm.is_enabled() or not objective.strip():
+        return _DEFAULT_SEQUENCE
+    system = (
+        "You design short B2B outreach sequences (recruiting/sales). 2-3 steps mixing email and "
+        "linkedin, escalating gently. Each message under 90 words, first-person, specific, no "
+        "clichés. Use {first_name} and {company} placeholders. For linkedin, subject may be empty."
+    )
+    titles = criteria.get("titles") if isinstance(criteria, dict) else None
+    user = (
+        f"Objective: {objective}\nAudience titles: {titles}\n"
+        'Return JSON {"steps": [{"channel": "email"|"linkedin", "delay_days": int, '
+        '"subject": string, "body": string}]}.'
+    )
+    obj = await llm.complete_json(system, user, max_tokens=800)
+    raw = obj.get("steps") if obj else None
+    if not isinstance(raw, list):
+        return _DEFAULT_SEQUENCE
+    steps = [step for step in (_coerce_step(s) for s in raw) if step is not None]
+    return steps or _DEFAULT_SEQUENCE
 
 
 async def summarize_thread(state: str, last_inbound: str | None) -> str:

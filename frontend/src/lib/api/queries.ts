@@ -523,6 +523,14 @@ export function useIntake() {
   });
 }
 
+/** Draft a tailored AI starter sequence from the objective + audience. */
+export function useDraftSequence() {
+  return useMutation({
+    mutationFn: async (body: S["DraftSequenceIn"]) =>
+      unwrap(await client.POST("/agent/draft-sequence", { body })),
+  });
+}
+
 // ---- campaign cockpit (per-campaign agent surface) ----
 
 export function useCampaignFunnel(id: string) {
