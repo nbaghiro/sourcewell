@@ -1859,6 +1859,20 @@ export interface components {
             /** Ids */
             ids: string[];
         };
+        /**
+         * CampaignCounts
+         * @description Pipeline rollup shown on each campaign list row.
+         */
+        CampaignCounts: {
+            /** Sourced */
+            sourced: number;
+            /** In Sequence */
+            in_sequence: number;
+            /** Handed Off */
+            handed_off: number;
+            /** Needs You */
+            needs_you: number;
+        };
         /** CampaignFunnelOut */
         CampaignFunnelOut: {
             /** Sourced */
@@ -1949,6 +1963,31 @@ export interface components {
             /** From Email */
             from_email?: string | null;
             status?: components["schemas"]["CampaignStatus"] | null;
+        };
+        /** CampaignRowOut */
+        CampaignRowOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Status */
+            status: string;
+            /** Autonomy Mode */
+            autonomy_mode: string;
+            /** From Email */
+            from_email: string | null;
+            criteria: components["schemas"]["JsonObject"];
+            sequence: components["schemas"]["JsonList"];
+            /** Objective */
+            objective: string | null;
+            /** Autonomy Level */
+            autonomy_level: string;
+            /** Authored By */
+            authored_by: string;
+            field_owners: components["schemas"]["JsonObject"];
+            /** Next Source At */
+            next_source_at: string | null;
+            counts: components["schemas"]["CampaignCounts"];
         };
         /** CampaignStatOut */
         CampaignStatOut: {
@@ -4053,7 +4092,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CampaignOut"][];
+                    "application/json": components["schemas"]["CampaignRowOut"][];
                 };
             };
         };

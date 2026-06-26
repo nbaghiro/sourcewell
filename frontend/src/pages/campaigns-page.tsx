@@ -44,14 +44,23 @@ export function CampaignsPage() {
                 <TableHead>Campaign</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Autonomy</TableHead>
-                <TableHead>Targets</TableHead>
+                <TableHead>Pipeline</TableHead>
                 <TableHead className="text-right">Touchpoints</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.map((c) => (
                 <TableRow key={c.id} className="cursor-pointer" onClick={() => navigate(`/campaigns/${c.id}`)}>
-                  <TableCell className="font-semibold text-foreground">{c.name}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">{c.name}</span>
+                      {c.counts.needs_you > 0 && (
+                        <Badge variant="warning" className="font-normal">
+                          {c.counts.needs_you} to approve
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <StateBadge state={c.status} />
                   </TableCell>
@@ -59,13 +68,17 @@ export function CampaignsPage() {
                     {AUTONOMY[stopFrom(c.autonomy_level, c.autonomy_mode)].label}
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {((c.criteria as { skills?: string[] }).skills ?? []).slice(0, 3).map((s) => (
-                        <Badge key={s} variant="secondary">
-                          {s}
-                        </Badge>
-                      ))}
-                    </div>
+                    {c.counts.sourced === 0 ? (
+                      <span className="text-xs text-muted-foreground/60">Not sourced yet</span>
+                    ) : (
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                        <span className="font-semibold text-foreground">{c.counts.sourced}</span> sourced
+                        <span className="mx-1 opacity-40">·</span>
+                        {c.counts.in_sequence} active
+                        <span className="mx-1 opacity-40">·</span>
+                        {c.counts.handed_off} won
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{c.sequence.length}</TableCell>
                 </TableRow>

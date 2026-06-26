@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
@@ -69,6 +69,19 @@ class CampaignOut(BaseModel):
     authored_by: str
     field_owners: JsonObject
     next_source_at: str | None
+
+
+class CampaignCounts(BaseModel):
+    """Pipeline rollup shown on each campaign list row."""
+
+    sourced: int
+    in_sequence: int
+    handed_off: int
+    needs_you: int
+
+
+class CampaignRowOut(CampaignOut):
+    counts: CampaignCounts
 
 
 class EnrollmentOut(BaseModel):
@@ -170,10 +183,45 @@ async def create_campaign_endpoint(
     return dump(campaign)
 
 
-@router.get("", response_model=list[CampaignOut])
-async def list_campaigns_endpoint(ctx: ContextDep, session: SessionDep) -> list[CampaignOut]:
+_IN_SEQUENCE = (
+    EnrollmentState.active,
+    EnrollmentState.awaiting_approval,
+    EnrollmentState.scheduled,
+    EnrollmentState.awaiting_reply,
+)
+
+
+@router.get("", response_model=list[CampaignRowOut])
+async def list_campaigns_endpoint(ctx: ContextDep, session: SessionDep) -> list[CampaignRowOut]:
     ws = require_workspace(ctx)
-    return [dump(c) for c in await list_campaigns(session, workspace_id=ws)]
+    campaigns = await list_campaigns(session, workspace_id=ws)
+
+    # One pass: count enrollments per (campaign, state), then roll up into the funnel.
+    rows = (
+        (
+            await session.execute(
+                select(Enrollment.campaign_id, Enrollment.state, func.count())
+                .where(Enrollment.workspace_id == ws)
+                .group_by(Enrollment.campaign_id, Enrollment.state)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    by_campaign: dict[str, dict[EnrollmentState, int]] = {}
+    for cid, state, cnt in rows:
+        by_campaign.setdefault(cid, {})[state] = int(cnt)
+
+    def counts_for(cid: str) -> CampaignCounts:
+        d = by_campaign.get(cid, {})
+        return CampaignCounts(
+            sourced=sum(d.values()),
+            in_sequence=sum(d.get(s, 0) for s in _IN_SEQUENCE),
+            handed_off=d.get(EnrollmentState.handed_off, 0),
+            needs_you=d.get(EnrollmentState.awaiting_approval, 0),
+        )
+
+    return [CampaignRowOut(**dump(c).model_dump(), counts=counts_for(c.id)) for c in campaigns]
 
 
 @router.get("/{campaign_id}", response_model=CampaignOut)
