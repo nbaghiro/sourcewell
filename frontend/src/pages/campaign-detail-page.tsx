@@ -53,6 +53,7 @@ interface Campaign {
   name: string;
   status: string;
   autonomy_mode: string;
+  autonomy_level: string;
   criteria: Partial<Targeting>;
   sequence: { channel: "email" | "linkedin"; delay_days: number; subject: string | null; body: string }[];
   next_source_at: string | null;
@@ -214,8 +215,38 @@ export function CampaignDetailPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <StateBadge state={campaign.status} />
-              <span className="font-mono text-xs text-muted-foreground">
-                {campaign.autonomy_mode === "auto" ? "Auto-send" : "Approve each"}
+              <span className="flex items-center gap-1.5" title="How much the agent sources and enrolls on its own">
+                <span className="text-xs text-muted-foreground">Autonomy</span>
+                <Segmented
+                  value={campaign.autonomy_level}
+                  onChange={(v) =>
+                    updateCampaign.mutate({
+                      id: campaign.id,
+                      patch: { autonomy_level: v as "manual" | "assisted" | "full" },
+                    })
+                  }
+                  options={[
+                    { value: "manual", label: "Manual" },
+                    { value: "assisted", label: "Assisted" },
+                    { value: "full", label: "Full" },
+                  ]}
+                />
+              </span>
+              <span className="flex items-center gap-1.5" title="Whether outbound messages need your approval">
+                <span className="text-xs text-muted-foreground">Sends</span>
+                <Segmented
+                  value={campaign.autonomy_mode}
+                  onChange={(v) =>
+                    updateCampaign.mutate({
+                      id: campaign.id,
+                      patch: { autonomy_mode: v as "approve_each" | "auto" },
+                    })
+                  }
+                  options={[
+                    { value: "approve_each", label: "Approve each" },
+                    { value: "auto", label: "Auto-send" },
+                  ]}
+                />
               </span>
               <span className="text-muted-foreground">·</span>
               <span className="text-muted-foreground">{all.length} candidates</span>

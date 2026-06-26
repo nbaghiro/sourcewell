@@ -45,6 +45,9 @@ function CampaignBuilderInner() {
   const [objective, setObjective] = React.useState("");
   const [seedContactIds, setSeedContactIds] = React.useState<string[]>([]);
   const [autonomy, setAutonomy] = React.useState<"approve_each" | "auto">("approve_each");
+  const [autonomyLevel, setAutonomyLevel] = React.useState<"manual" | "assisted" | "full">(
+    "assisted",
+  );
   const [authoredBy, setAuthoredBy] = React.useState<"agent" | "human">("human");
   const [criteria, setCriteria] = React.useState<Targeting>(emptyTargeting());
   const [steps, setSteps] = React.useState<Step[]>(DEFAULT_STEPS);
@@ -92,7 +95,7 @@ function CampaignBuilderInner() {
         criteria,
         sequence: steps,
         autonomy_mode: autonomy,
-        autonomy_level: "assisted",
+        autonomy_level: autonomyLevel,
         authored_by: authoredBy,
         objective: objective || null,
         seed_contact_ids: seedContactIds,
@@ -147,6 +150,21 @@ function CampaignBuilderInner() {
             )
           )}
         </div>
+        <span
+          className="flex items-center gap-1.5"
+          title="How much the agent sources and enrolls on its own"
+        >
+          <span className="text-xs text-muted-foreground">Autonomy</span>
+          <Segmented
+            value={autonomyLevel}
+            onChange={(v) => setAutonomyLevel(v as "manual" | "assisted" | "full")}
+            options={[
+              { value: "manual", label: "Manual" },
+              { value: "assisted", label: "Assisted" },
+              { value: "full", label: "Full" },
+            ]}
+          />
+        </span>
         <Segmented
           value={autonomy}
           onChange={(v) => setAutonomy(v as "approve_each" | "auto")}
