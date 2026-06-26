@@ -15,7 +15,7 @@ from app.core.runtime import AgentLLM, AgentResult, Tool, run_episode
 from app.core.types import JsonList, JsonObject
 from app.ext.base import PersonHit, SourceProvider
 from app.ext.registry import build_providers_for_org, provider_selection
-from app.models import AgentRole, Campaign, Workspace
+from app.models import AgentRole, Campaign, Contact, Workspace
 from app.services.sourcing import usage
 from app.services.sourcing.contacts import list_contacts
 from app.services.sourcing.discovery import enrich_ref, import_hits, search_people
@@ -177,6 +177,22 @@ def sourcing_tools(ctx: SourcingContext) -> list[Tool]:
     ]
 
 
+async def _seed_resemblance(session: AsyncSession, campaign: Campaign) -> str:
+    """A 'find people like these examples' line from the campaign's seed contacts (look-alike)."""
+    raw = (
+        campaign.constraints.get("seed_contact_ids")
+        if isinstance(campaign.constraints, dict)
+        else None
+    )
+    ids = [str(x) for x in raw] if isinstance(raw, list) else []
+    names: list[str] = []
+    for cid in ids[:5]:
+        c = await session.get(Contact, cid)
+        if c is not None:
+            names.append(c.full_name + (f" ({c.title})" if c.title else ""))
+    return f"\nFind people resembling these examples: {', '.join(names)}." if names else ""
+
+
 async def run_sourcing(
     session: AsyncSession, *, llm: AgentLLM, campaign: Campaign, organization_id: str
 ) -> AgentResult:
@@ -197,7 +213,7 @@ async def run_sourcing(
     system = compose_system(AgentRole.sourcing, vertical)
     user = (
         f"Goal: {campaign.objective or campaign.name}\n"
-        f"Criteria: {targeting.model_dump_json()}\n"
+        f"Criteria: {targeting.model_dump_json()}{await _seed_resemblance(session, campaign)}\n"
         "Find, qualify, and import strong candidates into the campaign. Stop once you've added a "
         "good batch or exhausted strong matches."
     )

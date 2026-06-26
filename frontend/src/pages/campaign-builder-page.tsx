@@ -42,6 +42,7 @@ function CampaignBuilderInner() {
   const [objective, setObjective] = React.useState("");
   const [seedContactIds, setSeedContactIds] = React.useState<string[]>([]);
   const [autonomy, setAutonomy] = React.useState<"approve_each" | "auto">("approve_each");
+  const [authoredBy, setAuthoredBy] = React.useState<"agent" | "human">("human");
   const [criteria, setCriteria] = React.useState<Targeting>(emptyTargeting());
   const [steps, setSteps] = React.useState<Step[]>(DEFAULT_STEPS);
   const saving = createCampaign.isPending;
@@ -51,12 +52,22 @@ function CampaignBuilderInner() {
     setObjective(r.objective);
     setCriteria(r.criteria);
     setSeedContactIds(r.seedContactIds);
+    setAuthoredBy(r.authoredBy);
     setPhase("build");
   }
 
   function save() {
     createCampaign.mutate(
-      { name, criteria, sequence: steps, autonomy_mode: autonomy },
+      {
+        name,
+        criteria,
+        sequence: steps,
+        autonomy_mode: autonomy,
+        autonomy_level: "assisted",
+        authored_by: authoredBy,
+        objective: objective || null,
+        seed_contact_ids: seedContactIds,
+      },
       {
         onSuccess: () => {
           toast.success("Campaign created", {

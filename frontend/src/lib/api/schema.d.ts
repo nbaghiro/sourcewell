@@ -456,6 +456,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/campaigns/{campaign_id}/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Source Now
+         * @description Queue an immediate sourcing pass — the worker's next tick (~10s) runs the Sourcing agent.
+         */
+        post: operations["source_now_campaigns__campaign_id__source_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/campaigns/{campaign_id}/duplicate": {
         parameters: {
             query?: never;
@@ -1751,6 +1771,18 @@ export interface components {
             password: boolean;
         };
         /**
+         * Authorship
+         * @description Who owns a campaign or one of its strategy sections (provenance).
+         * @enum {string}
+         */
+        Authorship: "human" | "agent";
+        /**
+         * AutonomyLevel
+         * @description Campaign-level autonomy — drives all three gates (campaign / candidate / message).
+         * @enum {string}
+         */
+        AutonomyLevel: "manual" | "assisted" | "full";
+        /**
          * AutonomyMode
          * @enum {string}
          */
@@ -1805,6 +1837,17 @@ export interface components {
             sequence: components["schemas"]["SequenceStep"][];
             /** @default approve_each */
             autonomy_mode: components["schemas"]["AutonomyMode"];
+            /** @default assisted */
+            autonomy_level: components["schemas"]["AutonomyLevel"];
+            /** @default human */
+            authored_by: components["schemas"]["Authorship"];
+            /** Objective */
+            objective?: string | null;
+            /**
+             * Seed Contact Ids
+             * @default []
+             */
+            seed_contact_ids: string[];
             /** From Email */
             from_email?: string | null;
         };
@@ -1838,6 +1881,9 @@ export interface components {
             /** Sequence */
             sequence?: components["schemas"]["SequenceStep"][] | null;
             autonomy_mode?: components["schemas"]["AutonomyMode"] | null;
+            autonomy_level?: components["schemas"]["AutonomyLevel"] | null;
+            /** Objective */
+            objective?: string | null;
             /** From Email */
             from_email?: string | null;
             status?: components["schemas"]["CampaignStatus"] | null;
@@ -4100,6 +4146,37 @@ export interface operations {
         };
     };
     archive_campaign_campaigns__campaign_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_now_campaigns__campaign_id__source_post: {
         parameters: {
             query?: never;
             header?: never;

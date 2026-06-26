@@ -14,6 +14,7 @@ export interface IntakeResult {
   objective: string;
   criteria: Targeting;
   seedContactIds: string[];
+  authoredBy: "agent" | "human"; // JD / examples → the agent designed it; manual → you did
 }
 
 type Mode = "jd" | "examples" | "manual";
@@ -74,7 +75,7 @@ export function CampaignIntake({
     const res = await intake.mutateAsync(text);
     const criteria = { ...emptyTargeting(), ...(res.criteria as Partial<Targeting>) };
     const name = campaignName(criteria, res.objective ?? "");
-    onComplete({ name, objective: res.objective ?? "", criteria, seedContactIds: [] });
+    onComplete({ name, objective: res.objective ?? "", criteria, seedContactIds: [], authoredBy: "agent" });
   }
 
   function continueWithSeeds() {
@@ -86,11 +87,18 @@ export function CampaignIntake({
       objective: `Find people resembling ${chosen.map((c) => c.full_name).join(", ")}`,
       criteria: criteriaFromSeeds(chosen),
       seedContactIds: chosen.map((c) => c.id),
+      authoredBy: "agent",
     });
   }
 
   function continueManual() {
-    onComplete({ name: "New campaign", objective: "", criteria: emptyTargeting(), seedContactIds: [] });
+    onComplete({
+      name: "New campaign",
+      objective: "",
+      criteria: emptyTargeting(),
+      seedContactIds: [],
+      authoredBy: "human",
+    });
   }
 
   const filtered = (pool ?? []).filter((c) =>

@@ -1,5 +1,6 @@
 """Campaigns HTTP layer: routes, request/response schemas, serializers."""
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
@@ -10,6 +11,8 @@ from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.types import JsonList, JsonObject
 from app.models import (
+    Authorship,
+    AutonomyLevel,
     AutonomyMode,
     Campaign,
     CampaignStatus,
@@ -45,6 +48,10 @@ class CampaignIn(BaseModel):
     criteria: Targeting = Targeting()
     sequence: list[SequenceStep] = []
     autonomy_mode: AutonomyMode = AutonomyMode.approve_each
+    autonomy_level: AutonomyLevel = AutonomyLevel.assisted
+    authored_by: Authorship = Authorship.human
+    objective: str | None = None
+    seed_contact_ids: list[str] = []
     from_email: str | None = None
 
 
@@ -142,6 +149,10 @@ async def create_campaign_endpoint(
         criteria=body.criteria.model_dump(),
         sequence=[s.model_dump() for s in body.sequence],
         autonomy_mode=body.autonomy_mode,
+        autonomy_level=body.autonomy_level,
+        authored_by=body.authored_by,
+        objective=body.objective,
+        seed_contact_ids=body.seed_contact_ids,
         from_email=body.from_email,
     )
     await audit.record(
@@ -176,6 +187,8 @@ class CampaignPatch(BaseModel):
     criteria: Targeting | None = None
     sequence: list[SequenceStep] | None = None
     autonomy_mode: AutonomyMode | None = None
+    autonomy_level: AutonomyLevel | None = None
+    objective: str | None = None
     from_email: str | None = None
     status: CampaignStatus | None = None
 
@@ -194,6 +207,10 @@ async def update_campaign(
         campaign.sequence = [s.model_dump() for s in body.sequence]
     if body.autonomy_mode is not None:
         campaign.autonomy_mode = body.autonomy_mode
+    if body.autonomy_level is not None:
+        campaign.autonomy_level = body.autonomy_level
+    if body.objective is not None:
+        campaign.objective = body.objective
     if body.from_email is not None:
         campaign.from_email = body.from_email
     if body.status is not None:
@@ -224,6 +241,16 @@ async def resume_campaign(campaign_id: str, ctx: ContextDep, session: SessionDep
 @router.post("/{campaign_id}/archive", response_model=CampaignOut)
 async def archive_campaign(campaign_id: str, ctx: ContextDep, session: SessionDep) -> CampaignOut:
     return await _set_status(session, require_workspace(ctx), campaign_id, CampaignStatus.done)
+
+
+@router.post("/{campaign_id}/source", response_model=CampaignOut)
+async def source_now(campaign_id: str, ctx: ContextDep, session: SessionDep) -> CampaignOut:
+    """Queue an immediate sourcing pass — the worker's next tick (~10s) runs the Sourcing agent."""
+    ws = require_workspace(ctx)
+    campaign = await get_campaign(session, workspace_id=ws, campaign_id=campaign_id)
+    campaign.next_source_at = datetime.now(UTC)
+    await session.flush()
+    return dump(campaign)
 
 
 @router.post("/{campaign_id}/duplicate", response_model=CampaignOut)
