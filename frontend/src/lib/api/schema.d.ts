@@ -1892,6 +1892,8 @@ export interface components {
             /** Authored By */
             authored_by: string;
             field_owners: components["schemas"]["JsonObject"];
+            /** Next Source At */
+            next_source_at: string | null;
         };
         /** CampaignPatch */
         CampaignPatch: {

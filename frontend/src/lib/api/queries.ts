@@ -169,6 +169,20 @@ export function useUpdateCampaign() {
   });
 }
 
+/** Queue an immediate sourcing pass — the worker runs the Sourcing agent on its next tick. */
+export function useSourceNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      unwrap(
+        await client.POST("/campaigns/{campaign_id}/source", {
+          params: { path: { campaign_id: id } },
+        }),
+      ),
+    onSuccess: () => invalidateCampaign(qc),
+  });
+}
+
 export function useCampaignLifecycle() {
   const qc = useQueryClient();
   return useMutation({

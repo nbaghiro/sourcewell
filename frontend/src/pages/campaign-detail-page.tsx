@@ -1,4 +1,14 @@
-import { Archive, ArrowLeft, Copy, MoreHorizontal, Pause, Play, Sparkles, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  Copy,
+  MoreHorizontal,
+  Pause,
+  Play,
+  Radar,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -6,6 +16,7 @@ import { toast } from "sonner";
 import { CampaignComposer, type Step } from "@/components/campaign-composer";
 import { PageHeader } from "@/components/page-header";
 import { PageLayout } from "@/components/page-layout";
+import { longAgo } from "@/lib/format";
 import { toTargeting, type Targeting } from "@/lib/targeting";
 import { PersonCell } from "@/components/person-cell";
 import { ScoreBar } from "@/components/score-bar";
@@ -28,10 +39,12 @@ import {
   useCampaign,
   useCampaignEnrollments,
   useCampaignLifecycle,
+  useCampaignRuns,
   useContacts,
   useDeleteCampaign,
   useDuplicateCampaign,
   useRankCampaign,
+  useSourceNow,
   useUpdateCampaign,
 } from "@/lib/api/queries";
 
@@ -42,6 +55,13 @@ interface Campaign {
   autonomy_mode: string;
   criteria: Partial<Targeting>;
   sequence: { channel: "email" | "linkedin"; delay_days: number; subject: string | null; body: string }[];
+  next_source_at: string | null;
+}
+
+interface AgentRun {
+  role: string;
+  summary: string;
+  created_at: string;
 }
 
 const IN_SEQUENCE = ["active", "awaiting_approval", "scheduled", "awaiting_reply"];
@@ -102,6 +122,8 @@ export function CampaignDetailPage() {
   const rankCampaign = useRankCampaign(id ?? "");
   const bulkApprove = useBulkApprove();
   const updateCampaign = useUpdateCampaign();
+  const sourceNow = useSourceNow();
+  const { data: runs } = useCampaignRuns(id ?? "");
 
   const [view, setView] = React.useState<"sequence" | "candidates">("sequence");
   const [tab, setTab] = React.useState("proposed");
@@ -171,6 +193,18 @@ export function CampaignDetailPage() {
                 <Sparkles /> Cockpit
               </Link>
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={sourceNow.isPending}
+              onClick={() =>
+                sourceNow.mutate(campaign.id, {
+                  onSuccess: () => toast.success("Sourcing queued — the agent runs shortly"),
+                })
+              }
+            >
+              <Radar /> Source now
+            </Button>
             <Button variant="outline" size="sm" disabled={busy} onClick={() => void rank()}>
               <Sparkles /> Rank contacts
             </Button>
@@ -185,6 +219,26 @@ export function CampaignDetailPage() {
               </span>
               <span className="text-muted-foreground">·</span>
               <span className="text-muted-foreground">{all.length} candidates</span>
+              {(() => {
+                const sourced = ((runs ?? []) as AgentRun[]).find((r) => r.role === "sourcing");
+                if (sourced)
+                  return (
+                    <>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground">
+                        sourced {longAgo(sourced.created_at)}
+                      </span>
+                    </>
+                  );
+                if (campaign.next_source_at)
+                  return (
+                    <>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="font-medium text-primary">sourcing queued</span>
+                    </>
+                  );
+                return null;
+              })()}
             </div>
             <Segmented
               value={view}

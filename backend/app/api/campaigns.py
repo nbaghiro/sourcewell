@@ -68,6 +68,7 @@ class CampaignOut(BaseModel):
     autonomy_level: str
     authored_by: str
     field_owners: JsonObject
+    next_source_at: str | None
 
 
 class EnrollmentOut(BaseModel):
@@ -117,6 +118,7 @@ def dump(c: Campaign) -> CampaignOut:
         autonomy_level=c.autonomy_level.value,
         authored_by=c.authored_by.value,
         field_owners=c.field_owners,
+        next_source_at=c.next_source_at.isoformat() if c.next_source_at else None,
     )
 
 
