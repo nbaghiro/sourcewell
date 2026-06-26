@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { AUTONOMY, AutonomyDial, stopFrom } from "@/components/autonomy-dial";
 import { CampaignActivity } from "@/components/campaign-activity";
 import { CampaignComposer, type Step } from "@/components/campaign-composer";
+import { CandidateSheet } from "@/components/candidate-sheet";
 import { PageHeader } from "@/components/page-header";
 import { PageLayout } from "@/components/page-layout";
 import { PersonCell } from "@/components/person-cell";
@@ -111,6 +112,7 @@ export function CampaignDetailPage() {
   const [setupOpen, setSetupOpen] = React.useState(false);
   const [setupTab, setSetupTab] = React.useState("design");
   const [activityOpen, setActivityOpen] = React.useState(false);
+  const [openCandidate, setOpenCandidate] = React.useState<Enrollment | null>(null);
   const busy = rankCampaign.isPending || bulkApprove.isPending;
 
   // Editable copies of the audience + sequence, autosaved via PATCH (edited in the Setup drawer).
@@ -312,9 +314,13 @@ export function CampaignDetailPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Link to={`/people/${e.contact_id}`} className="inline-block rounded-md transition-opacity hover:opacity-80">
+                          <button
+                            type="button"
+                            onClick={() => setOpenCandidate(e)}
+                            className="inline-block rounded-md text-left transition-opacity hover:opacity-80"
+                          >
                             <PersonCell name={e.contact_name} subtitle={e.contact_title ?? undefined} imageSrc={e.contact_avatar ?? undefined} />
-                          </Link>
+                          </button>
                         </TableCell>
                         <TableCell>
                           <ScoreBar value={e.score} />
@@ -427,6 +433,17 @@ export function CampaignDetailPage() {
       >
         <div className="p-5">{campaign && <CampaignActivity campaignId={campaign.id} />}</div>
       </Sheet>
+
+      {/* ---- candidate peek ---- */}
+      <CandidateSheet
+        enrollment={openCandidate}
+        onClose={() => setOpenCandidate(null)}
+        onApprove={(eid) => {
+          approve([eid]);
+          setOpenCandidate(null);
+        }}
+        approving={busy}
+      />
     </PageLayout>
   );
 }
