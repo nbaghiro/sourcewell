@@ -17,7 +17,6 @@ import { CampaignBuilderPage } from "@/pages/campaign-builder-page";
 import { CampaignCockpitPage } from "@/pages/campaign-cockpit-page";
 import { CampaignDetailPage } from "@/pages/campaign-detail-page";
 import { CampaignsPage } from "@/pages/campaigns-page";
-import { ComponentsPage } from "@/pages/components-page";
 import { ContactDetailPage } from "@/pages/contact-detail-page";
 import { ContactsPage } from "@/pages/contacts-page";
 import { DashboardPage } from "@/pages/dashboard-page";
@@ -92,8 +91,6 @@ export default function App() {
               <Route path="/audit" element={<AuditPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
-            {/* Internal design-system route — not part of the product nav. */}
-            <Route path="/components" element={<ComponentsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
             <Toaster position="top-right" />
