@@ -45,6 +45,14 @@ function criteriaFromSeeds(seeds: Contact[]): Targeting {
   };
 }
 
+// A short campaign name from the parsed criteria (the role title), not the full objective sentence.
+function campaignName(criteria: Targeting, objective: string): string {
+  const title = criteria.titles[0]?.trim();
+  if (title) return title.length > 40 ? title.slice(0, 40).trim() : title;
+  const clause = objective.split(/[,.;:—–-]/)[0].trim();
+  return clause ? clause.slice(0, 36).trim() : "New campaign";
+}
+
 export function CampaignIntake({
   pool,
   onComplete,
@@ -65,7 +73,7 @@ export function CampaignIntake({
     if (!text || intake.isPending) return;
     const res = await intake.mutateAsync(text);
     const criteria = { ...emptyTargeting(), ...(res.criteria as Partial<Targeting>) };
-    const name = res.objective ? res.objective.slice(0, 60) : "New campaign";
+    const name = campaignName(criteria, res.objective ?? "");
     onComplete({ name, objective: res.objective ?? "", criteria, seedContactIds: [] });
   }
 
