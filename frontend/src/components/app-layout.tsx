@@ -1,5 +1,5 @@
 import { Columns3, Inbox, LayoutDashboard, LogOut, Send, Settings, Users } from "lucide-react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 
 import { AgentChatWidget } from "@/components/agent-chat-widget";
 import { AppSidebar, type NavItemDef } from "@/components/app-sidebar";
@@ -24,12 +24,12 @@ const NAV: NavItemDef[] = [
   { label: "People", icon: Users, href: "/people" },
   { label: "Campaigns", icon: Send, href: "/campaigns" },
   { label: "Pipeline", icon: Columns3, href: "/pipeline" },
+  { label: "Settings", icon: Settings, href: "/settings" },
 ];
 
 export function AppLayout() {
   const { me, logout } = useAuth();
   const { workspaces, workspaceId, setWorkspaceId } = useWorkspace();
-  const navigate = useNavigate();
 
   const user = me?.user;
   const org = me?.organization;
@@ -55,12 +55,9 @@ export function AppLayout() {
             <div className="text-xs font-normal text-muted-foreground">{user?.email}</div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => navigate("/settings")}>
-            <Settings /> Settings
+          <DropdownMenuItem onClick={() => void logout()}>
+            <LogOut /> Sign out
           </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void logout()}>
-              <LogOut /> Sign out
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
