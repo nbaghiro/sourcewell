@@ -26,7 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { type ContactIn, useContacts, useImportContacts } from "@/lib/api/queries";
 
-export function ContactsPage() {
+export function PeoplePage() {
   const { data, isLoading, isError, refetch } = useContacts();
   const navigate = useNavigate();
 

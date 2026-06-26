@@ -20,11 +20,10 @@ import { useWorkspace } from "@/lib/workspace";
 
 const NAV: NavItemDef[] = [
   { label: "Home", icon: LayoutDashboard, href: "/" },
+  { label: "Inbox", icon: Inbox, href: "/inbox" },
   { label: "People", icon: Users, href: "/people" },
   { label: "Campaigns", icon: Send, href: "/campaigns" },
   { label: "Pipeline", icon: Columns3, href: "/pipeline" },
-  { label: "Inbox", icon: Inbox, href: "/inbox" },
-  { label: "Settings", icon: Settings, href: "/settings" },
 ];
 
 export function AppLayout() {
