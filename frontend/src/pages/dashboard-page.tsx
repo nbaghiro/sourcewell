@@ -1,6 +1,7 @@
 import { Plus, Send, Upload } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { AgentStatus } from "@/components/agent-status";
 import { DataError } from "@/components/data-error";
 import { PageHeader } from "@/components/page-header";
 import { PageLayout } from "@/components/page-layout";
@@ -119,6 +120,8 @@ export function DashboardPage() {
                   ))}
                 </CardContent>
               </Card>
+
+              <AgentStatus />
             </div>
           </div>
         </>

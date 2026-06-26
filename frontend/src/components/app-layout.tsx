@@ -1,5 +1,4 @@
 import {
-  Bot,
   CheckCircle2,
   Columns3,
   Inbox,
@@ -31,7 +30,6 @@ import { useWorkspace } from "@/lib/workspace";
 
 const NAV: NavItemDef[] = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/" },
-  { label: "Agent", icon: Bot, href: "/agent" },
   { label: "Contacts", icon: Users, href: "/contacts" },
   { label: "Find people", icon: UserSearch, href: "/people" },
   { label: "Campaigns", icon: Send, href: "/campaigns" },
