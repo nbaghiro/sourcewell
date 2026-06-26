@@ -31,14 +31,39 @@ def _public_identifier(url: str) -> str:
     return url.rstrip("/").rsplit("/", 1)[-1]
 
 
-async def fetch_job_postings(*, organization_id: str) -> list[str]:
-    """Pull the org's open job postings from its connected LinkedIn account (Unipile) as JD text.
+async def fetch_job_postings(*, organization_id: str) -> list[JsonObject]:
+    """Pull the connected account's active LinkedIn job postings (title + description) via Unipile.
 
-    STUB: the real implementation will hit Unipile's recruiter/job endpoints for the org's account.
-    Returns `[]` for now so the intake flow's "pull from LinkedIn" source is wired end-to-end;
-    paste/upload is the working path until this lands.
+    Returns `[{id, title, description}]`, or `[]` when no account is configured or the call fails.
+    The Unipile jobs response schema is undocumented, so field extraction is best-effort across
+    common key names; paste/upload stays the primary intake path. (organization_id is the seam for
+    per-org account resolution; today the configured account is used.)
     """
-    return []
+    s = get_settings()
+    if not (s.unipile_api_key and s.unipile_dsn and s.unipile_account_id):
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(
+                f"{s.unipile_dsn.rstrip('/')}/api/v1/linkedin/jobs",
+                headers={"X-API-KEY": s.unipile_api_key, "accept": "application/json"},
+                params={"account_id": s.unipile_account_id, "category": "active", "limit": 25},
+            )
+        if resp.status_code >= 400:
+            return []
+        payload: object = resp.json()
+    except Exception:
+        return []
+    raw = payload.get("items") if isinstance(payload, dict) else payload
+    out: list[JsonObject] = []
+    for it in raw if isinstance(raw, list) else []:
+        if not isinstance(it, dict):
+            continue
+        title = opt_str(it.get("title")) or opt_str(it.get("name")) or ""
+        desc = opt_str(it.get("description")) or opt_str(it.get("job_description")) or ""
+        if title or desc:
+            out.append({"id": opt_str(it.get("id")) or "", "title": title, "description": desc})
+    return out
 
 
 class UnipileProvider:

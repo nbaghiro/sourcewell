@@ -23,6 +23,7 @@ from app.api.guards import require_workspace
 from app.core.db import SessionLocal
 from app.core.runtime import default_llm
 from app.core.types import JsonList, JsonObject
+from app.ext.unipile import fetch_job_postings
 from app.models import Campaign, Workspace
 from app.services.insights.agent import (
     ActivityEventData,
@@ -306,6 +307,27 @@ async def intake(body: IntakeIn, ctx: ContextDep, session: SessionDep) -> Intake
     return IntakeOut(
         objective=brief.objective, criteria=brief.targeting.model_dump(), facts=brief.facts
     )
+
+
+class LinkedInJob(BaseModel):
+    id: str
+    title: str
+    description: str
+
+
+@router.get("/linkedin-jobs", response_model=list[LinkedInJob])
+async def linkedin_jobs(ctx: ContextDep) -> list[LinkedInJob]:
+    """The connected LinkedIn account's active job postings (the 'pull from LinkedIn' intake)."""
+    require_workspace(ctx)
+    jobs = await fetch_job_postings(organization_id=ctx.org_id)
+    return [
+        LinkedInJob(
+            id=str(j.get("id") or ""),
+            title=str(j.get("title") or ""),
+            description=str(j.get("description") or ""),
+        )
+        for j in jobs
+    ]
 
 
 class DraftSequenceIn(BaseModel):

@@ -545,6 +545,15 @@ export function useDraftSequence() {
   });
 }
 
+/** The connected LinkedIn account's active job postings (for the "pull from LinkedIn" intake). */
+export function useLinkedInJobs(enabled: boolean) {
+  return useQuery({
+    queryKey: ["linkedin-jobs"],
+    enabled,
+    queryFn: async () => unwrap(await client.GET("/agent/linkedin-jobs")),
+  });
+}
+
 /** Regenerate one touchpoint's message — a fresh AI take on the same intent. */
 export function useRegenerateMessage() {
   return useMutation({

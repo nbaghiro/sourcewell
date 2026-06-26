@@ -1,10 +1,19 @@
-import { ArrowRight, Check, FileText, Loader2, SlidersHorizontal, Sparkles, Users } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  FileText,
+  Briefcase,
+  Loader2,
+  SlidersHorizontal,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import * as React from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { type Contact, useIntake } from "@/lib/api/queries";
+import { type Contact, useIntake, useLinkedInJobs } from "@/lib/api/queries";
 import { initials } from "@/lib/format";
 import { emptyTargeting, type Targeting } from "@/lib/targeting";
 import { cn } from "@/lib/utils";
@@ -17,10 +26,11 @@ export interface IntakeResult {
   authoredBy: "agent" | "human"; // JD / examples → the agent designed it; manual → you did
 }
 
-type Mode = "jd" | "examples" | "manual";
+type Mode = "jd" | "linkedin" | "examples" | "manual";
 
 const MODES: { value: Mode; label: string; hint: string; Icon: typeof FileText }[] = [
   { value: "jd", label: "Paste a job description", hint: "The agent reads it into criteria", Icon: FileText },
+  { value: "linkedin", label: "Pull from LinkedIn", hint: "Use a job you posted", Icon: Briefcase },
   { value: "examples", label: "From example people", hint: "Find more like these", Icon: Users },
   { value: "manual", label: "Enter criteria", hint: "Set the audience yourself", Icon: SlidersHorizontal },
 ];
@@ -68,14 +78,21 @@ export function CampaignIntake({
   const [seeds, setSeeds] = React.useState<Set<string>>(new Set());
   const [query, setQuery] = React.useState("");
   const intake = useIntake();
+  const jobs = useLinkedInJobs(mode === "linkedin");
 
-  async function analyzeJd() {
-    const text = jd.trim();
-    if (!text || intake.isPending) return;
-    const res = await intake.mutateAsync(text);
+  // Parse any brief text (pasted JD or a pulled LinkedIn posting) into objective + criteria.
+  async function analyze(text: string) {
+    const t = text.trim();
+    if (!t || intake.isPending) return;
+    const res = await intake.mutateAsync(t);
     const criteria = { ...emptyTargeting(), ...(res.criteria as Partial<Targeting>) };
-    const name = campaignName(criteria, res.objective ?? "");
-    onComplete({ name, objective: res.objective ?? "", criteria, seedContactIds: [], authoredBy: "agent" });
+    onComplete({
+      name: campaignName(criteria, res.objective ?? ""),
+      objective: res.objective ?? "",
+      criteria,
+      seedContactIds: [],
+      authoredBy: "agent",
+    });
   }
 
   function continueWithSeeds() {
@@ -120,7 +137,7 @@ export function CampaignIntake({
       </div>
 
       {/* mode chooser */}
-      <div className="grid gap-2.5 sm:grid-cols-3">
+      <div className="grid gap-2.5 sm:grid-cols-2">
         {MODES.map((m) => (
           <button
             key={m.value}
@@ -150,7 +167,7 @@ export function CampaignIntake({
             className="min-h-[12rem] w-full resize-y rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-ring"
           />
           <div className="flex justify-end">
-            <Button onClick={() => void analyzeJd()} disabled={!jd.trim() || intake.isPending}>
+            <Button onClick={() => void analyze(jd)} disabled={!jd.trim() || intake.isPending}>
               {intake.isPending ? (
                 <>
                   <Loader2 className="animate-spin" /> Reading…
@@ -162,6 +179,43 @@ export function CampaignIntake({
               )}
             </Button>
           </div>
+        </div>
+      )}
+
+      {mode === "linkedin" && (
+        <div className="space-y-3">
+          {jobs.isLoading ? (
+            <p className="rounded-xl border border-border px-4 py-6 text-center text-sm text-muted-foreground">
+              Loading your LinkedIn job postings…
+            </p>
+          ) : (jobs.data ?? []).length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+              No active job postings found on the connected LinkedIn account. Paste the JD instead,
+              or post a role on LinkedIn first.
+            </p>
+          ) : (
+            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+              {(jobs.data ?? []).map((j) => (
+                <button
+                  key={j.id || j.title}
+                  type="button"
+                  disabled={intake.isPending}
+                  onClick={() => void analyze(j.description || j.title)}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/40 disabled:opacity-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {j.title || "Untitled role"}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {j.description}
+                    </span>
+                  </span>
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

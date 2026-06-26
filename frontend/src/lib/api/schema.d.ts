@@ -1550,6 +1550,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agent/linkedin-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Linkedin Jobs
+         * @description The connected LinkedIn account's active job postings (the 'pull from LinkedIn' intake).
+         */
+        get: operations["linkedin_jobs_agent_linkedin_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agent/draft-sequence": {
         parameters: {
             query?: never;
@@ -2659,6 +2679,15 @@ export interface components {
         JsonList: components["schemas"]["JsonObject"][];
         JsonObject: {
             [key: string]: unknown;
+        };
+        /** LinkedInJob */
+        LinkedInJob: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
         };
         /** MemberOut */
         MemberOut: {
@@ -6052,6 +6081,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    linkedin_jobs_agent_linkedin_jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkedInJob"][];
                 };
             };
         };
