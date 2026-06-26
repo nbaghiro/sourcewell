@@ -1,4 +1,4 @@
-import { Columns3, Plus, Send } from "lucide-react";
+import { Plus, Send } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { DataError } from "@/components/data-error";
@@ -24,9 +24,6 @@ export function CampaignsPage() {
         title="Campaigns"
         description="Each campaign defines who to reach (criteria) and how (a multi-touchpoint sequence)."
       >
-        <Button variant="outline" size="sm" onClick={() => navigate("/pipeline")}>
-          <Columns3 /> Pipeline
-        </Button>
         <Button size="sm" onClick={() => navigate("/campaigns/new")}>
           <Plus /> New campaign
         </Button>
