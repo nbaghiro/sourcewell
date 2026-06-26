@@ -1,12 +1,6 @@
-import { Check, ChevronDown, Gauge } from "lucide-react";
+import { Check } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
 export type AutonomyStop = "manual" | "assisted" | "autopilot";
@@ -91,28 +85,10 @@ export function AutonomyDial({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Gauge className="size-4" /> {AUTONOMY[current].label}
-          <ChevronDown className="size-3.5 opacity-60" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
-        {STOPS.map((s) => (
-          <DropdownMenuItem
-            key={s}
-            onClick={() => set(s)}
-            className="flex flex-col items-start gap-0.5 py-2"
-          >
-            <span className="flex w-full items-center justify-between font-medium">
-              {AUTONOMY[s].label}
-              {current === s && <Check className="size-3.5 text-primary" />}
-            </span>
-            <span className="text-xs text-muted-foreground">{AUTONOMY[s].blurb}</span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Segmented
+      value={current}
+      onChange={(v) => set(v as AutonomyStop)}
+      options={STOPS.map((s) => ({ value: s, label: AUTONOMY[s].label }))}
+    />
   );
 }
