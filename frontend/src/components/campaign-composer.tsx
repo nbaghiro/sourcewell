@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
+import { useRegenerateMessage } from "@/lib/api/queries";
 import { evaluateFit, type Targeting } from "@/lib/targeting";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ export type { Targeting };
 type ContactLike = Parameters<typeof evaluateFit>[0];
 
 const TOKENS = ["{first_name}", "{company}", "{title}"];
+const DEFAULT_BODY = "Hi {first_name}, came across your work at {company} — open to a quick chat?";
 const SAMPLE = { first: "Jane", name: "Jane Doe", company: "Acme", title: "Senior Backend Engineer" };
 const fill = (t: string) =>
   (t || "")
@@ -298,6 +300,13 @@ function StepEditor({
   onDuplicate: () => void;
   onMove: (dir: -1 | 1) => void;
 }) {
+  const regen = useRegenerateMessage();
+  function regenerate() {
+    regen.mutate(
+      { body: step.body, objective: "", channel: step.channel },
+      { onSuccess: (r) => onChange({ body: r.body }) },
+    );
+  }
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -362,7 +371,27 @@ function StepEditor({
       )}
 
       <div>
-        <Label htmlFor="body">Message</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="body">Message</Label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={regen.isPending}
+              onClick={regenerate}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:opacity-50"
+            >
+              <Sparkles className="size-3" />
+              {regen.isPending ? "Regenerating…" : "Regenerate"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ body: DEFAULT_BODY })}
+              className="rounded-md border border-border px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
         <Textarea
           id="body"
           rows={5}

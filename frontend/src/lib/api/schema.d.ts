@@ -1570,6 +1570,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agent/regenerate-message": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate Message Endpoint
+         * @description Regenerate one touchpoint's message — a fresh take on the same intent.
+         */
+        post: operations["regenerate_message_endpoint_agent_regenerate_message_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agent/design": {
         parameters: {
             query?: never;
@@ -2940,6 +2960,26 @@ export interface components {
             sub?: string | null;
             /** Avatar */
             avatar?: string | null;
+        };
+        /** RegenerateIn */
+        RegenerateIn: {
+            /** Body */
+            body: string;
+            /**
+             * Objective
+             * @default
+             */
+            objective: string;
+            /**
+             * Channel
+             * @default email
+             */
+            channel: string;
+        };
+        /** RegenerateOut */
+        RegenerateOut: {
+            /** Body */
+            body: string;
         };
         /** RemovedOut */
         RemovedOut: {
@@ -6036,6 +6076,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DraftSequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_message_endpoint_agent_regenerate_message_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegenerateOut"];
                 };
             };
             /** @description Validation Error */

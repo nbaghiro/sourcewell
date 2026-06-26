@@ -545,6 +545,14 @@ export function useDraftSequence() {
   });
 }
 
+/** Regenerate one touchpoint's message — a fresh AI take on the same intent. */
+export function useRegenerateMessage() {
+  return useMutation({
+    mutationFn: async (body: S["RegenerateIn"]) =>
+      unwrap(await client.POST("/agent/regenerate-message", { body })),
+  });
+}
+
 // ---- campaign cockpit (per-campaign agent surface) ----
 
 export function useCampaignFunnel(id: string) {

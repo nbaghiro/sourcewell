@@ -33,7 +33,7 @@ from app.services.insights.agent import (
     campaign_funnel,
     recent_runs,
 )
-from app.services.outreach.messaging import draft_sequence
+from app.services.outreach.messaging import draft_sequence, rewrite_message
 from app.services.sourcing.briefs import parse_brief
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -322,6 +322,28 @@ async def draft_sequence_endpoint(body: DraftSequenceIn, ctx: ContextDep) -> Dra
     """Draft a tailored outreach sequence from the objective + audience (the AI starter)."""
     require_workspace(ctx)
     return DraftSequenceOut(steps=await draft_sequence(body.objective, body.criteria))
+
+
+class RegenerateIn(BaseModel):
+    body: str
+    objective: str = ""
+    channel: str = "email"
+
+
+class RegenerateOut(BaseModel):
+    body: str
+
+
+@router.post("/regenerate-message", response_model=RegenerateOut)
+async def regenerate_message_endpoint(body: RegenerateIn, ctx: ContextDep) -> RegenerateOut:
+    """Regenerate one touchpoint's message — a fresh take on the same intent."""
+    require_workspace(ctx)
+    goal = f" for the goal: {body.objective}" if body.objective.strip() else ""
+    instruction = (
+        f"Rewrite this {body.channel} outreach message — fresh, specific, compelling, same "
+        f"intent{goal}. Concise, first-person, keep {{first_name}} and {{company}} placeholders."
+    )
+    return RegenerateOut(body=await rewrite_message(body.body, instruction))
 
 
 class DesignIn(BaseModel):
