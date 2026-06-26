@@ -25,8 +25,8 @@ interface AuthContextValue {
   login: () => void;
   /** Redirect to the LinkedIn hosted-auth (Unipile) sign-in. */
   linkedinLogin: () => void;
-  /** Local-only: sign in as the demo admin, bypassing SSO (validates creds if given). */
-  devLogin: (creds?: { email: string; password: string }) => Promise<void>;
+  /** Sign in with email + password (the seeded demo account: demo@sourcewell.ai). */
+  passwordLogin: (creds: { email: string; password: string }) => Promise<void>;
   /** Clear the session and bounce through the WorkOS logout. */
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -59,14 +59,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const devLogin = React.useCallback(
-    async (creds?: { email: string; password: string }) => {
-      setStatus("loading"); // swap the login page for the splash loader while we "sign in"
+  const passwordLogin = React.useCallback(
+    async (creds: { email: string; password: string }) => {
+      setStatus("loading"); // swap the login page for the splash loader while we sign in
       try {
-        await api("/auth/dev-login", {
-          method: "POST",
-          body: creds ? JSON.stringify(creds) : undefined,
-        });
+        await api("/auth/password", { method: "POST", body: JSON.stringify(creds) });
         await refresh();
       } catch (err) {
         setStatus("anon");
@@ -94,8 +91,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = React.useMemo(
-    () => ({ status, me, login, linkedinLogin, devLogin, logout, refresh }),
-    [status, me, login, linkedinLogin, devLogin, logout, refresh],
+    () => ({ status, me, login, linkedinLogin, passwordLogin, logout, refresh }),
+    [status, me, login, linkedinLogin, passwordLogin, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

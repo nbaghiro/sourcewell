@@ -214,6 +214,8 @@ class User(IdMixin, TimestampMixin, Base):
     status: Mapped[UserStatus] = mapped_column(sa_enum(UserStatus), default=UserStatus.active)
     # The federated identity key: the LinkedIn member_urn from Unipile hosted-auth sign-in.
     sso_subject: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
+    # Local password hash (scrypt) for the email/password login; null for SSO-provisioned users.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notifications_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

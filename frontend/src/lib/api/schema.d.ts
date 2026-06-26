@@ -70,7 +70,7 @@ export interface paths {
         };
         /**
          * Options
-         * @description Which sign-in methods are configured, so the login screen renders the right buttons.
+         * @description Which sign-in methods are available, so the login screen renders the right buttons.
          */
         get: operations["options_auth_options_get"];
         put?: never;
@@ -121,7 +121,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/dev-login": {
+    "/auth/password": {
         parameters: {
             query?: never;
             header?: never;
@@ -131,12 +131,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Dev Login
-         * @description Demo sign-in that bypasses LinkedIn auth (local design/QA only).
-         *
-         *     With no body it's a one-click bypass; with email/password it validates the demo credentials.
+         * Password Login
+         * @description Email + password sign-in (the seeded demo account: demo@sourcewell.ai).
          */
-        post: operations["dev_login_auth_dev_login_post"];
+        post: operations["password_login_auth_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1451,6 +1449,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agent/chat/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat Stream
+         * @description Streaming Main-agent chat (SSE): `token` events as the narration streams, then a `done`
+         *     event carrying the typed entities. Requires an LLM.
+         */
+        post: operations["chat_stream_agent_chat_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agent/runs": {
         parameters: {
             query?: never;
@@ -1728,8 +1747,8 @@ export interface components {
             workos: boolean;
             /** Linkedin */
             linkedin: boolean;
-            /** Dev */
-            dev: boolean;
+            /** Password */
+            password: boolean;
         };
         /**
          * AutonomyMode
@@ -1887,6 +1906,8 @@ export interface components {
             user_email: string;
             /** External Id */
             external_id: string | null;
+            /** Display Name */
+            display_name: string | null;
         };
         /**
          * ConnectionProvider
@@ -2235,17 +2256,6 @@ export interface components {
             status: string;
             criteria: components["schemas"]["JsonObject"];
             sequence: components["schemas"]["JsonList"];
-        };
-        /** DevLoginRequest */
-        DevLoginRequest: {
-            /** Email */
-            email?: string | null;
-            /** Password */
-            password?: string | null;
-        };
-        /** DevLoginResponse */
-        DevLoginResponse: {
-            user: components["schemas"]["UserSummary"];
         };
         /** DraftOut */
         DraftOut: {
@@ -2680,6 +2690,17 @@ export interface components {
             locations: string[];
             /** Keywords */
             keywords: string;
+        };
+        /** PasswordLoginRequest */
+        PasswordLoginRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** PasswordLoginResponse */
+        PasswordLoginResponse: {
+            user: components["schemas"]["UserSummary"];
         };
         /** PeopleSearchIn */
         PeopleSearchIn: {
@@ -3360,16 +3381,16 @@ export interface operations {
             };
         };
     };
-    dev_login_auth_dev_login_post: {
+    password_login_auth_password_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["DevLoginRequest"] | null;
+                "application/json": components["schemas"]["PasswordLoginRequest"];
             };
         };
         responses: {
@@ -3379,7 +3400,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DevLoginResponse"];
+                    "application/json": components["schemas"]["PasswordLoginResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5740,6 +5761,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_stream_agent_chat_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

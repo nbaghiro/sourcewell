@@ -65,11 +65,21 @@ async def test_finish_pending_returns_none(db_session: AsyncSession) -> None:
     assert await auth.finish_linkedin_login(db_session, state="pend") is None  # notify not in yet
 
 
-# --- dev-login still works when LinkedIn auth is unconfigured -----------------
+# --- email/password login (the seeded demo account) --------------------------
 
 
 @pytest.mark.db
-async def test_dev_login_endpoint_still_available(db_client: AsyncClient) -> None:
-    resp = await db_client.post("/auth/dev-login", json={})
+async def test_password_login_succeeds_with_demo_credentials(db_client: AsyncClient) -> None:
+    resp = await db_client.post(
+        "/auth/password", json={"email": "demo@sourcewell.ai", "password": "testpass"}
+    )
     assert resp.status_code == 200
-    assert resp.json()["user"]["email"]  # one-click demo sign-in (Unipile not configured in tests)
+    assert resp.json()["user"]["email"] == "demo@sourcewell.ai"
+
+
+@pytest.mark.db
+async def test_password_login_rejects_wrong_password(db_client: AsyncClient) -> None:
+    resp = await db_client.post(
+        "/auth/password", json={"email": "demo@sourcewell.ai", "password": "nope"}
+    )
+    assert resp.status_code == 401

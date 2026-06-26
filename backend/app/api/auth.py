@@ -41,16 +41,14 @@ async def linkedin_login(session: SessionDep) -> RedirectResponse:
 class AuthOptions(BaseModel):
     workos: bool
     linkedin: bool
-    dev: bool
+    password: bool
 
 
 @router.get("/options", response_model=AuthOptions)
 async def options() -> AuthOptions:
-    """Which sign-in methods are configured, so the login screen renders the right buttons."""
+    """Which sign-in methods are available, so the login screen renders the right buttons."""
     s = get_settings()
-    return AuthOptions(
-        workos=s.workos_enabled, linkedin=s.linkedin_auth_enabled, dev=s.dev_login_enabled
-    )
+    return AuthOptions(workos=s.workos_enabled, linkedin=s.linkedin_auth_enabled, password=True)
 
 
 @router.post("/linkedin/notify")
@@ -90,9 +88,9 @@ async def callback(
     return redirect
 
 
-class DevLoginRequest(BaseModel):
-    email: str | None = None
-    password: str | None = None
+class PasswordLoginRequest(BaseModel):
+    email: str
+    password: str
 
 
 class UserSummary(BaseModel):
@@ -101,29 +99,23 @@ class UserSummary(BaseModel):
     name: str
 
 
-class DevLoginResponse(BaseModel):
+class PasswordLoginResponse(BaseModel):
     user: UserSummary
 
 
-@router.post("/dev-login", response_model=DevLoginResponse)
-async def dev_login(
-    session: SessionDep, response: Response, body: DevLoginRequest | None = None
-) -> DevLoginResponse:
-    """Demo sign-in that bypasses SSO (local design/QA only).
-
-    With no body it's a one-click bypass; with email/password it validates the demo credentials.
-    """
-    settings = get_settings()
-    if not settings.dev_login_enabled:
-        raise HTTPException(
-            status_code=403, detail="dev login disabled (a sign-in provider is configured)"
-        )
-    if body is not None and (body.email or body.password):
-        if body.email != settings.demo_admin_email or body.password != settings.demo_password:
-            raise HTTPException(status_code=401, detail="invalid credentials")
-    user = await auth_service.ensure_demo_user(session)
-    auth_service.set_dev_cookie(response, user.id)
-    return DevLoginResponse(user=UserSummary(id=user.id, email=user.email, name=user.name))
+@router.post("/password", response_model=PasswordLoginResponse)
+async def password_login(
+    session: SessionDep, response: Response, body: PasswordLoginRequest
+) -> PasswordLoginResponse:
+    """Email + password sign-in (the seeded demo account: demo@sourcewell.ai)."""
+    user_id = await auth_service.password_login(session, email=body.email, password=body.password)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="invalid email or password")
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="invalid email or password")
+    auth_service.set_session_cookie(response, auth_service.mint_session(user_id))
+    return PasswordLoginResponse(user=UserSummary(id=user.id, email=user.email, name=user.name))
 
 
 class OrgSummary(BaseModel):
@@ -172,5 +164,4 @@ async def me(ctx: ContextDep, session: SessionDep) -> MeResponse:
 @router.post("/logout")
 async def logout(response: Response) -> dict[str, str]:
     auth_service.clear_session_cookie(response)
-    auth_service.clear_dev_cookie(response)
     return {"logout_url": get_settings().frontend_url}

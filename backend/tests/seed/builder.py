@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.crypto import hash_password
 from app.core.types import JsonObject
 from app.models import (
     AgentRole,
@@ -196,7 +197,13 @@ async def _org_and_admin(session: AsyncSession) -> tuple[Organization, User]:
     org = Organization(name="Acme Talent", slug=DEMO_ORG_SLUG, plan="demo")
     session.add(org)
     await session.flush()
-    admin = User(organization_id=org.id, email=get_settings().demo_admin_email, name="Avery Brooks")
+    s = get_settings()
+    admin = User(
+        organization_id=org.id,
+        email=s.demo_admin_email,
+        name="Avery Brooks",
+        password_hash=hash_password(s.demo_password),
+    )
     session.add(admin)
     await session.flush()
     session.add(

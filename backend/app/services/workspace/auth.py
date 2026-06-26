@@ -2,8 +2,9 @@
 
 Sign-in connects a real LinkedIn account through Unipile's hosted-auth wizard; the connected
 account's stable identity (`member_urn`) maps to a local user, provisioning an org + default
-workspace on first login. The session is a Fernet-sealed cookie holding the local user id. A
-dev-login bypass (header / cookie) is available when LinkedIn auth isn't configured (local / QA).
+workspace on first login. The session is a Fernet-sealed cookie holding the local user id.
+Email/password sign-in (the seeded demo account, scrypt-hashed) and an X-User-Id header (no-SSO
+only, for tests) round out the sign-in methods.
 """
 
 from functools import lru_cache
@@ -14,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from workos import WorkOSClient
 
 from app.core.config import get_settings
-from app.core.crypto import seal, unseal
+from app.core.crypto import hash_password, seal, unseal, verify_password
 from app.core.db import new_id
 from app.ext.unipile import unipile_connection
 from app.models import (
@@ -163,19 +164,14 @@ async def finish_linkedin_login(session: AsyncSession, *, state: str) -> str | N
 async def resolve_user_from_request(
     request: Request, response: Response, session: AsyncSession
 ) -> str | None:
-    """Identify the caller: the sealed LinkedIn session cookie, then the dev-login fallback."""
+    """Identify the caller: the sealed session cookie, then (no-SSO only) the X-User-Id header."""
     settings = get_settings()
     sealed = request.cookies.get(settings.session_cookie_name)
     if sealed:
         user_id = await _session_user_id(session, sealed)
         if user_id:
             return user_id
-    if settings.dev_login_enabled:
-        dev_id = request.cookies.get(settings.dev_session_cookie_name)
-        if dev_id is not None:
-            user = await session.get(User, dev_id)
-            if user is not None:
-                return user.id
+    if settings.header_auth_enabled:
         header_id = request.headers.get("X-User-Id")
         if header_id:
             user = await session.get(User, header_id)
@@ -184,50 +180,50 @@ async def resolve_user_from_request(
     return None
 
 
-# --- Dev login (only when LinkedIn auth is not configured) -------------------
+# --- Email/password login (the seeded demo account) --------------------------
 
 
 async def ensure_demo_user(session: AsyncSession) -> User:
-    """Return the demo admin (created by the seeder), or provision a minimal one on the fly."""
-    email = get_settings().demo_admin_email
+    """Return the demo admin (seeded or provisioned on the fly), ensuring its password is set."""
+    s = get_settings()
+    email = s.demo_admin_email
     user = (
         (await session.execute(select(User).where(User.email == email).limit(1))).scalars().first()
     )
-    if user is not None:
-        return user
-    org = Organization(name="Demo", slug=f"demo-{new_id()[:8].lower()}")
-    session.add(org)
-    await session.flush()
-    session.add(
-        Workspace(organization_id=org.id, name="Default workspace", kind=WorkspaceKind.team)
-    )
-    user = User(organization_id=org.id, email=email, name="Demo Admin")
-    session.add(user)
-    await session.flush()
-    session.add(
-        Membership(
-            user_id=user.id,
-            organization_id=org.id,
-            scope=MembershipScope.organization,
-            role=MembershipRole.org_admin,
+    if user is None:
+        org = Organization(name="Demo", slug=f"demo-{new_id()[:8].lower()}")
+        session.add(org)
+        await session.flush()
+        session.add(
+            Workspace(organization_id=org.id, name="Default workspace", kind=WorkspaceKind.team)
         )
-    )
+        user = User(organization_id=org.id, email=email, name="Demo Admin")
+        session.add(user)
+        await session.flush()
+        session.add(
+            Membership(
+                user_id=user.id,
+                organization_id=org.id,
+                scope=MembershipScope.organization,
+                role=MembershipRole.org_admin,
+            )
+        )
+    if user.password_hash is None:  # backfill a seeded user created before passwords existed
+        user.password_hash = hash_password(s.demo_password)
     await session.flush()
     return user
 
 
-def set_dev_cookie(response: Response, user_id: str) -> None:
-    s = get_settings()
-    response.set_cookie(
-        key=s.dev_session_cookie_name,
-        value=user_id,
-        httponly=True,
-        secure=s.cookie_secure,
-        samesite=s.cookie_samesite,
-        path="/",
-        max_age=60 * 60 * 24 * 7,
-    )
-
-
-def clear_dev_cookie(response: Response) -> None:
-    response.delete_cookie(key=get_settings().dev_session_cookie_name, path="/")
+async def password_login(session: AsyncSession, *, email: str, password: str) -> str | None:
+    """Verify an email + password against the local hash; the demo account is auto-ensured."""
+    if email == get_settings().demo_admin_email:
+        user: User | None = await ensure_demo_user(session)
+    else:
+        user = (
+            (await session.execute(select(User).where(User.email == email).limit(1)))
+            .scalars()
+            .first()
+        )
+    if user is None or user.password_hash is None:
+        return None
+    return user.id if verify_password(password, user.password_hash) else None

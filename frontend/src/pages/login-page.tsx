@@ -97,7 +97,7 @@ function HeroArt() {
 }
 
 export function LoginPage() {
-  const { login, linkedinLogin, devLogin } = useAuth();
+  const { login, linkedinLogin, passwordLogin } = useAuth();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
@@ -108,7 +108,7 @@ export function LoginPage() {
       setBusy(true);
       setError(null);
       try {
-        await devLogin({ email, password });
+        await passwordLogin({ email, password });
       } catch {
         setError("Invalid email or password.");
         setBusy(false);
@@ -221,17 +221,6 @@ export function LoginPage() {
               Secured by WorkOS
             </span>
             SSO, MFA &amp; audit logs
-          </p>
-
-          <p className="mt-3 text-xs text-muted-foreground">
-            Demo:{" "}
-            <button
-              type="button"
-              className="font-mono text-foreground underline-offset-2 hover:underline"
-              onClick={() => void devLogin()}
-            >
-              demo@sourcewell.ai · pass
-            </button>
           </p>
         </div>
       </div>
