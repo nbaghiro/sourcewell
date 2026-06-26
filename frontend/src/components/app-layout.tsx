@@ -1,12 +1,10 @@
 import {
-  BarChart3,
   Bot,
   CheckCircle2,
   Columns3,
   Inbox,
   LayoutDashboard,
   LogOut,
-  ScrollText,
   Send,
   Settings,
   UserSearch,
@@ -40,8 +38,6 @@ const NAV: NavItemDef[] = [
   { label: "Approvals", icon: CheckCircle2, href: "/approvals" },
   { label: "Inbox", icon: Inbox, href: "/inbox" },
   { label: "Pipeline", icon: Columns3, href: "/pipeline" },
-  { label: "Analytics", icon: BarChart3, href: "/analytics" },
-  { label: "Audit", icon: ScrollText, href: "/audit" },
   { label: "Settings", icon: Settings, href: "/settings" },
 ];
 

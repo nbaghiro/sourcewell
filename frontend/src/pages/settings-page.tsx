@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { LinkedInIcon, MicrosoftIcon } from "@/components/brand-icons";
 import { PageHeader } from "@/components/page-header";
 import { PageLayout } from "@/components/page-layout";
+import { ReportingTab } from "@/pages/analytics-page";
+import { AuditTab } from "@/pages/audit-page";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,8 +79,8 @@ const ROLE: Record<string, { label: string; variant: BadgeProps["variant"] }> = 
 export function SettingsPage() {
   const [tab, setTab] = React.useState("connections");
   return (
-    <PageLayout width="narrow">
-      <PageHeader eyebrow="Workspace" title="Settings" description="Channels, your team, and how autonomously the agent operates." />
+    <PageLayout width={tab === "reporting" ? "wide" : "narrow"}>
+      <PageHeader eyebrow="Workspace" title="Settings" description="Channels, your team, reporting, and how autonomously the agent operates." />
       <Segmented
         value={tab}
         onChange={setTab}
@@ -88,6 +90,8 @@ export function SettingsPage() {
           { value: "suppression", label: "Suppression" },
           { value: "members", label: "Members" },
           { value: "autonomy", label: "Autonomy" },
+          { value: "reporting", label: "Reporting" },
+          { value: "audit", label: "Audit" },
         ]}
       />
       {tab === "connections" && <ConnectionsTab />}
@@ -95,6 +99,8 @@ export function SettingsPage() {
       {tab === "suppression" && <SuppressionTab />}
       {tab === "members" && <MembersTab />}
       {tab === "autonomy" && <AutonomyTab />}
+      {tab === "reporting" && <ReportingTab />}
+      {tab === "audit" && <AuditTab />}
     </PageLayout>
   );
 }

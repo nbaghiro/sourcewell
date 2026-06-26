@@ -2,8 +2,6 @@ import { Ban, CheckCircle2, Link2, LogIn, Reply, Shield, UserCheck, UserPlus } f
 import type { LucideIcon } from "lucide-react";
 
 import { DataError } from "@/components/data-error";
-import { PageHeader } from "@/components/page-header";
-import { PageLayout } from "@/components/page-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAudit } from "@/lib/api/queries";
@@ -21,21 +19,15 @@ const ACTION: Record<string, { label: string; icon: LucideIcon; tone: string }> 
   "member.invited": { label: "Member", icon: UserPlus, tone: "text-muted-foreground bg-secondary" },
 };
 
-export function AuditPage() {
+/** Audit log (Compliance) — rendered as a tab inside Settings. */
+export function AuditTab() {
   const { data, isLoading, isError, refetch } = useAudit();
 
+  if (isError) return <DataError onRetry={() => void refetch()} />;
+  if (isLoading) return <Skeleton className="h-96" />;
+
   return (
-    <PageLayout width="narrow">
-      <PageHeader
-        eyebrow="Compliance"
-        title="Audit log"
-        description="An append-only record of every consequential action across the organization."
-      />
-      {isError ? (
-        <DataError onRetry={() => void refetch()} />
-      ) : isLoading ? (
-        <Skeleton className="h-96" />
-      ) : (
+    <>
         <Card>
           <CardContent className="py-1">
             {(data ?? []).map((e) => {
@@ -63,7 +55,6 @@ export function AuditPage() {
             )}
           </CardContent>
         </Card>
-      )}
-    </PageLayout>
+    </>
   );
 }

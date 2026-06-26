@@ -1,7 +1,5 @@
 import { ChannelIcon } from "@/components/brand-icons";
 import { DataError } from "@/components/data-error";
-import { PageHeader } from "@/components/page-header";
-import { PageLayout } from "@/components/page-layout";
 import { StateBadge } from "@/components/state-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,21 +10,14 @@ import { cn } from "@/lib/utils";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
-export function AnalyticsPage() {
+/** Reporting (Analytics) — rendered as a tab inside Settings. */
+export function ReportingTab() {
   const { data, isError, refetch } = useAnalytics();
 
-  if (isError) {
-    return (
-      <PageLayout>
-        <DataError onRetry={() => void refetch()} />
-      </PageLayout>
-    );
-  }
+  if (isError) return <DataError onRetry={() => void refetch()} />;
 
   return (
-    <PageLayout>
-      <PageHeader eyebrow="Reporting" title="Analytics" description="How outreach is converting — by funnel stage, channel, and campaign." />
-
+    <div className="space-y-6">
       {!data ? (
         <div className="space-y-6">
           <Skeleton className="h-56" />
@@ -127,7 +118,7 @@ export function AnalyticsPage() {
           </Card>
         </>
       )}
-    </PageLayout>
+    </div>
   );
 }
 

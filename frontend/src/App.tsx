@@ -10,9 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorkspaceProvider } from "@/components/workspace-provider";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { AgentPage } from "@/pages/agent-page";
-import { AnalyticsPage } from "@/pages/analytics-page";
 import { ApprovalsPage } from "@/pages/approvals-page";
-import { AuditPage } from "@/pages/audit-page";
 import { CampaignBuilderPage } from "@/pages/campaign-builder-page";
 import { CampaignCockpitPage } from "@/pages/campaign-cockpit-page";
 import { CampaignDetailPage } from "@/pages/campaign-detail-page";
@@ -87,8 +85,6 @@ export default function App() {
               <Route path="/approvals" element={<ApprovalsPage />} />
               <Route path="/inbox" element={<InboxPage />} />
               <Route path="/pipeline" element={<PipelinePage />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/audit" element={<AuditPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
