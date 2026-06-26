@@ -13,6 +13,7 @@ import * as React from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { CampaignActivity } from "@/components/campaign-activity";
 import { CampaignComposer, type Step } from "@/components/campaign-composer";
 import { PageHeader } from "@/components/page-header";
 import { PageLayout } from "@/components/page-layout";
@@ -126,7 +127,7 @@ export function CampaignDetailPage() {
   const sourceNow = useSourceNow();
   const { data: runs } = useCampaignRuns(id ?? "");
 
-  const [view, setView] = React.useState<"sequence" | "candidates">("sequence");
+  const [view, setView] = React.useState<"sequence" | "activity" | "candidates">("sequence");
   const [tab, setTab] = React.useState("proposed");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const busy = rankCampaign.isPending || bulkApprove.isPending;
@@ -189,11 +190,6 @@ export function CampaignDetailPage() {
       ) : (
         <>
           <PageHeader eyebrow="Campaign" title={campaign.name}>
-            <Button variant="outline" size="sm" asChild>
-              <Link to={`/campaigns/${campaign.id}/cockpit`}>
-                <Sparkles /> Cockpit
-              </Link>
-            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -273,9 +269,10 @@ export function CampaignDetailPage() {
             </div>
             <Segmented
               value={view}
-              onChange={(v) => setView(v as "sequence" | "candidates")}
+              onChange={(v) => setView(v as "sequence" | "activity" | "candidates")}
               options={[
                 { value: "sequence", label: "Sequence" },
+                { value: "activity", label: "Activity" },
                 { value: "candidates", label: `Candidates · ${all.length}` },
               ]}
             />
@@ -304,6 +301,8 @@ export function CampaignDetailPage() {
                 <Skeleton className="h-96" />
               )}
             </div>
+          ) : view === "activity" ? (
+            <CampaignActivity campaignId={campaign.id} />
           ) : (
             <>
               <div className="flex items-center justify-between gap-3">

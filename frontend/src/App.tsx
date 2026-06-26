@@ -12,7 +12,6 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { AgentPage } from "@/pages/agent-page";
 import { ApprovalsPage } from "@/pages/approvals-page";
 import { CampaignBuilderPage } from "@/pages/campaign-builder-page";
-import { CampaignCockpitPage } from "@/pages/campaign-cockpit-page";
 import { CampaignDetailPage } from "@/pages/campaign-detail-page";
 import { CampaignsPage } from "@/pages/campaigns-page";
 import { ContactDetailPage } from "@/pages/contact-detail-page";
@@ -81,7 +80,6 @@ export default function App() {
               <Route path="/campaigns" element={<CampaignsPage />} />
               <Route path="/campaigns/new" element={<CampaignBuilderPage />} />
               <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
-              <Route path="/campaigns/:id/cockpit" element={<CampaignCockpitPage />} />
               <Route path="/approvals" element={<ApprovalsPage />} />
               <Route path="/inbox" element={<InboxPage />} />
               <Route path="/pipeline" element={<PipelinePage />} />
