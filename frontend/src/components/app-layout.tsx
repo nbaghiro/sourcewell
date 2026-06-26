@@ -1,12 +1,4 @@
-import {
-  Columns3,
-  Inbox,
-  LayoutDashboard,
-  LogOut,
-  Send,
-  Settings,
-  Users,
-} from "lucide-react";
+import { Inbox, LayoutDashboard, LogOut, Send, Settings, Users } from "lucide-react";
 import { Outlet, useNavigate } from "react-router-dom";
 
 import { AgentChatWidget } from "@/components/agent-chat-widget";
@@ -31,7 +23,6 @@ const NAV: NavItemDef[] = [
   { label: "People", icon: Users, href: "/contacts" },
   { label: "Campaigns", icon: Send, href: "/campaigns" },
   { label: "Inbox", icon: Inbox, href: "/inbox" },
-  { label: "Pipeline", icon: Columns3, href: "/pipeline" },
   { label: "Settings", icon: Settings, href: "/settings" },
 ];
 

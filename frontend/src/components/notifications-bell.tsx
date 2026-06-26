@@ -43,7 +43,7 @@ export function NotificationsBell() {
 
         {data && data.approvals_waiting > 0 && (
           <>
-            <DropdownMenuItem onClick={() => navigate("/approvals")} className="gap-3">
+            <DropdownMenuItem onClick={() => navigate("/inbox")} className="gap-3">
               <span className="grid size-7 place-items-center rounded-md bg-accent">
                 <CheckCircle2 className="size-3.5" />
               </span>
