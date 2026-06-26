@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Bot,
   Copy,
+  Loader2,
   MoreHorizontal,
   Pause,
   Play,
@@ -13,6 +14,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -81,7 +83,9 @@ interface Enrollment {
 }
 
 interface AgentRun {
+  id: string;
   role: string;
+  status: string;
   summary: string;
   created_at: string;
 }
@@ -97,11 +101,15 @@ const STAGES: { value: string; label: string; match: (s: string) => boolean }[] 
 
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const qc = useQueryClient();
   const { data: campaignData } = useCampaign(id ?? "");
   const campaign = campaignData as Campaign | undefined;
   const { data: enrollments } = useCampaignEnrollments(id ?? "");
   const { data: pool } = useContacts();
-  const { data: runs } = useCampaignRuns(id ?? "");
+  // `sourcing` drives a live feedback loop: fast-poll runs + watch the new run to completion.
+  const [sourcing, setSourcing] = React.useState(false);
+  const sourcingBaseline = React.useRef<Set<string> | null>(null);
+  const { data: runs } = useCampaignRuns(id ?? "", sourcing);
   const rankCampaign = useRankCampaign(id ?? "");
   const bulkApprove = useBulkApprove();
   const updateCampaign = useUpdateCampaign();
@@ -142,6 +150,38 @@ export function CampaignDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [criteria, steps, id]);
 
+  // Watch the requested sourcing run to completion, then refresh the pipeline into Proposed.
+  React.useEffect(() => {
+    if (!sourcing || !sourcingBaseline.current) return;
+    const fresh = ((runs ?? []) as AgentRun[]).find(
+      (r) =>
+        r.role === "sourcing" &&
+        !sourcingBaseline.current!.has(r.id) &&
+        (r.status === "done" || r.status === "failed"),
+    );
+    if (!fresh) return;
+    setSourcing(false);
+    sourcingBaseline.current = null;
+    void qc.invalidateQueries({ queryKey: ["enrollments"] });
+    setStage("proposed");
+    toast.success(
+      fresh.status === "done"
+        ? "Sourcing complete — new candidates are in Proposed"
+        : "Sourcing finished with issues — check Activity",
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runs, sourcing]);
+
+  // Safety net: stop the live loop if the run never reports back.
+  React.useEffect(() => {
+    if (!sourcing) return;
+    const t = setTimeout(() => {
+      setSourcing(false);
+      sourcingBaseline.current = null;
+    }, 150_000);
+    return () => clearTimeout(t);
+  }, [sourcing]);
+
   const all = (enrollments ?? []) as Enrollment[];
   const count = (m: (s: string) => boolean) => all.filter((e) => m(e.state)).length;
   const activeStage = STAGES.find((s) => s.value === stage)!;
@@ -153,15 +193,32 @@ export function CampaignDetailPage() {
   const opted = count((s) => s === "opted_out");
   const needsYou = count((s) => s === "awaiting_approval");
   const sourcedRun = ((runs ?? []) as AgentRun[]).find((r) => r.role === "sourcing");
-  const sourcingStatus = sourcedRun
-    ? `sourced ${longAgo(sourcedRun.created_at)}`
-    : campaign?.next_source_at
-      ? "sourcing queued"
-      : "idle";
+  const sourcingStatus = sourcing
+    ? "sourcing now…"
+    : sourcedRun
+      ? `sourced ${longAgo(sourcedRun.created_at)}`
+      : campaign?.next_source_at
+        ? "sourcing queued"
+        : "idle";
+
+  function startSourcing() {
+    if (!campaign) return;
+    sourceNow.mutate(campaign.id, {
+      onSuccess: () => {
+        sourcingBaseline.current = new Set(((runs ?? []) as AgentRun[]).map((r) => r.id));
+        setSourcing(true);
+        setActivityOpen(true);
+        toast.success("Sourcing started — watch the agent work");
+      },
+    });
+  }
 
   function rank() {
     rankCampaign.mutate(undefined, {
-      onSuccess: (r) => toast.success(`Ranked ${r.proposed} new contact${r.proposed === 1 ? "" : "s"}`),
+      onSuccess: (r) => {
+        toast.success(`Ranked ${r.proposed} new candidate${r.proposed === 1 ? "" : "s"} from your workspace`);
+        setStage("proposed");
+      },
     });
   }
   function approve(ids: string[]) {
@@ -207,8 +264,13 @@ export function CampaignDetailPage() {
           {/* agent strip — what the agent's doing + the funnel + your queue */}
           <Card className="flex flex-wrap items-center justify-between gap-4 p-4">
             <div className="flex items-center gap-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-accent-foreground">
-                <Bot className="size-5" />
+              <span
+                className={cn(
+                  "grid size-9 shrink-0 place-items-center rounded-lg",
+                  sourcing ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground",
+                )}
+              >
+                {sourcing ? <Loader2 className="size-5 animate-spin" /> : <Bot className="size-5" />}
               </span>
               <div>
                 <div className="text-sm font-semibold">
@@ -238,19 +300,19 @@ export function CampaignDetailPage() {
               <Button variant="outline" size="sm" onClick={() => setActivityOpen(true)}>
                 <ScrollText /> Activity
               </Button>
-              <Button variant="outline" size="sm" disabled={busy} onClick={() => void rank()}>
-                <Sparkles /> Rank
+              <Button variant="outline" size="sm" disabled={busy || sourcing} onClick={() => void rank()}>
+                {rankCampaign.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Rank
               </Button>
-              <Button
-                size="sm"
-                disabled={sourceNow.isPending}
-                onClick={() =>
-                  sourceNow.mutate(campaign.id, {
-                    onSuccess: () => toast.success("Sourcing queued — the agent runs shortly"),
-                  })
-                }
-              >
-                <Radar /> Source now
+              <Button size="sm" disabled={sourcing || sourceNow.isPending} onClick={startSourcing}>
+                {sourcing ? (
+                  <>
+                    <Loader2 className="animate-spin" /> Sourcing…
+                  </>
+                ) : (
+                  <>
+                    <Radar /> Source now
+                  </>
+                )}
               </Button>
             </div>
           </Card>
@@ -431,7 +493,7 @@ export function CampaignDetailPage() {
         description={campaign?.name}
         className="max-w-xl"
       >
-        <div className="p-5">{campaign && <CampaignActivity campaignId={campaign.id} />}</div>
+        <div className="p-5">{campaign && <CampaignActivity campaignId={campaign.id} live={sourcing} />}</div>
       </Sheet>
 
       {/* ---- candidate peek ---- */}

@@ -575,12 +575,17 @@ export function useCampaignFunnel(id: string) {
   });
 }
 
-export function useCampaignRuns(id: string) {
+export function useCampaignRuns(id: string, live = false) {
   const ws = useWorkspaceId();
   return useQuery({
     queryKey: ["campaignRuns", ws, id],
     enabled: !!ws && !!id,
-    refetchInterval: 15_000,
+    // Poll fast while a run is in flight (or sourcing was just requested), idle otherwise.
+    refetchInterval: (query) => {
+      const runs = query.state.data as { status?: string }[] | undefined;
+      if (live || runs?.some((r) => r.status === "running")) return 2500;
+      return 15_000;
+    },
     queryFn: async () =>
       unwrap(
         await client.GET("/agent/runs", { params: { query: { campaign_id: id, limit: 40 } } }),

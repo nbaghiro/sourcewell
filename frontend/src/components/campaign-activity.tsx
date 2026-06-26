@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCampaignRuns } from "@/lib/api/queries";
 import { longAgo } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 interface RunStep {
   seq: number;
@@ -77,9 +78,10 @@ function groupSteps(steps: RunStep[]): Action[] {
 }
 
 /** Per-campaign agent run feed — the sourcing/main/outreach agent's episodes as a timeline. */
-export function CampaignActivity({ campaignId }: { campaignId: string }) {
-  const { data, isLoading } = useCampaignRuns(campaignId);
+export function CampaignActivity({ campaignId, live = false }: { campaignId: string; live?: boolean }) {
+  const { data, isLoading } = useCampaignRuns(campaignId, live);
   const runs = (data as Run[] | undefined) ?? [];
+  const running = live || runs.some((r) => r.status === "running");
 
   return (
     <Card>
@@ -88,9 +90,20 @@ export function CampaignActivity({ campaignId }: { campaignId: string }) {
           <Bot className="size-4 text-primary" />
           Agent activity
         </CardTitle>
-        <span className="flex items-center gap-1.5 font-mono text-[0.65rem] font-semibold uppercase tracking-wide text-success">
-          <span className="size-1.5 animate-pulse rounded-full bg-success" aria-hidden />
-          live
+        <span
+          className={cn(
+            "flex items-center gap-1.5 font-mono text-[0.65rem] font-semibold uppercase tracking-wide",
+            running ? "text-primary" : "text-success",
+          )}
+        >
+          <span
+            className={cn(
+              "size-1.5 rounded-full",
+              running ? "animate-pulse bg-primary" : "bg-success",
+            )}
+            aria-hidden
+          />
+          {running ? "running" : "live"}
         </span>
       </CardHeader>
       <CardContent>
@@ -124,7 +137,8 @@ export function CampaignActivity({ campaignId }: { campaignId: string }) {
 }
 
 function RunRow({ run }: { run: Run }) {
-  const [open, setOpen] = React.useState(false);
+  // Auto-expand a run that's still in flight so its steps stream in live.
+  const [open, setOpen] = React.useState(run.status === "running");
   const actions = React.useMemo(() => groupSteps(run.steps), [run.steps]);
   const summary = run.summary?.trim();
 
