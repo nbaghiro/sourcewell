@@ -15,18 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from workos import WorkOSClient
 
 from app.core.config import get_settings
-from app.core.crypto import hash_password, seal, unseal, verify_password
+from app.core.crypto import seal, unseal, verify_password
 from app.core.db import new_id
 from app.ext.unipile import unipile_connection
 from app.models import (
     LoginAttempt,
-    Membership,
-    MembershipRole,
-    MembershipScope,
-    Organization,
     User,
-    Workspace,
-    WorkspaceKind,
 )
 from app.services.workspace.connections import provision_from_linkedin, provision_user
 
@@ -180,50 +174,14 @@ async def resolve_user_from_request(
     return None
 
 
-# --- Email/password login (the seeded demo account) --------------------------
-
-
-async def ensure_demo_user(session: AsyncSession) -> User:
-    """Return the demo admin (seeded or provisioned on the fly), ensuring its password is set."""
-    s = get_settings()
-    email = s.demo_admin_email
-    user = (
-        (await session.execute(select(User).where(User.email == email).limit(1))).scalars().first()
-    )
-    if user is None:
-        org = Organization(name="Demo", slug=f"demo-{new_id()[:8].lower()}")
-        session.add(org)
-        await session.flush()
-        session.add(
-            Workspace(organization_id=org.id, name="Default workspace", kind=WorkspaceKind.team)
-        )
-        user = User(organization_id=org.id, email=email, name="Demo Admin")
-        session.add(user)
-        await session.flush()
-        session.add(
-            Membership(
-                user_id=user.id,
-                organization_id=org.id,
-                scope=MembershipScope.organization,
-                role=MembershipRole.org_admin,
-            )
-        )
-    if user.password_hash is None:  # backfill a seeded user created before passwords existed
-        user.password_hash = hash_password(s.demo_password)
-    await session.flush()
-    return user
+# --- Email/password login ----------------------------------------------------
 
 
 async def password_login(session: AsyncSession, *, email: str, password: str) -> str | None:
-    """Verify an email + password against the local hash; the demo account is auto-ensured."""
-    if email == get_settings().demo_admin_email:
-        user: User | None = await ensure_demo_user(session)
-    else:
-        user = (
-            (await session.execute(select(User).where(User.email == email).limit(1)))
-            .scalars()
-            .first()
-        )
+    """Verify an email + password against the user's stored hash (SSO-only users have none)."""
+    user = (
+        (await session.execute(select(User).where(User.email == email).limit(1))).scalars().first()
+    )
     if user is None or user.password_hash is None:
         return None
     return user.id if verify_password(password, user.password_hash) else None

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.crypto import hash_password
 from app.models import LoginAttempt, User
 from app.services.workspace import auth
 from tests.factories import make_org, make_user
@@ -65,21 +66,43 @@ async def test_finish_pending_returns_none(db_session: AsyncSession) -> None:
     assert await auth.finish_linkedin_login(db_session, state="pend") is None  # notify not in yet
 
 
-# --- email/password login (the seeded demo account) --------------------------
+# --- email/password login (generic: verifies the user's stored hash) ---------
+
+
+async def _seed_password_user(session: AsyncSession, *, slug: str) -> str:
+    org = await make_org(session, slug=slug)
+    session.add(
+        User(
+            organization_id=org.id,
+            email="agent@acme.test",
+            name="Agent",
+            password_hash=hash_password("testpass"),
+        )
+    )
+    await session.flush()
+    return "agent@acme.test"
 
 
 @pytest.mark.db
-async def test_password_login_succeeds_with_demo_credentials(db_client: AsyncClient) -> None:
-    resp = await db_client.post(
-        "/auth/password", json={"email": "demo@sourcewell.ai", "password": "testpass"}
-    )
+async def test_password_login_succeeds_against_a_seeded_user(
+    db_session: AsyncSession, db_client: AsyncClient
+) -> None:
+    email = await _seed_password_user(db_session, slug="pw-ok")
+    resp = await db_client.post("/auth/password", json={"email": email, "password": "testpass"})
     assert resp.status_code == 200
-    assert resp.json()["user"]["email"] == "demo@sourcewell.ai"
+    assert resp.json()["user"]["email"] == email
 
 
 @pytest.mark.db
-async def test_password_login_rejects_wrong_password(db_client: AsyncClient) -> None:
-    resp = await db_client.post(
-        "/auth/password", json={"email": "demo@sourcewell.ai", "password": "nope"}
-    )
+async def test_password_login_rejects_wrong_password(
+    db_session: AsyncSession, db_client: AsyncClient
+) -> None:
+    email = await _seed_password_user(db_session, slug="pw-bad")
+    resp = await db_client.post("/auth/password", json={"email": email, "password": "nope"})
+    assert resp.status_code == 401
+
+
+@pytest.mark.db
+async def test_password_login_rejects_unknown_email(db_client: AsyncClient) -> None:
+    resp = await db_client.post("/auth/password", json={"email": "nobody@x.test", "password": "x"})
     assert resp.status_code == 401
