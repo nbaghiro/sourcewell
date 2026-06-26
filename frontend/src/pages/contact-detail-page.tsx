@@ -53,7 +53,7 @@ export function ContactDetailPage() {
   return (
     <PageLayout>
       <Link
-        to="/contacts"
+        to="/people"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-4" /> Contacts
@@ -362,7 +362,7 @@ function EditContactDialog({ contact }: { contact: ContactDetail }) {
     del.mutate(contact.id, {
       onSuccess: () => {
         toast.success("Contact deleted");
-        navigate("/contacts");
+        navigate("/people");
       },
     });
   }
@@ -370,7 +370,7 @@ function EditContactDialog({ contact }: { contact: ContactDetail }) {
     forget.mutate(contact.id, {
       onSuccess: () => {
         toast.success("Erased & suppressed");
-        navigate("/contacts");
+        navigate("/people");
       },
     });
   }

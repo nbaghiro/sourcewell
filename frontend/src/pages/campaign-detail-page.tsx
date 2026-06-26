@@ -351,7 +351,7 @@ export function CampaignDetailPage() {
                             </TableCell>
                           )}
                           <TableCell>
-                            <Link to={`/contacts/${e.contact_id}`} className="inline-block rounded-md transition-opacity hover:opacity-80">
+                            <Link to={`/people/${e.contact_id}`} className="inline-block rounded-md transition-opacity hover:opacity-80">
                               <PersonCell name={e.contact_name} subtitle={e.contact_title ?? undefined} imageSrc={e.contact_avatar ?? undefined} />
                             </Link>
                           </TableCell>

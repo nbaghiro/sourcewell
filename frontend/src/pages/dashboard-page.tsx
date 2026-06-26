@@ -50,7 +50,7 @@ export function DashboardPage() {
         <>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <StatCard label="Active campaigns" value={summary.stats.active_campaigns} />
-            <StatCard label="Contacts sourced" value={summary.stats.contacts.toLocaleString()} />
+            <StatCard label="People sourced" value={summary.stats.contacts.toLocaleString()} />
             <StatCard label="Awaiting approval" value={summary.stats.awaiting_approval} trend="needs review" trendDirection="flat" />
             <StatCard label="Replies · 7d" value={summary.stats.replies_7d} trend="this week" />
           </div>
@@ -139,8 +139,8 @@ function Onboarding({ workspace }: { workspace: string; onChanged: () => void })
       title: "Add candidates",
       body: "Import your list of people to start sourcing.",
       actions: (
-        <Button size="sm" onClick={() => navigate("/contacts")}>
-          <Upload /> Import contacts
+        <Button size="sm" onClick={() => navigate("/people")}>
+          <Upload /> Import people
         </Button>
       ),
     },

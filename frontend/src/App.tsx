@@ -13,7 +13,7 @@ import { CampaignBuilderPage } from "@/pages/campaign-builder-page";
 import { CampaignDetailPage } from "@/pages/campaign-detail-page";
 import { CampaignsPage } from "@/pages/campaigns-page";
 import { ContactDetailPage } from "@/pages/contact-detail-page";
-import { ContactsPage } from "@/pages/contacts-page";
+import { ContactsPage } from "@/pages/people-page";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { FindPeoplePage } from "@/pages/find-people-page";
 import { InboxPage } from "@/pages/inbox-page";
@@ -71,9 +71,9 @@ export default function App() {
               }
             >
               <Route path="/" element={<DashboardPage />} />
-              <Route path="/contacts" element={<ContactsPage />} />
-              <Route path="/contacts/:id" element={<ContactDetailPage />} />
-              <Route path="/people" element={<FindPeoplePage />} />
+              <Route path="/people" element={<ContactsPage />} />
+              <Route path="/people/find" element={<FindPeoplePage />} />
+              <Route path="/people/:id" element={<ContactDetailPage />} />
               <Route path="/campaigns" element={<CampaignsPage />} />
               <Route path="/campaigns/new" element={<CampaignBuilderPage />} />
               <Route path="/campaigns/:id" element={<CampaignDetailPage />} />

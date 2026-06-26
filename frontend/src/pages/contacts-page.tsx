@@ -37,7 +37,7 @@ export function ContactsPage() {
         title="People"
         description="People sourced into this workspace. Rank them into a campaign to start outreach."
       >
-        <Button variant="outline" size="sm" onClick={() => navigate("/people")}>
+        <Button variant="outline" size="sm" onClick={() => navigate("/people/find")}>
           <UserSearch /> Find people
         </Button>
         <ImportDialog />
@@ -50,7 +50,7 @@ export function ContactsPage() {
       ) : !data || data.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No contacts yet"
+          title="No people yet"
           description="Import your own list to start ranking candidates."
           action={<ImportDialog />}
         />
@@ -68,7 +68,7 @@ export function ContactsPage() {
             </TableHeader>
             <TableBody>
               {data.map((c) => (
-                <TableRow key={c.id} className="cursor-pointer" onClick={() => navigate(`/contacts/${c.id}`)}>
+                <TableRow key={c.id} className="cursor-pointer" onClick={() => navigate(`/people/${c.id}`)}>
                   <TableCell>
                     <PersonCell name={c.full_name} subtitle={c.email ?? undefined} imageSrc={c.avatar_url ?? undefined} />
                   </TableCell>
@@ -119,7 +119,7 @@ function ImportDialog() {
     if (contacts.length === 0) return;
     importContacts.mutate(contacts, {
       onSuccess: () => {
-        toast.success(`Imported ${contacts.length} contact${contacts.length === 1 ? "" : "s"}`);
+        toast.success(`Imported ${contacts.length} ${contacts.length === 1 ? "person" : "people"}`);
         setText("");
       },
       onError: () => toast.error("Import failed"),
@@ -135,7 +135,7 @@ function ImportDialog() {
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Import contacts</DialogTitle>
+          <DialogTitle>Import people</DialogTitle>
           <DialogDescription>
             One per line: <span className="font-mono text-xs">Name, Title, Company, Email, skill;skill</span>
           </DialogDescription>

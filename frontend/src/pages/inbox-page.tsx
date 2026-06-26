@@ -418,7 +418,7 @@ function ContextRail({
     <aside className="hidden min-h-0 flex-col gap-5 overflow-y-auto border-l border-border p-5 xl:flex">
       <div className="flex flex-col items-center text-center">
         <Link
-          to={c.id ? `/contacts/${c.id}` : "#"}
+          to={c.id ? `/people/${c.id}` : "#"}
           className="flex flex-col items-center text-center transition-opacity hover:opacity-90"
         >
           <Avatar className="size-14">

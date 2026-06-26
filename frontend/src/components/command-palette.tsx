@@ -45,7 +45,7 @@ export function CommandPalette() {
   const flat = React.useMemo<FlatItem[]>(() => {
     if (!results) return [];
     const f: FlatItem[] = [];
-    results.contacts.forEach((c) => f.push({ key: "c" + c.id, label: c.full_name, sub: c.title ?? undefined, avatar: c.avatar_url, nav: `/contacts/${c.id}`, group: "Contacts" }));
+    results.contacts.forEach((c) => f.push({ key: "c" + c.id, label: c.full_name, sub: c.title ?? undefined, avatar: c.avatar_url, nav: `/people/${c.id}`, group: "People" }));
     results.campaigns.forEach((c) => f.push({ key: "k" + c.id, label: c.name, sub: c.status, nav: `/campaigns/${c.id}`, group: "Campaigns", isCampaign: true }));
     results.conversations.forEach((c) => f.push({ key: "v" + c.enrollment_id, label: c.contact_name, sub: c.state.replace(/_/g, " "), avatar: c.avatar_url, nav: `/inbox`, group: "Conversations" }));
     return f;
@@ -72,7 +72,7 @@ export function CommandPalette() {
     }
   }
 
-  const groups = ["Contacts", "Campaigns", "Conversations"]
+  const groups = ["People", "Campaigns", "Conversations"]
     .map((g) => ({ g, items: flat.filter((i) => i.group === g) }))
     .filter((x) => x.items.length > 0);
 
@@ -95,7 +95,7 @@ export function CommandPalette() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="Search contacts, campaigns, conversations…"
+              placeholder="Search people, campaigns, conversations…"
               className="w-full bg-transparent py-3.5 text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>

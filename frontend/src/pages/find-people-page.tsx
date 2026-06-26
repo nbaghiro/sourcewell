@@ -179,7 +179,7 @@ export function FindPeoplePage() {
     importPeople.mutate(hits, {
       onSuccess: (res) => {
         toast.success(`Imported ${res.imported} to Contacts`);
-        navigate("/contacts");
+        navigate("/people");
       },
       onError: () => toast.error("Import failed"),
     });
