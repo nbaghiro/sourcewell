@@ -1,4 +1,4 @@
-"""The Sourcing agent: find + qualify candidates for a campaign via a bounded tool-use episode.
+"""The Sourcing agent: find + qualify candidates for a campaign via a bounded tool-use run.
 
 The tools wrap the existing deterministic primitives (discovery / ext providers / targeting /
 suppression); the agent only decides what to search, enrich, and import. The work is deterministic
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.prompts import DEFAULT_VERTICAL, compose_system
-from app.core.runtime import AgentLLM, AgentResult, Tool, run_episode
+from app.core.runtime import AgentLLM, AgentResult, Tool, run_agent
 from app.core.types import JsonList, JsonObject
 from app.ext.base import PersonHit, SourceProvider
 from app.ext.registry import build_providers_for_org, provider_selection
@@ -26,7 +26,7 @@ from app.targeting import FIT_THRESHOLD, Targeting, as_targeting, evaluate
 
 @dataclass
 class SourcingContext:
-    """Shared state for one sourcing episode — the session, scope, and the working set of hits."""
+    """Shared state for one sourcing run — the session, scope, and the working set of hits."""
 
     session: AsyncSession
     workspace_id: str
@@ -59,7 +59,7 @@ def _ids(data: JsonObject) -> list[str]:
 
 
 def sourcing_tools(ctx: SourcingContext) -> list[Tool]:
-    """The Sourcing agent's toolset, bound to one episode's context."""
+    """The Sourcing agent's toolset, bound to one run's context."""
 
     async def search(data: JsonObject) -> JsonObject:
         limit = min(_int(data, "limit", 25), 50)
@@ -196,7 +196,7 @@ async def _seed_resemblance(session: AsyncSession, campaign: Campaign) -> str:
 async def run_sourcing(
     session: AsyncSession, *, llm: AgentLLM, campaign: Campaign, organization_id: str
 ) -> AgentResult:
-    """Run one Sourcing episode for an active campaign."""
+    """Run one sourcing pass for an active campaign."""
     workspace = await session.get(Workspace, campaign.workspace_id)
     vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
     selection = provider_selection(workspace.settings) if workspace else None
@@ -217,7 +217,7 @@ async def run_sourcing(
         "Find, qualify, and import strong candidates into the campaign. Stop once you've added a "
         "good batch or exhausted strong matches."
     )
-    return await run_episode(
+    return await run_agent(
         session,
         llm=llm,
         role=AgentRole.sourcing,

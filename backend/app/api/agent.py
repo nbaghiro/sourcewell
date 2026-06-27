@@ -251,7 +251,7 @@ async def _campaign_in_workspace(
 async def runs(
     ctx: ContextDep, session: SessionDep, campaign_id: str, limit: int = 20
 ) -> list[AgentRunOut]:
-    """The agent-episode trace feed for a campaign — the narrated activity tab."""
+    """The agent-run trace feed for a campaign — the narrated activity tab."""
     ws = require_workspace(ctx)
     await _campaign_in_workspace(session, campaign_id, ws)
     data = await recent_runs(session, campaign_id=campaign_id, limit=limit)

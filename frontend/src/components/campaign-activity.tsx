@@ -77,7 +77,7 @@ function groupSteps(steps: RunStep[]): Action[] {
   return out;
 }
 
-/** Per-campaign agent run feed — the sourcing/main/outreach agent's episodes as a timeline. */
+/** Per-campaign agent run feed — the sourcing/strategy/outreach agent's runs as a timeline. */
 export function CampaignActivity({ campaignId, live = false }: { campaignId: string; live?: boolean }) {
   const { data, isLoading } = useCampaignRuns(campaignId, live);
   const runs = (data as Run[] | undefined) ?? [];

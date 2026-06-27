@@ -1,7 +1,7 @@
 """Hardcoded vertical packs (industry prompt overlays) + prompt composition.
 
 Verticals live in code for now — only "recruiting"; `Workspace.vertical` is the pointer. The runtime
-composes an agent's system prompt as: BASE[role] + the vertical overlay + the per-episode context.
+composes an agent's system prompt as: BASE[role] + the vertical overlay + the per-run context.
 Adding an industry later = another entry here, no schema change.
 """
 
@@ -66,7 +66,7 @@ def get_vertical(name: str) -> Vertical:
 
 
 def compose_system(role: AgentRole, vertical: str, *, context: str = "") -> str:
-    """BASE[role] + the vertical overlay + the per-episode context."""
+    """BASE[role] + the vertical overlay + the per-run context."""
     v = get_vertical(vertical)
     parts = [_BASE[role], v.prompts.get(role, "")]
     if context:

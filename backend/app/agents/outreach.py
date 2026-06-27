@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.prompts import DEFAULT_VERTICAL, compose_system
-from app.core.runtime import AgentLLM, AgentResult, Tool, default_llm, run_episode
+from app.core.runtime import AgentLLM, AgentResult, Tool, default_llm, run_agent
 from app.core.types import JsonList, JsonObject
 from app.models import (
     AgentRole,
@@ -159,7 +159,7 @@ async def run_conversation(
     organization_id: str,
     now: datetime,
 ) -> AgentResult:
-    """Record an inbound reply and run one bounded Outreach conversation episode."""
+    """Record an inbound reply and run one bounded Outreach conversation."""
     session.add(
         Message(
             workspace_id=enrollment.workspace_id,
@@ -191,7 +191,7 @@ async def run_conversation(
         "Read the thread, then decide: reply (answer/qualify), hand_off (interested, negotiation, "
         "out-of-scope, or unsure), or opt_out (they asked to stop)."
     )
-    return await run_episode(
+    return await run_agent(
         session,
         llm=llm,
         role=AgentRole.outreach,

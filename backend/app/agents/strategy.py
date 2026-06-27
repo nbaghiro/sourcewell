@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.prompts import DEFAULT_VERTICAL, compose_system
 from app.agents.provenance import is_agent_owned
-from app.core.runtime import AgentLLM, AgentResult, Tool, run_episode
+from app.core.runtime import AgentLLM, AgentResult, Tool, run_agent
 from app.core.types import JsonList, JsonObject
 from app.models import AgentRole, AuditEvent, Campaign, Workspace
 from app.services.insights.agent import campaign_funnel
@@ -170,7 +170,7 @@ async def design_campaign(
         "Sanity-check with estimate_audience, then set the audience and sequence. Only sections "
         "you own apply; others become suggestions."
     )
-    return await run_episode(
+    return await run_agent(
         session,
         llm=llm,
         role=AgentRole.strategy,
@@ -193,7 +193,7 @@ async def review_campaign(
         f"Objective: {campaign.objective or campaign.name}\n"
         "Read the funnel, then adjust the audience or sequence (agent-owned), or flag the human."
     )
-    return await run_episode(
+    return await run_agent(
         session,
         llm=llm,
         role=AgentRole.strategy,

@@ -49,7 +49,7 @@ class RunData:
 
 
 async def recent_runs(session: AsyncSession, *, campaign_id: str, limit: int = 20) -> list[RunData]:
-    """The campaign's agent episodes, newest first, each with its ordered steps."""
+    """The campaign's agent runs, newest first, each with its ordered steps."""
     runs = list(
         (
             await session.execute(

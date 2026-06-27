@@ -1,8 +1,8 @@
 """The agent runtime: a bounded, traced, provider-agnostic tool-use loop.
 
-An *episode* runs one agent (Strategy / Sourcing / Outreach) against a goal: the model is given a
+A *run* executes one agent (Strategy / Sourcing / Outreach) against a goal: the model is given a
 toolset, and the runtime executes each tool the model requests, feeds the result back, and loops
-until the model stops or a guardrail trips (max steps / token budget / timeout). Every episode is
+until the model stops or a guardrail trips (max steps / token budget / timeout). Every run is
 persisted as an `AgentRun` + `AgentStep`s — the activity feed + budget trail.
 
 The loop speaks a neutral conversation model (`UserText` / `AssistantTurn` / `ToolResults`); each
@@ -24,8 +24,8 @@ from app.models import AgentRole, AgentRun, AgentStep
 
 # --- Guardrails (tunable defaults; per the plan) -----------------------------
 MAX_STEPS = 12
-EPISODE_TOKEN_BUDGET = 50_000
-EPISODE_TIMEOUT_S = 60.0
+RUN_TOKEN_BUDGET = 50_000
+RUN_TIMEOUT_S = 60.0
 CAMPAIGN_DAILY_TOKEN_BUDGET = 500_000
 
 
@@ -132,7 +132,7 @@ class AgentResult:
     steps: int
 
 
-# --- The episode runner ------------------------------------------------------
+# --- The agent-run loop ------------------------------------------------------
 
 
 class _Trace:
@@ -160,7 +160,7 @@ def _valid_input(tool: Tool, data: JsonObject) -> bool:
     return True
 
 
-async def run_episode(
+async def run_agent(
     session: AsyncSession,
     *,
     llm: AgentLLM,
@@ -172,10 +172,10 @@ async def run_episode(
     tools: list[Tool],
     campaign_id: str | None = None,
     max_steps: int = MAX_STEPS,
-    token_budget: int = EPISODE_TOKEN_BUDGET,
-    timeout_s: float = EPISODE_TIMEOUT_S,
+    token_budget: int = RUN_TOKEN_BUDGET,
+    timeout_s: float = RUN_TIMEOUT_S,
 ) -> AgentResult:
-    """Run one bounded, traced agent episode. Persists an `AgentRun` + its `AgentStep`s."""
+    """Execute one bounded, traced agent run. Persists an `AgentRun` + its `AgentStep`s."""
     run = AgentRun(
         workspace_id=workspace_id,
         campaign_id=campaign_id,
@@ -214,7 +214,7 @@ async def run_episode(
                     break
     except TimeoutError:
         status = "timeout"
-    except Exception as exc:  # a tool or the LLM blew up — fail the episode, don't crash the worker
+    except Exception as exc:  # a tool or the LLM blew up — fail the run, don't crash the worker
         status = "error"
         trace.record("result", None, {"error": str(exc)})
 
@@ -226,7 +226,7 @@ async def run_episode(
     return AgentResult(run_id=run.id, status=status, text=text, tokens=tokens, steps=trace.seq)
 
 
-async def stream_episode(
+async def stream_agent(
     session: AsyncSession,
     *,
     llm: AgentLLM,
@@ -238,10 +238,10 @@ async def stream_episode(
     tools: list[Tool],
     campaign_id: str | None = None,
     max_steps: int = MAX_STEPS,
-    token_budget: int = EPISODE_TOKEN_BUDGET,
-    timeout_s: float = EPISODE_TIMEOUT_S,
+    token_budget: int = RUN_TOKEN_BUDGET,
+    timeout_s: float = RUN_TIMEOUT_S,
 ) -> AsyncIterator[JsonObject]:
-    """Streaming twin of `run_episode`: yields `{"type":"token","text":...}` as the model emits
+    """Streaming twin of `run_agent`: yields `{"type":"token","text":...}` as the model emits
     text, runs any tool calls between turns, and persists the same `AgentRun` + `AgentStep` trace.
     """
     run = AgentRun(
@@ -290,7 +290,7 @@ async def stream_episode(
                     break
     except TimeoutError:
         status = "timeout"
-    except Exception as exc:  # a tool or the stream blew up — end the episode cleanly
+    except Exception as exc:  # a tool or the stream blew up — end the run cleanly
         status = "error"
         trace.record("result", None, {"error": str(exc)})
 

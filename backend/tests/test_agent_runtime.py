@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents import prompts
 from app.core import runtime
 from app.core.config import Settings
-from app.core.runtime import Tool, run_episode
+from app.core.runtime import Tool, run_agent
 from app.core.types import JsonObject
 from app.models import AgentRole, AgentRun, AgentStep
 from tests.factories import make_org, make_workspace
@@ -64,7 +64,7 @@ def test_compose_system_layers_base_vertical_context() -> None:
     sysprompt = prompts.compose_system(AgentRole.sourcing, "recruiting", context="Campaign X")
     assert "source" in sysprompt.lower()  # base behavior
     assert "recruiting" in sysprompt.lower()  # vertical overlay
-    assert "Campaign X" in sysprompt  # per-episode context
+    assert "Campaign X" in sysprompt  # per-run context
 
 
 def test_unknown_vertical_falls_back_to_recruiting() -> None:
@@ -83,14 +83,14 @@ def test_default_llm_constructs_with_key(monkeypatch: pytest.MonkeyPatch) -> Non
     assert runtime.default_llm() is not None  # AnthropicLLM constructs (lazy SDK import works)
 
 
-# --- integration: the episode loop + guardrails + tracing --------------------
+# --- integration: the run loop + guardrails + tracing --------------------
 
 
 @pytest.mark.db
-async def test_episode_runs_tool_then_finishes(db_session: AsyncSession) -> None:
+async def test_run_runs_tool_then_finishes(db_session: AsyncSession) -> None:
     ws = await _ws_id(db_session, "rt-ok")
     llm = FakeLLM([tool_turn("echo", {"x": 1}), text_turn("done")])
-    res = await run_episode(
+    res = await run_agent(
         db_session,
         llm=llm,
         role=AgentRole.sourcing,
@@ -126,7 +126,7 @@ async def test_episode_runs_tool_then_finishes(db_session: AsyncSession) -> None
 async def test_unknown_tool_is_rejected(db_session: AsyncSession) -> None:
     ws = await _ws_id(db_session, "rt-unknown")
     llm = FakeLLM([tool_turn("nope", {}), text_turn("ok")])
-    res = await run_episode(
+    res = await run_agent(
         db_session,
         llm=llm,
         role=AgentRole.strategy,
@@ -136,7 +136,7 @@ async def test_unknown_tool_is_rejected(db_session: AsyncSession) -> None:
         user_prompt="go",
         tools=[_tool("echo", _echo)],
     )
-    assert res.status == "done"  # rejection doesn't crash the episode
+    assert res.status == "done"  # rejection doesn't crash the run
     results = await _results(db_session, res.run_id)
     assert any("unknown tool" in str(s.content.get("error", "")) for s in results)
 
@@ -145,7 +145,7 @@ async def test_unknown_tool_is_rejected(db_session: AsyncSession) -> None:
 async def test_invalid_input_is_rejected(db_session: AsyncSession) -> None:
     ws = await _ws_id(db_session, "rt-invalid")
     llm = FakeLLM([tool_turn("search", {}), text_turn("ok")])  # missing required "q"
-    res = await run_episode(
+    res = await run_agent(
         db_session,
         llm=llm,
         role=AgentRole.sourcing,
@@ -164,7 +164,7 @@ async def test_invalid_input_is_rejected(db_session: AsyncSession) -> None:
 async def test_tool_exception_is_caught(db_session: AsyncSession) -> None:
     ws = await _ws_id(db_session, "rt-boom")
     llm = FakeLLM([tool_turn("boom", {}), text_turn("recovered")])
-    res = await run_episode(
+    res = await run_agent(
         db_session,
         llm=llm,
         role=AgentRole.sourcing,
@@ -174,7 +174,7 @@ async def test_tool_exception_is_caught(db_session: AsyncSession) -> None:
         user_prompt="go",
         tools=[_tool("boom", _boom)],
     )
-    assert res.status == "done"  # the tool error didn't crash the episode
+    assert res.status == "done"  # the tool error didn't crash the run
     results = await _results(db_session, res.run_id)
     assert any("boom" in str(s.content.get("error", "")) for s in results)
 
@@ -183,7 +183,7 @@ async def test_tool_exception_is_caught(db_session: AsyncSession) -> None:
 async def test_token_budget_trips(db_session: AsyncSession) -> None:
     ws = await _ws_id(db_session, "rt-budget")
     llm = FakeLLM([tool_turn("echo", {}), text_turn("unreached")])
-    res = await run_episode(
+    res = await run_agent(
         db_session,
         llm=llm,
         role=AgentRole.sourcing,
@@ -202,7 +202,7 @@ async def test_token_budget_trips(db_session: AsyncSession) -> None:
 async def test_max_steps_trips(db_session: AsyncSession) -> None:
     ws = await _ws_id(db_session, "rt-steps")
     llm = FakeLLM([tool_turn("echo", {}), tool_turn("echo", {}), tool_turn("echo", {})])
-    res = await run_episode(
+    res = await run_agent(
         db_session,
         llm=llm,
         role=AgentRole.sourcing,
@@ -221,7 +221,7 @@ async def test_max_steps_trips(db_session: AsyncSession) -> None:
 async def test_timeout_trips(db_session: AsyncSession) -> None:
     ws = await _ws_id(db_session, "rt-timeout")
     llm = FakeLLM([tool_turn("slow", {}), text_turn("unreached")])
-    res = await run_episode(
+    res = await run_agent(
         db_session,
         llm=llm,
         role=AgentRole.sourcing,

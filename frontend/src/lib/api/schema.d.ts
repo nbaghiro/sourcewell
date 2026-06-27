@@ -1499,7 +1499,7 @@ export interface paths {
         };
         /**
          * Runs
-         * @description The agent-episode trace feed for a campaign — the narrated activity tab.
+         * @description The agent-run trace feed for a campaign — the narrated activity tab.
          */
         get: operations["runs_agent_runs_get"];
         put?: never;

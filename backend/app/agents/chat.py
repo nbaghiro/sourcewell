@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.prompts import DEFAULT_VERTICAL, compose_system
 from app.core.db import new_id
-from app.core.runtime import AgentLLM, Tool, run_episode, stream_episode
+from app.core.runtime import AgentLLM, Tool, run_agent, stream_agent
 from app.core.types import JsonList, JsonObject
 from app.models import AgentRole, Contact, Enrollment, Workspace
 from app.services.insights.agent import campaign_funnel
@@ -165,7 +165,7 @@ async def run_chat(
         organization_id=organization_id,
         campaign_id=campaign_id,
     )
-    result = await run_episode(
+    result = await run_agent(
         session,
         llm=llm,
         role=AgentRole.strategy,
@@ -199,7 +199,7 @@ async def run_chat_stream(
         organization_id=organization_id,
         campaign_id=campaign_id,
     )
-    async for ev in stream_episode(
+    async for ev in stream_agent(
         session,
         llm=llm,
         role=AgentRole.strategy,

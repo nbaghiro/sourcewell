@@ -124,7 +124,7 @@ class MemoryScope(enum.StrEnum):
 
 
 class AgentRole(enum.StrEnum):
-    """Which agent ran an episode."""
+    """Which agent produced a run."""
 
     strategy = "strategy"
     sourcing = "sourcing"
@@ -543,7 +543,7 @@ class Memory(IdMixin, TimestampMixin, Base):
 
 
 class AgentRun(IdMixin, TimestampMixin, Base):
-    """One bounded agent episode — the trace that powers the activity feed + budgets."""
+    """One bounded agent run — the trace that powers the activity feed + budgets."""
 
     __tablename__ = "agent_run"
 
