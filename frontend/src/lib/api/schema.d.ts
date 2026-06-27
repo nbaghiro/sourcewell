@@ -2028,6 +2028,11 @@ export interface components {
             message: string;
             /** Campaign Id */
             campaign_id?: string | null;
+            /**
+             * History
+             * @default []
+             */
+            history: components["schemas"]["ChatTurn"][];
         };
         /** ChatOut */
         ChatOut: {
@@ -2038,6 +2043,13 @@ export interface components {
             data?: components["schemas"]["JsonObject"] | null;
             /** @default [] */
             entities: components["schemas"]["JsonList"];
+        };
+        /** ChatTurn */
+        ChatTurn: {
+            /** Role */
+            role: string;
+            /** Text */
+            text: string;
         };
         /** ConnectionOut */
         ConnectionOut: {
