@@ -1,12 +1,13 @@
-"""The agent runtime: a bounded, traced tool-use loop over the Anthropic Messages API.
+"""The agent runtime: a bounded, traced, provider-agnostic tool-use loop.
 
-An *episode* runs one agent (Main / Sourcing / Outreach) against a goal: the model is given a
+An *episode* runs one agent (Strategy / Sourcing / Outreach) against a goal: the model is given a
 toolset, and the runtime executes each tool the model requests, feeds the result back, and loops
 until the model stops or a guardrail trips (max steps / token budget / timeout). Every episode is
 persisted as an `AgentRun` + `AgentStep`s — the activity feed + budget trail.
 
-The LLM sits behind the `AgentLLM` protocol so tests inject a scripted `FakeLLM` (no live API in
-CI); `AnthropicLLM` is the real client (SDK imported lazily, key-gated by the caller).
+The loop speaks a neutral conversation model (`UserText` / `AssistantTurn` / `ToolResults`); each
+provider adapter behind the `AgentLLM` protocol translates that to/from its own wire format. Tests
+inject a scripted `FakeLLM` (no live API in CI); the real adapters live in `core/providers.py`.
 """
 
 import asyncio
@@ -37,22 +38,19 @@ CAMPAIGN_DAILY_TOKEN_BUDGET = 500_000
 
 @dataclass(frozen=True)
 class Tool:
-    """A capability the agent may call. `run` receives the validated input, returns a result."""
+    """A capability the agent may call. `run` receives the validated input, returns a result.
+
+    `input_schema` is a plain JSON Schema — provider-neutral; each adapter wraps it in its own tool
+    format (Anthropic `input_schema`, OpenAI `parameters`, Gemini function declarations).
+    """
 
     name: str
     description: str
     input_schema: JsonObject
     run: Callable[[JsonObject], Awaitable[JsonObject]]
 
-    def spec(self) -> JsonObject:
-        return {
-            "name": self.name,
-            "description": self.description,
-            "input_schema": self.input_schema,
-        }
 
-
-# --- LLM interface (so a scripted FakeLLM can be injected in tests) ----------
+# --- Neutral conversation model (adapters translate this to/from wire format) ----
 
 
 @dataclass(frozen=True)
@@ -63,12 +61,39 @@ class ToolCall:
 
 
 @dataclass(frozen=True)
-class LLMTurn:
-    """One model turn: text + any tool-use requests + the assistant content to thread back."""
+class UserText:
+    """A user / instruction message."""
+
+    text: str
+
+
+@dataclass(frozen=True)
+class AssistantTurn:
+    """A prior assistant turn the model produced: its text plus any tool calls it requested."""
 
     text: str
     tool_calls: list[ToolCall]
-    assistant_blocks: JsonList
+
+
+@dataclass(frozen=True)
+class ToolResults:
+    """Results for the tool calls of the immediately preceding assistant turn."""
+
+    results: list[tuple[str, JsonObject]]  # (tool_call_id, result)
+
+
+Msg = UserText | AssistantTurn | ToolResults
+
+
+# --- LLM interface (so a scripted FakeLLM can be injected in tests) ----------
+
+
+@dataclass(frozen=True)
+class LLMTurn:
+    """One model turn: assistant text + any tool-use requests + token usage."""
+
+    text: str
+    tool_calls: list[ToolCall]
     input_tokens: int
     output_tokens: int
 
@@ -91,12 +116,10 @@ StreamItem = TextDelta | TurnDone
 
 
 class AgentLLM(Protocol):
-    async def turn(
-        self, *, system: str, messages: JsonList, tools: list[JsonObject]
-    ) -> LLMTurn: ...
+    async def turn(self, *, system: str, history: list[Msg], tools: list[Tool]) -> LLMTurn: ...
 
     def stream(
-        self, *, system: str, messages: JsonList, tools: list[JsonObject]
+        self, *, system: str, history: list[Msg], tools: list[Tool]
     ) -> AsyncIterator[StreamItem]: ...
 
 
@@ -165,8 +188,7 @@ async def run_episode(
     await session.flush()
 
     by_name = {t.name: t for t in tools}
-    specs = [t.spec() for t in tools]
-    messages: JsonList = [{"role": "user", "content": user_prompt}]
+    history: list[Msg] = [UserText(user_prompt)]
     trace = _Trace(session, run.id)
     tokens = 0
     status = "max_steps"
@@ -175,21 +197,18 @@ async def run_episode(
     try:
         async with asyncio.timeout(timeout_s):
             for _ in range(max_steps):
-                turn = await llm.turn(system=system, messages=messages, tools=specs)
+                turn = await llm.turn(system=system, history=history, tools=tools)
                 tokens += turn.input_tokens + turn.output_tokens
                 if turn.text:
                     trace.record("thought", None, {"text": turn.text})
                 if not turn.tool_calls:
                     status, text = "done", turn.text
                     break
-                messages.append({"role": "assistant", "content": turn.assistant_blocks})
-                results: JsonList = []
+                history.append(AssistantTurn(turn.text, turn.tool_calls))
+                results: list[tuple[str, JsonObject]] = []
                 for tc in turn.tool_calls:
-                    result = await _exec_tool(trace, by_name, tc)
-                    results.append(
-                        {"type": "tool_result", "tool_use_id": tc.id, "content": json.dumps(result)}
-                    )
-                messages.append({"role": "user", "content": results})
+                    results.append((tc.id, await _exec_tool(trace, by_name, tc)))
+                history.append(ToolResults(results))
                 if tokens > token_budget:
                     status = "over_budget"
                     break
@@ -237,8 +256,7 @@ async def stream_episode(
     await session.flush()
 
     by_name = {t.name: t for t in tools}
-    specs = [t.spec() for t in tools]
-    messages: JsonList = [{"role": "user", "content": user_prompt}]
+    history: list[Msg] = [UserText(user_prompt)]
     trace = _Trace(session, run.id)
     tokens = 0
     status = "max_steps"
@@ -248,7 +266,7 @@ async def stream_episode(
         async with asyncio.timeout(timeout_s):
             for _ in range(max_steps):
                 turn: LLMTurn | None = None
-                async for item in llm.stream(system=system, messages=messages, tools=specs):
+                async for item in llm.stream(system=system, history=history, tools=tools):
                     if isinstance(item, TextDelta):
                         yield {"type": "token", "text": item.text}
                     else:
@@ -262,14 +280,11 @@ async def stream_episode(
                 if not turn.tool_calls:
                     status, text = "done", turn.text
                     break
-                messages.append({"role": "assistant", "content": turn.assistant_blocks})
-                results: JsonList = []
+                history.append(AssistantTurn(turn.text, turn.tool_calls))
+                results: list[tuple[str, JsonObject]] = []
                 for tc in turn.tool_calls:
-                    result = await _exec_tool(trace, by_name, tc)
-                    results.append(
-                        {"type": "tool_result", "tool_use_id": tc.id, "content": json.dumps(result)}
-                    )
-                messages.append({"role": "user", "content": results})
+                    results.append((tc.id, await _exec_tool(trace, by_name, tc)))
+                history.append(ToolResults(results))
                 if tokens > token_budget:
                     status = "over_budget"
                     break
@@ -303,7 +318,40 @@ async def _exec_tool(trace: _Trace, by_name: dict[str, Tool], tc: ToolCall) -> J
     return result
 
 
-# --- Real client (the Anthropic SDK) -----------------------------------------
+# --- Real client: the Anthropic SDK ------------------------------------------
+
+
+def _to_anthropic_messages(history: list[Msg]) -> JsonList:
+    """Translate the neutral history into Anthropic Messages wire format."""
+    msgs: JsonList = []
+    for m in history:
+        if isinstance(m, UserText):
+            msgs.append({"role": "user", "content": m.text})
+        elif isinstance(m, AssistantTurn):
+            blocks: JsonList = []
+            if m.text:
+                blocks.append({"type": "text", "text": m.text})
+            for tc in m.tool_calls:
+                blocks.append({"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input})
+            msgs.append({"role": "assistant", "content": blocks})
+        else:  # ToolResults
+            msgs.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": cid, "content": json.dumps(res)}
+                        for cid, res in m.results
+                    ],
+                }
+            )
+    return msgs
+
+
+def _to_anthropic_tools(tools: list[Tool]) -> JsonList:
+    return [
+        {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+        for t in tools
+    ]
 
 
 class AnthropicLLM:
@@ -317,19 +365,17 @@ class AnthropicLLM:
         self._model = model
         self._max_tokens = max_tokens
 
-    async def turn(self, *, system: str, messages: JsonList, tools: list[JsonObject]) -> LLMTurn:
+    async def turn(self, *, system: str, history: list[Msg], tools: list[Tool]) -> LLMTurn:
         resp = await self._client.messages.create(
             model=self._model,
             max_tokens=self._max_tokens,
             system=system,
-            messages=cast("list[MessageParam]", messages),
-            tools=cast("list[ToolParam]", tools),
+            messages=cast("list[MessageParam]", _to_anthropic_messages(history)),
+            tools=cast("list[ToolParam]", _to_anthropic_tools(tools)),
         )
         text = ""
         tool_calls: list[ToolCall] = []
-        blocks: JsonList = []
         for block in resp.content:
-            blocks.append(block.model_dump())
             if block.type == "text":
                 text += block.text
             elif block.type == "tool_use":
@@ -341,20 +387,19 @@ class AnthropicLLM:
         return LLMTurn(
             text=text,
             tool_calls=tool_calls,
-            assistant_blocks=blocks,
             input_tokens=resp.usage.input_tokens,
             output_tokens=resp.usage.output_tokens,
         )
 
     async def stream(
-        self, *, system: str, messages: JsonList, tools: list[JsonObject]
+        self, *, system: str, history: list[Msg], tools: list[Tool]
     ) -> AsyncIterator[StreamItem]:
         async with self._client.messages.stream(
             model=self._model,
             max_tokens=self._max_tokens,
             system=system,
-            messages=cast("list[MessageParam]", messages),
-            tools=cast("list[ToolParam]", tools),
+            messages=cast("list[MessageParam]", _to_anthropic_messages(history)),
+            tools=cast("list[ToolParam]", _to_anthropic_tools(tools)),
         ) as stream:
             async for event in stream:
                 if event.type == "text":  # the SDK's high-level text-delta event
@@ -362,9 +407,7 @@ class AnthropicLLM:
             final = await stream.get_final_message()
         text = ""
         tool_calls: list[ToolCall] = []
-        blocks: JsonList = []
         for block in final.content:
-            blocks.append(block.model_dump())
             if block.type == "text":
                 text += block.text
             elif block.type == "tool_use":
@@ -377,7 +420,6 @@ class AnthropicLLM:
             turn=LLMTurn(
                 text=text,
                 tool_calls=tool_calls,
-                assistant_blocks=blocks,
                 input_tokens=final.usage.input_tokens,
                 output_tokens=final.usage.output_tokens,
             )
