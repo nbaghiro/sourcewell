@@ -171,7 +171,7 @@ async def test_memory_keyed_recall_and_run_trace(db_session: AsyncSession) -> No
 @pytest.mark.db
 async def test_agent_run_cascade_deletes_steps(db_session: AsyncSession) -> None:
     _org, ws = await _org_ws(db_session, "ag-cascade")
-    run = AgentRun(workspace_id=ws.id, role=AgentRole.main, trigger="cold_start")
+    run = AgentRun(workspace_id=ws.id, role=AgentRole.strategy, trigger="cold_start")
     db_session.add(run)
     await db_session.flush()
     step = AgentStep(run_id=run.id, seq=0, kind="thought", content={})

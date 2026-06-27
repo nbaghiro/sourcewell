@@ -129,7 +129,7 @@ async def test_unknown_tool_is_rejected(db_session: AsyncSession) -> None:
     res = await run_episode(
         db_session,
         llm=llm,
-        role=AgentRole.main,
+        role=AgentRole.strategy,
         trigger="chat",
         workspace_id=ws,
         system="s",

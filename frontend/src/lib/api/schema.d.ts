@@ -1621,7 +1621,7 @@ export interface paths {
         put?: never;
         /**
          * Design
-         * @description Run the Main agent's cold-start design (LLM-free fallback when no key).
+         * @description Run the Strategy agent's cold-start design (LLM-free fallback when no key).
          */
         post: operations["design_agent_design_post"];
         delete?: never;

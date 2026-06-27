@@ -1,11 +1,11 @@
-"""The Main agent — brief intake, cold-start design, review, provenance enforcement."""
+"""The Strategy agent — brief intake, cold-start design, review, provenance enforcement."""
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.main import design_campaign, deterministic_design, review_campaign
+from app.agents.strategy import design_campaign, deterministic_design, review_campaign
 from app.models import AuditEvent, Authorship, Campaign
 from app.services.sourcing.briefs import parse_brief
 from tests.factories import make_org, make_workspace
@@ -52,7 +52,7 @@ async def test_parse_brief_keyword_fallback() -> None:
     assert res.targeting.keywords  # the keyword fallback
 
 
-# --- the Main agent ----------------------------------------------------------
+# --- the Strategy agent ----------------------------------------------------------
 
 
 @pytest.mark.db

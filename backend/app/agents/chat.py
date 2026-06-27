@@ -168,11 +168,11 @@ async def run_chat(
     result = await run_episode(
         session,
         llm=llm,
-        role=AgentRole.main,
+        role=AgentRole.strategy,
         trigger="chat",
         workspace_id=workspace_id,
         campaign_id=campaign_id,
-        system=compose_system(AgentRole.main, vertical, context=_CHAT_GUIDANCE),
+        system=compose_system(AgentRole.strategy, vertical, context=_CHAT_GUIDANCE),
         user_prompt=message,
         tools=chat_tools(ctx),
     )
@@ -202,11 +202,11 @@ async def run_chat_stream(
     async for ev in stream_episode(
         session,
         llm=llm,
-        role=AgentRole.main,
+        role=AgentRole.strategy,
         trigger="chat",
         workspace_id=workspace_id,
         campaign_id=campaign_id,
-        system=compose_system(AgentRole.main, vertical, context=_CHAT_GUIDANCE),
+        system=compose_system(AgentRole.strategy, vertical, context=_CHAT_GUIDANCE),
         user_prompt=message,
         tools=chat_tools(ctx),
     ):

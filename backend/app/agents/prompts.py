@@ -12,10 +12,11 @@ from app.models import AgentRole
 
 # Base behavior per agent role (industry-agnostic).
 _BASE: dict[AgentRole, str] = {
-    AgentRole.main: (
-        "You are the strategist for an outreach campaign. You design the campaign from the brief "
-        "and continuously optimize it from the funnel. Make the smallest change likely to help, "
-        "edit only agent-owned sections, and record why."
+    AgentRole.strategy: (
+        "You are Strategy, the agent that owns an outreach campaign's plan. You design the "
+        "campaign from the brief and continuously optimize it from the funnel. Make the smallest "
+        "change likely to help, edit only agent-owned sections, and record why. Be sharp, "
+        "analytical, and decisive, and explain the reasoning behind every change in plain language."
     ),
     AgentRole.sourcing: (
         "You source and qualify people for an active campaign. Plan a search, run it, assess the "
@@ -40,7 +41,7 @@ class Vertical:
 _RECRUITING = Vertical(
     name="recruiting",
     prompts={
-        AgentRole.main: (
+        AgentRole.strategy: (
             "Domain: recruiting. The audience is passive candidates; the goal is to fill a role. "
             "Favor precise targeting (seniority, skills, location) and a respectful pitch."
         ),

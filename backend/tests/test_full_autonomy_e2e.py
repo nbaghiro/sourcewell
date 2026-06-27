@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import worker
-from app.agents.main import design_campaign
+from app.agents.strategy import design_campaign
 from app.agents.outreach import run_conversation
 from app.core.runtime import CAMPAIGN_DAILY_TOKEN_BUDGET
 from app.models import (
@@ -51,7 +51,7 @@ async def test_full_autonomy_lifecycle(db_session: AsyncSession) -> None:
     db_session.add(c)
     await db_session.flush()
 
-    # 1 · DESIGN — the Main agent writes the agent-owned strategy
+    # 1 · DESIGN — the Strategy agent writes the agent-owned strategy
     design_llm = FakeLLM(
         [
             tool_turn("set_audience", {"titles": ["VP of Sales"]}, call_id="a1"),

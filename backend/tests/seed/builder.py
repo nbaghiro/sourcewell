@@ -597,7 +597,7 @@ async def _seed_agent_runs(
         base = c.created_at or now
         plan(
             c,
-            role=AgentRole.main,
+            role=AgentRole.strategy,
             trigger="cold_start",
             tokens=rng.randint(1500, 2200),
             when=base + timedelta(hours=1),
@@ -641,7 +641,7 @@ async def _seed_agent_runs(
             )
         plan(
             c,
-            role=AgentRole.main,
+            role=AgentRole.strategy,
             trigger="review",
             tokens=rng.randint(900, 1400),
             when=now - timedelta(days=rng.randint(1, 3), hours=rng.randint(0, 10)),

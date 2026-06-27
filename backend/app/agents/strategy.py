@@ -1,4 +1,4 @@
-"""The Main agent: design + continuously optimize a campaign's strategy (provenance-aware).
+"""The Strategy agent: design + continuously optimize a campaign's strategy (provenance-aware).
 
 Cold-start = design from the brief; scheduled review = improve the weakest funnel stage. The `set_*`
 tools write only agent-owned sections; a human-owned section gets a suggestion (an audit event the
@@ -27,7 +27,7 @@ _DEFAULT_SEQUENCE: JsonList = [
 
 
 @dataclass
-class MainContext:
+class StrategyContext:
     session: AsyncSession
     campaign: Campaign
     organization_id: str
@@ -60,7 +60,7 @@ def _json_list(v: object) -> JsonList:
     return [{str(k): val for k, val in s.items()} for s in v if isinstance(s, dict)]
 
 
-def _audit(ctx: MainContext, *, action: str, summary: str) -> None:
+def _audit(ctx: StrategyContext, *, action: str, summary: str) -> None:
     ctx.session.add(
         AuditEvent(
             organization_id=ctx.organization_id,
@@ -74,8 +74,8 @@ def _audit(ctx: MainContext, *, action: str, summary: str) -> None:
     )
 
 
-def main_tools(ctx: MainContext) -> list[Tool]:
-    """The Main agent's provenance-aware strategy toolset, bound to one campaign."""
+def strategy_tools(ctx: StrategyContext) -> list[Tool]:
+    """The Strategy agent's provenance-aware strategy toolset, bound to one campaign."""
 
     async def estimate_audience(data: JsonObject) -> JsonObject:
         targeting = _build_targeting(data)
@@ -150,10 +150,10 @@ def main_tools(ctx: MainContext) -> list[Tool]:
 
 async def _ctx_for(
     session: AsyncSession, campaign: Campaign, organization_id: str
-) -> tuple[MainContext, str]:
+) -> tuple[StrategyContext, str]:
     workspace = await session.get(Workspace, campaign.workspace_id)
     vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
-    return MainContext(
+    return StrategyContext(
         session=session, campaign=campaign, organization_id=organization_id
     ), vertical
 
@@ -173,13 +173,13 @@ async def design_campaign(
     return await run_episode(
         session,
         llm=llm,
-        role=AgentRole.main,
+        role=AgentRole.strategy,
         trigger="cold_start",
         workspace_id=campaign.workspace_id,
         campaign_id=campaign.id,
-        system=compose_system(AgentRole.main, vertical),
+        system=compose_system(AgentRole.strategy, vertical),
         user_prompt=user,
-        tools=main_tools(ctx),
+        tools=strategy_tools(ctx),
     )
 
 
@@ -196,13 +196,13 @@ async def review_campaign(
     return await run_episode(
         session,
         llm=llm,
-        role=AgentRole.main,
+        role=AgentRole.strategy,
         trigger="review",
         workspace_id=campaign.workspace_id,
         campaign_id=campaign.id,
-        system=compose_system(AgentRole.main, vertical),
+        system=compose_system(AgentRole.strategy, vertical),
         user_prompt=user,
-        tools=main_tools(ctx),
+        tools=strategy_tools(ctx),
     )
 
 

@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.chat import run_chat, run_chat_stream
-from app.agents.main import design_campaign, deterministic_design
+from app.agents.strategy import design_campaign, deterministic_design
 from app.agents.prompts import DEFAULT_VERTICAL
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
@@ -284,7 +284,7 @@ async def funnel(ctx: ContextDep, session: SessionDep, campaign_id: str) -> Camp
     )
 
 
-# ---- brief intake + the Main agent's design (the create flow) --------------
+# ---- brief intake + the Strategy agent's design (the create flow) --------------
 
 
 class IntakeIn(BaseModel):
@@ -380,7 +380,7 @@ class DesignOut(BaseModel):
 
 @router.post("/design", response_model=DesignOut)
 async def design(body: DesignIn, ctx: ContextDep, session: SessionDep) -> DesignOut:
-    """Run the Main agent's cold-start design (LLM-free fallback when no key)."""
+    """Run the Strategy agent's cold-start design (LLM-free fallback when no key)."""
     ws = require_workspace(ctx)
     campaign = await _campaign_in_workspace(session, body.campaign_id, ws)
     client = default_llm()

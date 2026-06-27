@@ -34,7 +34,7 @@ async def parse_brief(text: str, *, vertical: str = DEFAULT_VERTICAL) -> BriefRe
     if not llm.is_enabled() or not cleaned:
         return fallback
 
-    overlay = get_vertical(vertical).prompts.get(AgentRole.main, "")
+    overlay = get_vertical(vertical).prompts.get(AgentRole.strategy, "")
     system = (
         "Extract a concise outreach objective and people-targeting filters from a brief. " + overlay
     )

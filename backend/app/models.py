@@ -126,7 +126,7 @@ class MemoryScope(enum.StrEnum):
 class AgentRole(enum.StrEnum):
     """Which agent ran an episode."""
 
-    main = "main"
+    strategy = "strategy"
     sourcing = "sourcing"
     outreach = "outreach"
 
