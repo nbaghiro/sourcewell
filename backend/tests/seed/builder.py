@@ -395,8 +395,15 @@ async def _seed_workspace(
                     {
                         "channel": s["channel"],
                         "delay_days": s["delay_days"],
-                        "subject": s.get("subject", ""),
-                        "body": s.get("body", ""),
+                        # Fall back to a sensible touchpoint so no campaign renders an empty step.
+                        "subject": s.get("subject")
+                        or ("Quick question, {first}" if s["channel"] == "email" else ""),
+                        "body": s.get("body")
+                        or (
+                            "Came across your work at {company} — would you be open to a quick chat?"
+                            if s["channel"] == "email"
+                            else "Following up here, {first} — still worth a conversation?"
+                        ),
                     }
                     for s in spec["steps"]
                 ],
