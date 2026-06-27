@@ -59,12 +59,16 @@ export function AgentChatWidget() {
     const trimmed = text.trim();
     if (!trimmed || streaming) return;
     setInput("");
+    // the conversation so far becomes the history the agent sees (role "agent" → "assistant").
+    const history = messages
+      .filter((m) => m.text.trim())
+      .map((m) => ({ role: m.role === "agent" ? "assistant" : "user", text: m.text }));
     // append the user turn + an empty agent turn that the stream fills in.
     setMessages((m) => [...m, { role: "user", text: trimmed }, { role: "agent", text: "" }]);
     setStreaming(true);
     try {
       await streamAgentChat(
-        { message: trimmed, campaign_id: campaignId },
+        { message: trimmed, campaign_id: campaignId, history },
         {
           onToken: (t) => patchLastAgent((m) => ({ ...m, text: m.text + t })),
           onDone: (entities) => patchLastAgent((m) => ({ ...m, entities })),

@@ -171,6 +171,7 @@ async def run_agent(
     user_prompt: str,
     tools: list[Tool],
     campaign_id: str | None = None,
+    prior: list[Msg] | None = None,
     max_steps: int = MAX_STEPS,
     token_budget: int = RUN_TOKEN_BUDGET,
     timeout_s: float = RUN_TIMEOUT_S,
@@ -188,7 +189,7 @@ async def run_agent(
     await session.flush()
 
     by_name = {t.name: t for t in tools}
-    history: list[Msg] = [UserText(user_prompt)]
+    history: list[Msg] = [*(prior or []), UserText(user_prompt)]  # prior turns seed the run
     trace = _Trace(session, run.id)
     tokens = 0
     status = "max_steps"
@@ -237,6 +238,7 @@ async def stream_agent(
     user_prompt: str,
     tools: list[Tool],
     campaign_id: str | None = None,
+    prior: list[Msg] | None = None,
     max_steps: int = MAX_STEPS,
     token_budget: int = RUN_TOKEN_BUDGET,
     timeout_s: float = RUN_TIMEOUT_S,
@@ -256,7 +258,7 @@ async def stream_agent(
     await session.flush()
 
     by_name = {t.name: t for t in tools}
-    history: list[Msg] = [UserText(user_prompt)]
+    history: list[Msg] = [*(prior or []), UserText(user_prompt)]  # prior turns seed the run
     trace = _Trace(session, run.id)
     tokens = 0
     status = "max_steps"

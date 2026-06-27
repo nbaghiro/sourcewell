@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.prompts import DEFAULT_VERTICAL, compose_system
 from app.core.db import new_id
-from app.core.runtime import AgentLLM, Tool, run_agent, stream_agent
+from app.core.runtime import AgentLLM, AssistantTurn, Msg, Tool, UserText, run_agent, stream_agent
 from app.core.types import JsonList, JsonObject
 from app.models import AgentRole, Contact, Enrollment, Workspace
 from app.services.insights.agent import campaign_funnel
@@ -147,6 +147,19 @@ def chat_tools(ctx: ChatContext) -> list[Tool]:
     ]
 
 
+_CHAT_HISTORY_LIMIT = 20  # most recent prior turns threaded into the run
+
+
+def _prior(history: list[tuple[str, str]] | None) -> list[Msg]:
+    """Convert (role, text) chat turns into neutral messages that seed the run."""
+    msgs: list[Msg] = []
+    for role, text in (history or [])[-_CHAT_HISTORY_LIMIT:]:
+        if not text.strip():
+            continue
+        msgs.append(AssistantTurn(text, []) if role == "assistant" else UserText(text))
+    return msgs
+
+
 async def run_chat(
     session: AsyncSession,
     *,
@@ -155,6 +168,7 @@ async def run_chat(
     organization_id: str,
     message: str,
     campaign_id: str | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> ChatResult:
     """Run one Main-agent chat turn; returns the narration + the typed entities it surfaced."""
     workspace = await session.get(Workspace, workspace_id)
@@ -174,6 +188,7 @@ async def run_chat(
         campaign_id=campaign_id,
         system=compose_system(AgentRole.strategy, vertical, context=_CHAT_GUIDANCE),
         user_prompt=message,
+        prior=_prior(history),
         tools=chat_tools(ctx),
     )
     return ChatResult(reply=result.text, entities=ctx.entities)
@@ -187,6 +202,7 @@ async def run_chat_stream(
     organization_id: str,
     message: str,
     campaign_id: str | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> AsyncIterator[JsonObject]:
     """Streaming Main-agent chat turn: yields `{"type":"token"}` events as the narration streams,
     then a final `{"type":"done", "entities": [...]}` with the typed UI blocks the tools surfaced.
@@ -208,6 +224,7 @@ async def run_chat_stream(
         campaign_id=campaign_id,
         system=compose_system(AgentRole.strategy, vertical, context=_CHAT_GUIDANCE),
         user_prompt=message,
+        prior=_prior(history),
         tools=chat_tools(ctx),
     ):
         yield ev

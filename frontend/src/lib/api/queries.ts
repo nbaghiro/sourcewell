@@ -495,7 +495,7 @@ export function useAgentState() {
  * stream) — mirrors the client's credentials + X-Workspace-Id header.
  */
 export async function streamAgentChat(
-  vars: { message: string; campaign_id?: string },
+  vars: { message: string; campaign_id?: string; history?: { role: string; text: string }[] },
   handlers: { onToken: (text: string) => void; onDone: (entities: unknown) => void },
   signal?: AbortSignal,
 ): Promise<void> {

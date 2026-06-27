@@ -83,9 +83,15 @@ class AgentState(BaseModel):
     campaigns: list[AgentCampaign]
 
 
+class ChatTurn(BaseModel):
+    role: str  # "user" | "assistant"
+    text: str
+
+
 class ChatIn(BaseModel):
     message: str
     campaign_id: str | None = None
+    history: list[ChatTurn] = []  # prior turns the client carries, oldest→newest
 
 
 class ChatOut(BaseModel):
@@ -172,6 +178,7 @@ async def chat(body: ChatIn, ctx: ContextDep, session: SessionDep) -> ChatOut:
         organization_id=ctx.org_id,
         message=body.message,
         campaign_id=body.campaign_id,
+        history=[(t.role, t.text) for t in body.history],
     )
     return ChatOut(reply=res.reply, kind="agent", data=None, entities=res.entities)
 
@@ -203,6 +210,7 @@ async def chat_stream(body: ChatIn, ctx: ContextDep) -> StreamingResponse:
                 organization_id=org_id,
                 message=body.message,
                 campaign_id=body.campaign_id,
+                history=[(t.role, t.text) for t in body.history],
             ):
                 yield _sse(ev)
             await session.commit()

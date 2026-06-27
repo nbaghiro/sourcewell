@@ -39,9 +39,11 @@ class FakeLLM:
         self._script = script
         self.calls = 0
         self.seen_tools: list[list[str]] = []
+        self.seen_history: list[list[Msg]] = []
 
     async def turn(self, *, system: str, history: list[Msg], tools: list[Tool]) -> LLMTurn:
         self.seen_tools.append([t.name for t in tools])
+        self.seen_history.append(history)
         turn = self._script[self.calls]
         self.calls += 1
         return turn
@@ -50,6 +52,7 @@ class FakeLLM:
         self, *, system: str, history: list[Msg], tools: list[Tool]
     ) -> AsyncIterator[StreamItem]:
         self.seen_tools.append([t.name for t in tools])
+        self.seen_history.append(history)
         turn = self._script[self.calls]
         self.calls += 1
         text = turn.text
