@@ -58,3 +58,8 @@ class FakeLLM:
             if chunk:
                 yield TextDelta(text=chunk)
         yield TurnDone(turn=turn)
+
+    async def complete(self, *, system: str, user: str, max_tokens: int) -> str:
+        """The one-off LLM path is exercised through its deterministic fallback, not the FakeLLM;
+        this just satisfies the AgentLLM protocol."""
+        return ""

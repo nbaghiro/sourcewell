@@ -118,6 +118,10 @@ class AgentLLM(Protocol):
         self, *, system: str, history: list[Msg], tools: list[Tool]
     ) -> AsyncIterator[StreamItem]: ...
 
+    async def complete(self, *, system: str, user: str, max_tokens: int) -> str:
+        """One-off, no-tools completion (system + user → text) — backs `core/llm.py`."""
+        ...
+
 
 @dataclass
 class AgentResult:

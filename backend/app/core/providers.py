@@ -145,6 +145,15 @@ class AnthropicLLM:
             )
         )
 
+    async def complete(self, *, system: str, user: str, max_tokens: int) -> str:
+        resp = await self._client.messages.create(
+            model=self._model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=cast("list[MessageParam]", [{"role": "user", "content": user}]),
+        )
+        return "".join(b.text for b in resp.content if b.type == "text")
+
 
 # === OpenAI / xAI ============================================================
 
@@ -241,6 +250,17 @@ class OpenAILLM:
             yield TextDelta(text=turn.text)
         yield TurnDone(turn=turn)
 
+    async def complete(self, *, system: str, user: str, max_tokens: int) -> str:
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            max_tokens=max_tokens,
+            messages=cast(
+                "list[ChatCompletionMessageParam]",
+                [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            ),
+        )
+        return resp.choices[0].message.content or ""
+
 
 # === Gemini ==================================================================
 
@@ -330,32 +350,70 @@ class GeminiLLM:
             yield TextDelta(text=turn.text)
         yield TurnDone(turn=turn)
 
+    async def complete(self, *, system: str, user: str, max_tokens: int) -> str:
+        from google.genai import types
+
+        resp = await self._client.aio.models.generate_content(
+            model=self._model,
+            contents=[types.Content(role="user", parts=[types.Part(text=user)])],
+            config=types.GenerateContentConfig(
+                system_instruction=system, max_output_tokens=max_tokens
+            ),
+        )
+        cand = resp.candidates[0] if resp.candidates else None
+        parts = cand.content.parts if cand and cand.content and cand.content.parts else []
+        return "".join(p.text for p in parts if p.text)
+
 
 # === Dispatch ================================================================
+
+
+def _provider_key(s: Settings) -> str | None:
+    """The API key for the configured provider, or None if unset / the provider is unknown."""
+    keys = {
+        "anthropic": s.anthropic_api_key,
+        "openai": s.openai_api_key,
+        "xai": s.xai_api_key,
+        "gemini": s.gemini_api_key,
+    }
+    return keys.get((s.agent_provider or "anthropic").lower()) or None
+
+
+def provider_ready(s: Settings) -> bool:
+    """Whether the configured provider has a key — the cheap gate for `core/llm.py:is_enabled`."""
+    return _provider_key(s) is not None
 
 
 def build_llm(s: Settings) -> AgentLLM | None:
     """Construct the configured provider's client, or None when its key is unset (callers then fall
     back to their deterministic path). One provider + one model — no per-task tiering yet."""
     provider = (s.agent_provider or "anthropic").lower()
+    key = _provider_key(s)
+    if key is None:
+        return None
     if provider == "anthropic":
-        if not s.anthropic_api_key:
-            return None
-        return AnthropicLLM(api_key=s.anthropic_api_key, model=s.agent_model or s.anthropic_model)
+        return AnthropicLLM(api_key=key, model=s.agent_model or s.anthropic_model)
     if provider == "openai":
-        if not s.openai_api_key:
-            return None
-        return OpenAILLM(api_key=s.openai_api_key, model=s.agent_model or _DEFAULT_MODELS["openai"])
+        return OpenAILLM(api_key=key, model=s.agent_model or _DEFAULT_MODELS["openai"])
     if provider == "xai":
-        if not s.xai_api_key:
-            return None
         return OpenAILLM(
-            api_key=s.xai_api_key,
+            api_key=key,
             model=s.agent_model or _DEFAULT_MODELS["xai"],
             base_url="https://api.x.ai/v1",
         )
     if provider == "gemini":
-        if not s.gemini_api_key:
-            return None
-        return GeminiLLM(api_key=s.gemini_api_key, model=s.agent_model or _DEFAULT_MODELS["gemini"])
+        return GeminiLLM(api_key=key, model=s.agent_model or _DEFAULT_MODELS["gemini"])
     return None
+
+
+async def complete_text(s: Settings, *, system: str, user: str, max_tokens: int) -> str | None:
+    """One-off, no-tools completion through the configured provider — backs `core/llm.py`. Returns
+    None when no provider is configured or the call fails, so callers fall back to deterministic."""
+    client = build_llm(s)
+    if client is None:
+        return None
+    try:
+        text = await client.complete(system=system, user=user, max_tokens=max_tokens)
+    except Exception:
+        return None
+    return text.strip() or None
