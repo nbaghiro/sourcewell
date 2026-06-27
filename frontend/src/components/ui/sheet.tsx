@@ -9,6 +9,7 @@ export function Sheet({
   onClose,
   title,
   description,
+  header,
   children,
   className,
 }: {
@@ -16,6 +17,8 @@ export function Sheet({
   onClose: () => void;
   title?: React.ReactNode;
   description?: React.ReactNode;
+  /** Custom header content (rendered in place of title/description, keeping the close button). */
+  header?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -58,12 +61,14 @@ export function Sheet({
           className,
         )}
       >
-        {(title || description) && (
+        {(title || description || header) && (
           <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
-            <div className="min-w-0">
-              {title && <div className="font-display text-base font-semibold">{title}</div>}
-              {description && <div className="truncate text-xs text-muted-foreground">{description}</div>}
-            </div>
+            {header ?? (
+              <div className="min-w-0">
+                {title && <div className="font-display text-base font-semibold">{title}</div>}
+                {description && <div className="truncate text-xs text-muted-foreground">{description}</div>}
+              </div>
+            )}
             <button
               type="button"
               onClick={onClose}

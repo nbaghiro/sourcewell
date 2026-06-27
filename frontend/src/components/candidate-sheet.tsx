@@ -52,36 +52,44 @@ export function CandidateSheet({
     <Sheet
       open={!!enrollment}
       onClose={onClose}
-      title={enrollment?.contact_name}
-      description={
-        [enrollment?.contact_title, contact?.company].filter(Boolean).join(" · ") || undefined
+      header={
+        enrollment ? (
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <Avatar className="size-10 shrink-0">
+              {enrollment.contact_avatar && <AvatarImage src={enrollment.contact_avatar} alt="" />}
+              <AvatarFallback>{initials(enrollment.contact_name)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-display text-[0.95rem] font-semibold">
+                  {enrollment.contact_name}
+                </span>
+                <StateBadge state={enrollment.state} />
+              </div>
+              <div className="truncate text-xs text-muted-foreground">
+                {[enrollment.contact_title, contact?.company].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {contact?.email && (
+                <a href={`mailto:${contact.email}`} className="grid size-7 place-items-center rounded-md border border-border text-muted-foreground transition-colors hover:text-foreground">
+                  <Mail className="size-3.5" />
+                </a>
+              )}
+              {contact?.linkedin_url && (
+                <a href={contact.linkedin_url} target="_blank" rel="noreferrer" className="grid size-7 place-items-center rounded-md border border-border" style={{ color: LI_BLUE }}>
+                  <LinkedInIcon className="size-3.5" />
+                </a>
+              )}
+            </div>
+          </div>
+        ) : undefined
       }
       className="max-w-md"
     >
       {enrollment && (
         <div className="flex h-full flex-col">
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
-            {/* identity */}
-            <div className="flex items-center gap-3">
-              <Avatar className="size-12">
-                {enrollment.contact_avatar && <AvatarImage src={enrollment.contact_avatar} alt="" />}
-                <AvatarFallback>{initials(enrollment.contact_name)}</AvatarFallback>
-              </Avatar>
-              <div className="flex items-center gap-2">
-                <StateBadge state={enrollment.state} />
-                {contact?.email && (
-                  <a href={`mailto:${contact.email}`} className="grid size-7 place-items-center rounded-md border border-border text-muted-foreground transition-colors hover:text-foreground">
-                    <Mail className="size-3.5" />
-                  </a>
-                )}
-                {contact?.linkedin_url && (
-                  <a href={contact.linkedin_url} target="_blank" rel="noreferrer" className="grid size-7 place-items-center rounded-md border border-border" style={{ color: LI_BLUE }}>
-                    <LinkedInIcon className="size-3.5" />
-                  </a>
-                )}
-              </div>
-            </div>
-
             {/* fit */}
             <div>
               <FieldLabel>Fit score</FieldLabel>
