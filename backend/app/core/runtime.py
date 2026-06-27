@@ -11,20 +11,16 @@ inject a scripted `FakeLLM` (no live API in CI); the real adapters live in `core
 """
 
 import asyncio
-import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.types import JsonList, JsonObject
+from app.core.types import JsonObject
 from app.models import AgentRole, AgentRun, AgentStep
-
-if TYPE_CHECKING:
-    from anthropic.types import MessageParam, ToolParam
 
 # --- Guardrails (tunable defaults; per the plan) -----------------------------
 MAX_STEPS = 12
@@ -318,117 +314,12 @@ async def _exec_tool(trace: _Trace, by_name: dict[str, Tool], tc: ToolCall) -> J
     return result
 
 
-# --- Real client: the Anthropic SDK ------------------------------------------
-
-
-def _to_anthropic_messages(history: list[Msg]) -> JsonList:
-    """Translate the neutral history into Anthropic Messages wire format."""
-    msgs: JsonList = []
-    for m in history:
-        if isinstance(m, UserText):
-            msgs.append({"role": "user", "content": m.text})
-        elif isinstance(m, AssistantTurn):
-            blocks: JsonList = []
-            if m.text:
-                blocks.append({"type": "text", "text": m.text})
-            for tc in m.tool_calls:
-                blocks.append({"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input})
-            msgs.append({"role": "assistant", "content": blocks})
-        else:  # ToolResults
-            msgs.append(
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "tool_result", "tool_use_id": cid, "content": json.dumps(res)}
-                        for cid, res in m.results
-                    ],
-                }
-            )
-    return msgs
-
-
-def _to_anthropic_tools(tools: list[Tool]) -> JsonList:
-    return [
-        {"name": t.name, "description": t.description, "input_schema": t.input_schema}
-        for t in tools
-    ]
-
-
-class AnthropicLLM:
-    """Tool-use client backed by the Anthropic SDK. The SDK is imported lazily so the runtime
-    (and FakeLLM-based tests) load without it."""
-
-    def __init__(self, *, api_key: str, model: str, max_tokens: int = 2048) -> None:
-        from anthropic import AsyncAnthropic
-
-        self._client = AsyncAnthropic(api_key=api_key)
-        self._model = model
-        self._max_tokens = max_tokens
-
-    async def turn(self, *, system: str, history: list[Msg], tools: list[Tool]) -> LLMTurn:
-        resp = await self._client.messages.create(
-            model=self._model,
-            max_tokens=self._max_tokens,
-            system=system,
-            messages=cast("list[MessageParam]", _to_anthropic_messages(history)),
-            tools=cast("list[ToolParam]", _to_anthropic_tools(tools)),
-        )
-        text = ""
-        tool_calls: list[ToolCall] = []
-        for block in resp.content:
-            if block.type == "text":
-                text += block.text
-            elif block.type == "tool_use":
-                raw = block.input
-                inp: JsonObject = (
-                    {str(k): v for k, v in raw.items()} if isinstance(raw, dict) else {}
-                )
-                tool_calls.append(ToolCall(id=block.id, name=block.name, input=inp))
-        return LLMTurn(
-            text=text,
-            tool_calls=tool_calls,
-            input_tokens=resp.usage.input_tokens,
-            output_tokens=resp.usage.output_tokens,
-        )
-
-    async def stream(
-        self, *, system: str, history: list[Msg], tools: list[Tool]
-    ) -> AsyncIterator[StreamItem]:
-        async with self._client.messages.stream(
-            model=self._model,
-            max_tokens=self._max_tokens,
-            system=system,
-            messages=cast("list[MessageParam]", _to_anthropic_messages(history)),
-            tools=cast("list[ToolParam]", _to_anthropic_tools(tools)),
-        ) as stream:
-            async for event in stream:
-                if event.type == "text":  # the SDK's high-level text-delta event
-                    yield TextDelta(text=event.text)
-            final = await stream.get_final_message()
-        text = ""
-        tool_calls: list[ToolCall] = []
-        for block in final.content:
-            if block.type == "text":
-                text += block.text
-            elif block.type == "tool_use":
-                raw = block.input
-                inp: JsonObject = (
-                    {str(k): v for k, v in raw.items()} if isinstance(raw, dict) else {}
-                )
-                tool_calls.append(ToolCall(id=block.id, name=block.name, input=inp))
-        yield TurnDone(
-            turn=LLMTurn(
-                text=text,
-                tool_calls=tool_calls,
-                input_tokens=final.usage.input_tokens,
-                output_tokens=final.usage.output_tokens,
-            )
-        )
+# --- Provider selection ------------------------------------------------------
 
 
 def default_llm() -> AgentLLM | None:
-    """The real client when a key is set, else None (callers fall back to deterministic)."""
-    s = get_settings()
-    if not s.anthropic_api_key:
-        return None
-    return AnthropicLLM(api_key=s.anthropic_api_key, model=s.anthropic_model)
+    """The configured provider's client when its key is set, else None (callers fall back to the
+    deterministic path). The adapters + dispatch live in `core/providers.py`."""
+    from app.core.providers import build_llm
+
+    return build_llm(get_settings())

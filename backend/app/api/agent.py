@@ -16,8 +16,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.chat import run_chat, run_chat_stream
-from app.agents.strategy import design_campaign, deterministic_design
 from app.agents.prompts import DEFAULT_VERTICAL
+from app.agents.strategy import design_campaign, deterministic_design
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.db import SessionLocal

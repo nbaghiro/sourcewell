@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
 
+    # --- Agent runtime provider (backend-only; never exposed to users) ---
+    # Which provider the agent runtime uses. One model, no tiers (yet). Blank model = a
+    # per-provider default (see core/providers.py). Each provider has its own key.
+    agent_provider: str = "anthropic"  # anthropic | openai | gemini | xai
+    agent_model: str = ""
+    openai_api_key: str = ""
+    gemini_api_key: str = ""
+    xai_api_key: str = ""
+
     # --- People-data providers (Rail B: licensed search/enrich APIs) ---
     # Platform-key mode. Leave blank to fall back to the synthetic demo provider.
     pdl_api_key: str = ""

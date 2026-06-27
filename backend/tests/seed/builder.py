@@ -400,7 +400,7 @@ async def _seed_workspace(
                         or ("Quick question, {first}" if s["channel"] == "email" else ""),
                         "body": s.get("body")
                         or (
-                            "Came across your work at {company} — would you be open to a quick chat?"
+                            "Came across your work at {company} — open to a quick chat?"
                             if s["channel"] == "email"
                             else "Following up here, {first} — still worth a conversation?"
                         ),
