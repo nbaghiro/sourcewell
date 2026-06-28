@@ -21,9 +21,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/login")
-async def login() -> RedirectResponse:
-    """Start WorkOS SSO (Google / Microsoft / email): redirect to AuthKit."""
-    url = auth_service.workos_login_url()
+async def login(provider: str | None = None) -> RedirectResponse:
+    """Start WorkOS SSO: redirect to AuthKit, or deep-link to a specific IdP.
+
+    `?provider=google` / `?provider=microsoft` jump straight to that OAuth provider; no param
+    lands on AuthKit's own provider chooser (Google / Microsoft / email).
+    """
+    url = auth_service.workos_login_url(idp=provider)
     if url is None:
         raise HTTPException(status_code=503, detail="SSO is not configured")
     return RedirectResponse(url)

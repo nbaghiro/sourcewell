@@ -78,3 +78,36 @@ async def test_register_webhooks_posts() -> None:
         request_url="https://hook", source="messaging"
     )
     assert route.called
+
+
+@respx.mock
+async def test_ensure_webhooks_registers_missing_sources() -> None:
+    respx.get(f"{_DSN}/api/v1/webhooks").mock(return_value=httpx.Response(200, json={"items": []}))
+    post = respx.post(f"{_DSN}/api/v1/webhooks").mock(return_value=httpx.Response(200, json={}))
+    await UnipileConnection("key", _DSN).ensure_webhooks(
+        request_url="https://hook?token=t", sources=("messaging", "account")
+    )
+    assert post.call_count == 2  # neither source existed → both registered
+
+
+@respx.mock
+async def test_ensure_webhooks_skips_already_registered() -> None:
+    respx.get(f"{_DSN}/api/v1/webhooks").mock(
+        return_value=httpx.Response(
+            200, json={"items": [{"request_url": "https://hook?token=t", "source": "messaging"}]}
+        )
+    )
+    post = respx.post(f"{_DSN}/api/v1/webhooks").mock(return_value=httpx.Response(200, json={}))
+    await UnipileConnection("key", _DSN).ensure_webhooks(
+        request_url="https://hook?token=t", sources=("messaging", "account")
+    )
+    assert post.call_count == 1  # only the missing 'account' source is registered
+
+
+@respx.mock
+async def test_delete_account_calls_unipile() -> None:
+    route = respx.delete(f"{_DSN}/api/v1/accounts/acct-1").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    await UnipileConnection("key", _DSN).delete_account(account_id="acct-1")
+    assert route.called

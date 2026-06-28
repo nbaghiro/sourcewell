@@ -16,13 +16,22 @@ export interface Me {
   workspaces: Workspace[];
 }
 
+/** Which sign-in methods the backend has configured — drives which buttons the login page shows. */
+export interface AuthOptions {
+  workos: boolean;
+  linkedin: boolean;
+  password: boolean;
+}
+
 type Status = "loading" | "authed" | "anon";
 
 interface AuthContextValue {
   status: Status;
   me: Me | null;
-  /** Redirect to WorkOS AuthKit (SSO: Google / Microsoft / email). */
-  login: () => void;
+  /** Configured sign-in methods (null while still loading). */
+  options: AuthOptions | null;
+  /** Redirect to WorkOS AuthKit. Pass an `idp` to deep-link straight to Google / Microsoft. */
+  login: (idp?: "google" | "microsoft") => void;
   /** Redirect to the LinkedIn hosted-auth (Unipile) sign-in. */
   linkedinLogin: () => void;
   /** Sign in with email + password (the seeded demo account: demo@sourcewell.ai). */
@@ -37,6 +46,7 @@ const AuthContext = React.createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = React.useState<Status>("loading");
   const [me, setMe] = React.useState<Me | null>(null);
+  const [options, setOptions] = React.useState<AuthOptions | null>(null);
 
   const refresh = React.useCallback(async () => {
     try {
@@ -57,6 +67,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     void refresh();
+    // Sign-in methods are public; fall back to password-only if the probe fails so the form still renders.
+    void api<AuthOptions>("/auth/options")
+      .then(setOptions)
+      .catch(() => setOptions({ workos: false, linkedin: false, password: true }));
   }, [refresh]);
 
   const passwordLogin = React.useCallback(
@@ -73,8 +87,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   );
 
-  const login = React.useCallback(() => {
-    window.location.href = `${API_URL}/auth/login`;
+  const login = React.useCallback((idp?: "google" | "microsoft") => {
+    window.location.href = `${API_URL}/auth/login${idp ? `?provider=${idp}` : ""}`;
   }, []);
 
   const linkedinLogin = React.useCallback(() => {
@@ -91,8 +105,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = React.useMemo(
-    () => ({ status, me, login, linkedinLogin, passwordLogin, logout, refresh }),
-    [status, me, login, linkedinLogin, passwordLogin, logout, refresh],
+    () => ({ status, me, options, login, linkedinLogin, passwordLogin, logout, refresh }),
+    [status, me, options, login, linkedinLogin, passwordLogin, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

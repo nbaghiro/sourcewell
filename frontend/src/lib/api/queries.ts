@@ -734,15 +734,6 @@ export function useDisconnect() {
   });
 }
 
-export function useReauth() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) =>
-      unwrap(await client.POST("/settings/connections/{connection_id}/reauth", { params: { path: { connection_id: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["connections"] }),
-  });
-}
-
 export function useInviteMember() {
   const qc = useQueryClient();
   return useMutation({

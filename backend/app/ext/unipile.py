@@ -237,6 +237,39 @@ class UnipileConnection:
                 json={"request_url": request_url, "source": source},
             )
 
+    async def list_webhooks(self) -> list[JsonObject]:
+        """Existing webhook subscriptions for this Unipile app (used to register idempotently)."""
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(f"{self._dsn}/api/v1/webhooks", headers=self._headers())
+        if resp.status_code >= 400:
+            return []
+        try:
+            payload: object = resp.json()
+        except Exception:
+            return []
+        raw = payload.get("items") if isinstance(payload, dict) else payload
+        return [h for h in raw if isinstance(h, dict)] if isinstance(raw, list) else []
+
+    async def ensure_webhooks(self, *, request_url: str, sources: tuple[str, ...]) -> None:
+        """Idempotently subscribe our receiver for each `source`, skipping ones already live for the
+        same URL — so repeat connects/sign-ins don't pile up duplicate (double-delivering) hooks."""
+        live = {
+            h.get("source")
+            for h in await self.list_webhooks()
+            if h.get("request_url") == request_url
+        }
+        for source in sources:
+            if source not in live:
+                await self.register_webhooks(request_url=request_url, source=source)
+
+    async def delete_account(self, *, account_id: str) -> None:
+        """Remove a connected account from Unipile — best-effort cleanup on disconnect, so a
+        disconnected seat doesn't leave a connected (billable) account behind."""
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            await client.delete(
+                f"{self._dsn}/api/v1/accounts/{account_id}", headers=self._headers()
+            )
+
 
 def unipile_connection() -> UnipileConnection | None:
     """The platform Unipile connection client, or None if unconfigured."""
