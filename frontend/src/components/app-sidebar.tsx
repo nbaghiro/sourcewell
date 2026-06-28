@@ -2,6 +2,7 @@ import { Check, ChevronsUpDown, type LucideIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { BrandMark } from "@/components/brand-mark";
+import { CreditMeter } from "@/components/credit-meter";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -127,6 +128,8 @@ function AppSidebar({
           <SidebarNavItem key={item.label} {...item} />
         ))}
       </nav>
+
+      <CreditMeter />
 
       <div className="flex items-center gap-2.5 border-t border-sidebar-border pt-4">
         <div className="grid size-8 place-items-center rounded-md bg-sidebar-active text-xs font-semibold text-sidebar-active-foreground">
