@@ -1145,6 +1145,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/billing/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Checkout
+         * @description Start a Stripe Checkout for a paid plan; returns the hosted URL to redirect to.
+         */
+        post: operations["checkout_billing_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/billing/portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Portal
+         * @description Open the Stripe Customer Portal (manage/upgrade/cancel) for the org's billing account.
+         */
+        post: operations["portal_billing_portal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/stripe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stripe Webhook
+         * @description Stripe-called (unauthenticated; verified by signature). Updates the org's plan + period.
+         */
+        post: operations["stripe_webhook_webhooks_stripe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications": {
         parameters: {
             query?: never;
@@ -2071,6 +2131,11 @@ export interface components {
             role: string;
             /** Text */
             text: string;
+        };
+        /** CheckoutIn */
+        CheckoutIn: {
+            /** Plan */
+            plan: string;
         };
         /** ConnectionOut */
         ConnectionOut: {
@@ -3309,6 +3374,11 @@ export interface components {
              */
             exclude_titles: string[];
         };
+        /** UrlOut */
+        UrlOut: {
+            /** Url */
+            url: string;
+        };
         /** UserCreate */
         UserCreate: {
             /** Email */
@@ -3352,6 +3422,11 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WebhookOut */
+        WebhookOut: {
+            /** Status */
+            status: string;
         };
         /** WorkspaceCreate */
         WorkspaceCreate: {
@@ -3465,6 +3540,8 @@ export interface components {
             breakdown: {
                 [key: string]: number;
             };
+            /** Billing Enabled */
+            billing_enabled: boolean;
         };
         /** MeResponse */
         app__api__tenancy__MeResponse: {
@@ -5520,6 +5597,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgExport"];
+                };
+            };
+        };
+    };
+    checkout_billing_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portal_billing_portal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlOut"];
+                };
+            };
+        };
+    };
+    stripe_webhook_webhooks_stripe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookOut"];
                 };
             };
         };

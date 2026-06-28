@@ -441,6 +441,27 @@ export function useAccountUsage() {
   });
 }
 
+/** Start a Stripe Checkout for a paid plan, then redirect to the hosted page. */
+export function useStartCheckout() {
+  return useMutation({
+    mutationFn: async (plan: string) =>
+      unwrap(await client.POST("/billing/checkout", { body: { plan } })),
+    onSuccess: (data) => {
+      if (data?.url) window.location.href = data.url;
+    },
+  });
+}
+
+/** Open the Stripe Customer Portal (manage/upgrade/cancel), then redirect. */
+export function useOpenBillingPortal() {
+  return useMutation({
+    mutationFn: async () => unwrap(await client.POST("/billing/portal", {})),
+    onSuccess: (data) => {
+      if (data?.url) window.location.href = data.url;
+    },
+  });
+}
+
 export function useConnections() {
   const ws = useWorkspaceId();
   return useQuery({

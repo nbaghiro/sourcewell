@@ -34,6 +34,8 @@ import {
   type DataProvider,
   useAccountUsage,
   useAddSuppression,
+  useOpenBillingPortal,
+  useStartCheckout,
   useConnect,
   useConnections,
   useDataProviders,
@@ -110,6 +112,10 @@ export function SettingsPage() {
 
 function PlanUsageTab() {
   const { data } = useAccountUsage();
+  const checkout = useStartCheckout();
+  const portal = useOpenBillingPortal();
+  const busy = checkout.isPending || portal.isPending;
+  const onErr = () => toast.error("Billing action failed — try again.");
   if (!data)
     return (
       <Card>
@@ -171,6 +177,44 @@ function PlanUsageTab() {
           <UsageStat label="InMails sent" weight="×2" value={data.breakdown.inmails ?? 0} />
           <UsageStat label="Sourced" weight="×1" value={data.breakdown.sourced ?? 0} />
         </div>
+
+        {data.billing_enabled ? (
+          <div className="flex flex-wrap gap-2 border-t border-border/60 pt-4">
+            {data.plan !== "pro" && data.plan !== "premium" && (
+              <Button
+                size="sm"
+                onClick={() => checkout.mutate("pro", { onError: onErr })}
+                disabled={busy}
+              >
+                Upgrade to Pro
+              </Button>
+            )}
+            {data.plan !== "premium" && (
+              <Button
+                size="sm"
+                variant={data.plan === "pro" ? "default" : "outline"}
+                onClick={() => checkout.mutate("premium", { onError: onErr })}
+                disabled={busy}
+              >
+                Upgrade to Premium
+              </Button>
+            )}
+            {(data.plan === "pro" || data.plan === "premium") && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => portal.mutate(undefined, { onError: onErr })}
+                disabled={busy}
+              >
+                Manage billing
+              </Button>
+            )}
+          </div>
+        ) : (
+          <p className="border-t border-border/60 pt-4 text-xs text-muted-foreground">
+            Billing isn't set up yet — connect Stripe to enable upgrades.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
