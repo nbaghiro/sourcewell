@@ -14,11 +14,11 @@ from app.api.guards import require_org_admin, require_workspace
 from app.core.crypto import seal, unseal
 from app.core.types import JsonObject
 from app.ext.registry import PROVIDER_CATALOG, build_one
+from app.ext.unipile import unipile_connection
 from app.models import (
     Campaign,
     Connection,
     ConnectionProvider,
-    ConnectionStatus,
     Contact,
     Enrollment,
     Membership,
@@ -27,13 +27,13 @@ from app.models import (
     Message,
     Organization,
     ProviderCredential,
-    SeatType,
     User,
     UserStatus,
     Workspace,
 )
 from app.services.billing.credits import credit_status
 from app.services.insights import audit
+from app.services.workspace import auth as auth_service
 from app.services.workspace.settings import (
     ConnectionOut,
     DataProviderOut,
@@ -202,60 +202,53 @@ async def update_workspace_settings(
     )
 
 
-# ---- connection management (stub OAuth: connecting just marks the seat live) ----
-
-_SEAT_FOR = {
-    ConnectionProvider.gmail: SeatType.email,
-    ConnectionProvider.graph: SeatType.email,
-    ConnectionProvider.linkedin: SeatType.recruiter,
-}
+# ---- connection management (real seat connect via Unipile hosted-auth) ----
 
 
-@router.post("/connections/{provider}/connect", response_model=ConnectionOut)
+class ConnectStartOut(BaseModel):
+    url: str
+
+
+@router.post("/connections/{provider}/connect", response_model=ConnectStartOut)
 async def connect(
     provider: ConnectionProvider, ctx: ContextDep, session: SessionDep
-) -> ConnectionOut:
-    existing = (
-        await session.execute(
-            select(Connection).where(
-                Connection.organization_id == ctx.org_id,
-                Connection.user_id == ctx.user_id,
-                Connection.provider == provider,
-            )
-        )
-    ).scalar_one_or_none()
-    if existing is not None:
-        existing.status = ConnectionStatus.ok
-        conn = existing
-    else:
-        conn = Connection(
-            organization_id=ctx.org_id,
-            user_id=ctx.user_id,
-            provider=provider,
-            seat_type=_SEAT_FOR.get(provider, SeatType.email),
-            status=ConnectionStatus.ok,
-        )
-        session.add(conn)
-    await session.flush()
-    user = await session.get(User, ctx.user_id)
-    return _dump_connection(conn, user.email if user else "")
+) -> ConnectStartOut:
+    """Start a hosted-auth wizard to connect (or reconnect) a sending seat — returns the URL to
+    redirect the browser to; the seat is attached server-side when the provider notifies us.
+    LinkedIn (Unipile) only today; email seats (Gmail / Microsoft) are not yet available.
+    """
+    if provider is not ConnectionProvider.linkedin:
+        raise HTTPException(status_code=501, detail="Only LinkedIn seats can be connected today")
+    url = await auth_service.start_seat_connect(session, user_id=ctx.user_id)
+    if url is None:
+        raise HTTPException(status_code=503, detail="LinkedIn connection is not configured")
+    await audit.record(
+        session,
+        org_id=ctx.org_id,
+        workspace_id=ctx.current_workspace_id,
+        actor_user_id=ctx.user_id,
+        action="connection.connected",
+        summary="Started connecting a LinkedIn seat",
+        target_type="connection",
+        target_id=provider.value,
+    )
+    return ConnectStartOut(url=url)
 
 
 @router.post("/connections/{connection_id}/disconnect", response_model=StatusIdOut)
 async def disconnect(connection_id: str, ctx: ContextDep, session: SessionDep) -> StatusIdOut:
     conn = await _owned_connection(session, ctx.org_id, connection_id)
+    account_id = conn.external_id
     await session.delete(conn)
     await session.flush()
+    # Best-effort: drop the account in Unipile too so a disconnected seat doesn't linger (and bill).
+    unipile = unipile_connection()
+    if account_id and unipile is not None:
+        try:
+            await unipile.delete_account(account_id=account_id)
+        except Exception:
+            pass
     return StatusIdOut(status="disconnected", id=connection_id)
-
-
-@router.post("/connections/{connection_id}/reauth", response_model=ConnectionOut)
-async def reauth(connection_id: str, ctx: ContextDep, session: SessionDep) -> ConnectionOut:
-    conn = await _owned_connection(session, ctx.org_id, connection_id)
-    conn.status = ConnectionStatus.ok
-    await session.flush()
-    user = await session.get(User, conn.user_id)
-    return _dump_connection(conn, user.email if user else "")
 
 
 # ---- member management (org admin only) ----

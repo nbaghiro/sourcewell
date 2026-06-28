@@ -30,7 +30,10 @@ export interface paths {
         };
         /**
          * Login
-         * @description Start WorkOS SSO (Google / Microsoft / email): redirect to AuthKit.
+         * @description Start WorkOS SSO: redirect to AuthKit, or deep-link to a specific IdP.
+         *
+         *     `?provider=google` / `?provider=microsoft` jump straight to that OAuth provider; no param
+         *     lands on AuthKit's own provider chooser (Google / Microsoft / email).
          */
         get: operations["login_auth_login_get"];
         put?: never;
@@ -993,7 +996,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Connect */
+        /**
+         * Connect
+         * @description Start a hosted-auth wizard to connect (or reconnect) a sending seat — returns the URL to
+         *     redirect the browser to; the seat is attached server-side when the provider notifies us.
+         *     LinkedIn (Unipile) only today; email seats (Gmail / Microsoft) are not yet available.
+         */
         post: operations["connect_settings_connections__provider__connect_post"];
         delete?: never;
         options?: never;
@@ -1012,23 +1020,6 @@ export interface paths {
         put?: never;
         /** Disconnect */
         post: operations["disconnect_settings_connections__connection_id__disconnect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/settings/connections/{connection_id}/reauth": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reauth */
-        post: operations["reauth_settings_connections__connection_id__reauth_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2071,6 +2062,11 @@ export interface components {
             role: string;
             /** Text */
             text: string;
+        };
+        /** ConnectStartOut */
+        ConnectStartOut: {
+            /** Url */
+            url: string;
         };
         /** ConnectionOut */
         ConnectionOut: {
@@ -3514,7 +3510,9 @@ export interface operations {
     };
     login_auth_login_get: {
         parameters: {
-            query?: never;
+            query?: {
+                provider?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3528,6 +3526,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5212,7 +5219,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConnectionOut"];
+                    "application/json": components["schemas"]["ConnectStartOut"];
                 };
             };
             /** @description Validation Error */
@@ -5244,37 +5251,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusIdOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reauth_settings_connections__connection_id__reauth_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                connection_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConnectionOut"];
                 };
             };
             /** @description Validation Error */

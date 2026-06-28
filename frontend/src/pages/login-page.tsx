@@ -5,6 +5,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 
 const FEATURES = [
@@ -97,7 +98,7 @@ function HeroArt() {
 }
 
 export function LoginPage() {
-  const { login, linkedinLogin, passwordLogin } = useAuth();
+  const { login, linkedinLogin, passwordLogin, options } = useAuth();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
@@ -113,8 +114,10 @@ export function LoginPage() {
         setError("Invalid email or password.");
         setBusy(false);
       }
-    } else {
+    } else if (options?.workos) {
       login();
+    } else {
+      setError("Enter your email and password.");
     }
   }
 
@@ -160,68 +163,93 @@ export function LoginPage() {
           <div className="font-display text-2xl font-bold tracking-tight">Sign in to Sourcewell</div>
           <p className="mb-7 mt-2 text-sm text-muted-foreground">Use your company account to continue.</p>
 
-          <div className="flex flex-col gap-2.5">
-            <Button size="lg" className="h-11 w-full justify-center" onClick={login}>
-              <ShieldCheck /> Continue with SSO
-            </Button>
-            <Button variant="outline" size="lg" className="h-11 w-full justify-center" onClick={login}>
-              <GoogleIcon /> Continue with Google
-            </Button>
-            <Button variant="outline" size="lg" className="h-11 w-full justify-center" onClick={login}>
-              <MicrosoftIcon /> Continue with Microsoft
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-11 w-full justify-center"
-              onClick={linkedinLogin}
-            >
-              <LinkedInIcon /> Continue with LinkedIn
-            </Button>
-          </div>
-
-          <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
-          </div>
-
-          <div className="grid gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="email">Work email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@company.com"
-                className="h-11"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+          {options === null ? (
+            <div className="flex flex-col gap-2.5">
+              <Skeleton className="h-11 w-full" />
+              <Skeleton className="h-11 w-full" />
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                className="h-11"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && void continueWithEmail()}
-              />
-            </div>
-          </div>
+          ) : (
+            <>
+              {(options.workos || options.linkedin) && (
+                <div className="flex flex-col gap-2.5">
+                  {options.workos && (
+                    <>
+                      <Button size="lg" className="h-11 w-full justify-center" onClick={() => login()}>
+                        <ShieldCheck /> Continue with SSO
+                      </Button>
+                      <Button variant="outline" size="lg" className="h-11 w-full justify-center" onClick={() => login("google")}>
+                        <GoogleIcon /> Continue with Google
+                      </Button>
+                      <Button variant="outline" size="lg" className="h-11 w-full justify-center" onClick={() => login("microsoft")}>
+                        <MicrosoftIcon /> Continue with Microsoft
+                      </Button>
+                    </>
+                  )}
+                  {options.linkedin && (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="h-11 w-full justify-center"
+                      onClick={linkedinLogin}
+                    >
+                      <LinkedInIcon /> Continue with LinkedIn
+                    </Button>
+                  )}
+                </div>
+              )}
 
-          {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+              {(options.workos || options.linkedin) && options.password && (
+                <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+                </div>
+              )}
 
-          <Button size="lg" className="mt-3 h-11 w-full justify-center" disabled={busy} onClick={() => void continueWithEmail()}>
-            {busy ? "Signing in…" : "Continue with email"}
-          </Button>
+              {options.password && (
+                <>
+                  <div className="grid gap-3">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="email">Work email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="you@company.com"
+                        className="h-11"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder="••••••••"
+                        className="h-11"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && void continueWithEmail()}
+                      />
+                    </div>
+                  </div>
 
-          <p className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded-md border border-border bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-foreground">
-              Secured by WorkOS
-            </span>
-            SSO, MFA &amp; audit logs
-          </p>
+                  {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+
+                  <Button size="lg" className="mt-3 h-11 w-full justify-center" disabled={busy} onClick={() => void continueWithEmail()}>
+                    {busy ? "Signing in…" : "Continue with email"}
+                  </Button>
+                </>
+              )}
+
+              {options.workos && (
+                <p className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="rounded-md border border-border bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+                    Secured by WorkOS
+                  </span>
+                  SSO, MFA &amp; audit logs
+                </p>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

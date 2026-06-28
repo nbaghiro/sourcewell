@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Database, Mail, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -41,7 +42,6 @@ import {
   useDisconnect,
   useInviteMember,
   useMembers,
-  useReauth,
   useRemoveMember,
   useRemoveSuppression,
   useSaveDataProvider,
@@ -190,11 +190,20 @@ function UsageStat({ label, weight, value }: { label: string; weight: string; va
 }
 
 function ConnectionsTab() {
+  const qc = useQueryClient();
   const { data: connections } = useConnections();
   const connect = useConnect();
   const disconnect = useDisconnect();
-  const reauth = useReauth();
-  const busy = connect.isPending || disconnect.isPending || reauth.isPending;
+  const busy = connect.isPending || disconnect.isPending;
+
+  // Unipile bounces the recruiter back here after the hosted-auth wizard — confirm + refetch the seat.
+  React.useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("connected") === "linkedin") {
+      toast.success("LinkedIn connected");
+      void qc.invalidateQueries({ queryKey: ["connections"] });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [qc]);
 
   return (
     <Card>
@@ -225,7 +234,19 @@ function ConnectionsTab() {
                       Disconnect
                     </Button>
                   ) : (
-                    <Button variant="outline" size="sm" disabled={busy} onClick={() => reauth.mutate(c.id, { onSuccess: () => toast.success("Reconnected") })}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() =>
+                        connect.mutate(c.provider as "gmail" | "graph" | "linkedin", {
+                          onSuccess: (r) => {
+                            window.location.href = r.url;
+                          },
+                          onError: () => toast.error("Reconnect isn't available for this channel yet"),
+                        })
+                      }
+                    >
                       Reconnect
                     </Button>
                   )}
@@ -240,7 +261,19 @@ function ConnectionsTab() {
                 <div className="text-sm font-semibold text-foreground">LinkedIn · per-recruiter</div>
                 <div className="text-xs text-muted-foreground">Connect another seat via Unipile (~150/day)</div>
               </div>
-              <Button variant="outline" size="sm" disabled={busy} onClick={() => connect.mutate("linkedin", { onSuccess: () => toast.success("LinkedIn connected") })}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  connect.mutate("linkedin", {
+                    onSuccess: (r) => {
+                      window.location.href = r.url;
+                    },
+                    onError: () => toast.error("Couldn't start LinkedIn connection"),
+                  })
+                }
+              >
                 Connect
               </Button>
             </div>

@@ -17,12 +17,18 @@ from workos import WorkOSClient
 from app.core.config import get_settings
 from app.core.crypto import seal, unseal, verify_password
 from app.core.db import new_id
-from app.ext.unipile import unipile_connection
+from app.ext.unipile import UnipileConnection, unipile_connection
 from app.models import (
+    ConnectionProvider,
     LoginAttempt,
+    SeatType,
     User,
 )
-from app.services.workspace.connections import provision_from_linkedin, provision_user
+from app.services.workspace.connections import (
+    provision_from_linkedin,
+    provision_user,
+    upsert_seat,
+)
 
 
 def _opt(payload: object, key: str) -> str | None:
@@ -41,13 +47,27 @@ def _workos_client() -> WorkOSClient:
     return WorkOSClient(api_key=s.workos_api_key, client_id=s.workos_client_id)
 
 
-def workos_login_url(state: str | None = None) -> str | None:
-    """The AuthKit authorization URL, or None if WorkOS isn't configured."""
+# Friendly IdP hint from the login screen → WorkOS OAuth provider, so the Google / Microsoft
+# buttons deep-link straight to that provider. Anything else lands on AuthKit's own chooser.
+_OAUTH_PROVIDERS = {
+    "google": "GoogleOAuth",
+    "microsoft": "MicrosoftOAuth",
+}
+
+
+def workos_login_url(state: str | None = None, *, idp: str | None = None) -> str | None:
+    """The AuthKit authorization URL, or None if WorkOS isn't configured.
+
+    `idp` ("google" / "microsoft") deep-links straight to that OAuth provider; anything else
+    (including None) lands on AuthKit's hosted provider chooser (Google / Microsoft / email).
+    """
     s = get_settings()
     if not s.workos_enabled:
         return None
     return _workos_client().user_management.get_authorization_url(
-        provider="authkit", redirect_uri=s.workos_redirect_uri, state=state
+        provider=_OAUTH_PROVIDERS.get(idp or "", "authkit"),
+        redirect_uri=s.workos_redirect_uri,
+        state=state,
     )
 
 
@@ -115,8 +135,44 @@ async def start_linkedin_login(session: AsyncSession) -> str | None:
     return await conn.create_link(user_ref=state, notify_url=notify, redirect_url=redirect)
 
 
+async def start_seat_connect(session: AsyncSession, *, user_id: str) -> str | None:
+    """Begin a hosted-auth wizard for an already-signed-in user to connect (or reconnect) their
+    LinkedIn seat; returns the wizard URL (None if Unipile/webhook isn't configured). The seat is
+    attached server-side when the notify webhook fires — see `complete_linkedin_notify`.
+    """
+    conn = unipile_connection()
+    s = get_settings()
+    if conn is None or not s.unipile_webhook_secret:
+        return None
+    state = new_id()
+    # Pre-naming the user is what tells the shared notify this is a seat connect, not a sign-in.
+    session.add(LoginAttempt(state=state, status="pending", user_id=user_id))
+    await session.flush()
+    notify = f"{s.api_base_url}/auth/linkedin/notify?token={s.unipile_webhook_secret}"
+    redirect = f"{s.frontend_url}/settings?connected=linkedin"
+    return await conn.create_link(user_ref=state, notify_url=notify, redirect_url=redirect)
+
+
+async def _ensure_unipile_webhooks(conn: UnipileConnection) -> None:
+    """Best-effort: make sure Unipile will deliver inbound replies + account-status events for the
+    connected seat to our public receiver. Idempotent; a failure just means we retry next connect.
+    """
+    s = get_settings()
+    if not s.unipile_webhook_secret:
+        return
+    receiver = f"{s.api_base_url}/webhooks/unipile?token={s.unipile_webhook_secret}"
+    try:
+        await conn.ensure_webhooks(request_url=receiver, sources=("messaging", "account"))
+    except Exception:
+        pass
+
+
 async def complete_linkedin_notify(session: AsyncSession, *, state: str, account_id: str) -> None:
-    """Unipile notify: read the connected account's identity, provision the user, mark ready."""
+    """Unipile notify webhook, shared by two flows and told apart by whether the attempt already
+    names a user: a *sign-in* (no user yet → provision/find them by LinkedIn identity, mark ready
+    for the browser callback) or a settings-initiated *seat connect* (user preset → just attach the
+    seat to them and consume the attempt, since connect has no browser-side finish step).
+    """
     attempt = (
         await session.execute(select(LoginAttempt).where(LoginAttempt.state == state))
     ).scalar_one_or_none()
@@ -124,8 +180,26 @@ async def complete_linkedin_notify(session: AsyncSession, *, state: str, account
         return
     conn = unipile_connection()
     profile = await conn.profile(account_id=account_id) if conn is not None else None
-    member_urn = _opt(profile, "member_urn") or account_id
     name = " ".join(filter(None, [_opt(profile, "first_name"), _opt(profile, "last_name")]))
+    if attempt.user_id is not None:
+        user = await session.get(User, attempt.user_id)
+        if user is not None:
+            seat = await upsert_seat(
+                session,
+                organization_id=user.organization_id,
+                user_id=user.id,
+                provider=ConnectionProvider.linkedin,
+                account_id=account_id,
+                seat_type=SeatType.recruiter,
+            )
+            if name:
+                seat.capabilities = {**(seat.capabilities or {}), "display_name": name}
+            if conn is not None:
+                await _ensure_unipile_webhooks(conn)
+        await session.delete(attempt)
+        await session.flush()
+        return
+    member_urn = _opt(profile, "member_urn") or account_id
     user = await provision_from_linkedin(
         session,
         member_urn=member_urn,
@@ -133,6 +207,8 @@ async def complete_linkedin_notify(session: AsyncSession, *, state: str, account
         email=_opt(profile, "email"),
         account_id=account_id,
     )
+    if conn is not None:
+        await _ensure_unipile_webhooks(conn)
     attempt.user_id = user.id
     attempt.account_id = account_id
     attempt.status = "ready"
