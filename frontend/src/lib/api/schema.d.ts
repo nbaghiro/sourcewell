@@ -911,6 +911,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Account Usage
+         * @description The account's pooled monthly credit usage vs. its plan allowance — a soft limit (overage is
+         *     allowed). Powers the usage meter + the over-allowance warning.
+         */
+        get: operations["account_usage_settings_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/members": {
         parameters: {
             query?: never;
@@ -3288,17 +3309,6 @@ export interface components {
              */
             exclude_titles: string[];
         };
-        /** UsageOut */
-        UsageOut: {
-            /** Provider */
-            provider: string;
-            /** Kind */
-            kind: string;
-            /** Day */
-            day: string;
-            /** Count */
-            count: number;
-        };
         /** UserCreate */
         UserCreate: {
             /** Email */
@@ -3422,6 +3432,39 @@ export interface components {
             imported: number;
             /** Contact Ids */
             contact_ids: string[];
+        };
+        /** UsageOut */
+        app__api__discovery__UsageOut: {
+            /** Provider */
+            provider: string;
+            /** Kind */
+            kind: string;
+            /** Day */
+            day: string;
+            /** Count */
+            count: number;
+        };
+        /** UsageOut */
+        app__api__settings__UsageOut: {
+            /** Plan */
+            plan: string;
+            /** Used */
+            used: number;
+            /** Allowance */
+            allowance: number;
+            /** Over */
+            over: boolean;
+            /** Pct */
+            pct: number;
+            /**
+             * Period Start
+             * Format: date-time
+             */
+            period_start: string;
+            /** Breakdown */
+            breakdown: {
+                [key: string]: number;
+            };
         };
         /** MeResponse */
         app__api__tenancy__MeResponse: {
@@ -5039,6 +5082,26 @@ export interface operations {
             };
         };
     };
+    account_usage_settings_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__api__settings__UsageOut"];
+                };
+            };
+        };
+    };
     members_settings_members_get: {
         parameters: {
             query?: never;
@@ -5666,7 +5729,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UsageOut"][];
+                    "application/json": components["schemas"]["app__api__discovery__UsageOut"][];
                 };
             };
         };

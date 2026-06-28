@@ -43,6 +43,7 @@ const k = {
   analytics: (ws: string | null) => ["analytics", ws] as const,
   notifications: (ws: string | null) => ["notifications", ws] as const,
   members: (ws: string | null) => ["members", ws] as const,
+  usage: (ws: string | null) => ["usage", ws] as const,
   connections: (ws: string | null) => ["connections", ws] as const,
   workspaceSettings: (ws: string | null) => ["workspaceSettings", ws] as const,
   audit: (ws: string | null) => ["audit", ws] as const,
@@ -428,6 +429,15 @@ export function useMembers() {
     queryKey: k.members(ws),
     enabled: !!ws,
     queryFn: async () => unwrap(await client.GET("/settings/members")),
+  });
+}
+
+export function useAccountUsage() {
+  const ws = useWorkspaceId();
+  return useQuery({
+    queryKey: k.usage(ws),
+    enabled: !!ws,
+    queryFn: async () => unwrap(await client.GET("/settings/usage")),
   });
 }
 

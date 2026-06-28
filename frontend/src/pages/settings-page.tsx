@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   type DataProvider,
+  useAccountUsage,
   useAddSuppression,
   useConnect,
   useConnections,
@@ -85,6 +86,7 @@ export function SettingsPage() {
         value={tab}
         onChange={setTab}
         options={[
+          { value: "plan", label: "Plan & usage" },
           { value: "connections", label: "Connections" },
           { value: "providers", label: "Data providers" },
           { value: "suppression", label: "Suppression" },
@@ -94,6 +96,7 @@ export function SettingsPage() {
           { value: "audit", label: "Audit" },
         ]}
       />
+      {tab === "plan" && <PlanUsageTab />}
       {tab === "connections" && <ConnectionsTab />}
       {tab === "providers" && <ProvidersTab />}
       {tab === "suppression" && <SuppressionTab />}
@@ -102,6 +105,87 @@ export function SettingsPage() {
       {tab === "reporting" && <ReportingTab />}
       {tab === "audit" && <AuditTab />}
     </PageLayout>
+  );
+}
+
+function PlanUsageTab() {
+  const { data } = useAccountUsage();
+  if (!data)
+    return (
+      <Card>
+        <CardContent className="py-6">
+          <Skeleton className="h-44" />
+        </CardContent>
+      </Card>
+    );
+  const pct = Math.min(100, data.pct);
+  const tone = data.over
+    ? "var(--destructive)"
+    : data.pct >= 80
+      ? "var(--warning)"
+      : "var(--primary)";
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Plan &amp; usage</CardTitle>
+          <Badge variant="accent" className="capitalize">
+            {data.plan}
+          </Badge>
+        </div>
+        <span className="text-xs text-muted-foreground">
+          One pooled monthly credit balance — resets at the start of each month.
+        </span>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div>
+          <div className="flex items-baseline justify-between">
+            <span className="font-display text-2xl font-semibold text-foreground">
+              {data.used.toLocaleString()}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              of {data.allowance.toLocaleString()} credits · {data.pct}%
+            </span>
+          </div>
+          <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-secondary">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${pct}%`, background: tone }}
+            />
+          </div>
+        </div>
+
+        {data.over ? (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">
+            You're {data.pct - 100}% over this month's credits. Sending and sourcing keep working —
+            overage is reconciled at billing. Upgrade for more headroom.
+          </div>
+        ) : data.pct >= 80 ? (
+          <p className="text-sm" style={{ color: "var(--warning)" }}>
+            You've used {data.pct}% of this month's credits.
+          </p>
+        ) : null}
+
+        <div className="grid grid-cols-3 gap-3">
+          <UsageStat label="Emails sent" weight="×1" value={data.breakdown.emails ?? 0} />
+          <UsageStat label="InMails sent" weight="×2" value={data.breakdown.inmails ?? 0} />
+          <UsageStat label="Sourced" weight="×1" value={data.breakdown.sourced ?? 0} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function UsageStat({ label, weight, value }: { label: string; weight: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary/30 px-3.5 py-3">
+      <div className="text-xs text-muted-foreground">
+        {label} <span className="opacity-60">{weight}</span>
+      </div>
+      <div className="mt-0.5 font-display text-xl font-semibold text-foreground">
+        {value.toLocaleString()}
+      </div>
+    </div>
   );
 }
 
