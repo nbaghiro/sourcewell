@@ -180,6 +180,15 @@ class Organization(IdMixin, TimestampMixin, Base):
     slug: Mapped[str] = mapped_column(String(100), unique=True)
     plan: Mapped[str] = mapped_column(String(50), default="trial")
     data_region: Mapped[str] = mapped_column(String(20), default="us")
+    # Stripe billing (the webhook is the source of truth; blank until a subscription is created).
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    current_period_start: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    current_period_end: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class Workspace(IdMixin, TimestampMixin, Base):

@@ -54,10 +54,17 @@ class CreditStatus:
 
 
 async def credit_status(
-    session: AsyncSession, *, organization_id: str, plan: str, now: datetime
+    session: AsyncSession,
+    *,
+    organization_id: str,
+    plan: str,
+    now: datetime,
+    period_start_at: datetime | None = None,
 ) -> CreditStatus:
-    """The account's pooled credit usage for the current period, across all its workspaces."""
-    start = period_start(now)
+    """The account's pooled credit usage for the current period, across all its workspaces. When the
+    org has a Stripe billing window (`period_start_at`), usage resets on that cycle; else the
+    calendar month."""
+    start = period_start_at or period_start(now)
     sent = (
         (
             await session.execute(

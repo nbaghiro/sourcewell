@@ -70,7 +70,13 @@ async def account_usage(ctx: ContextDep, session: SessionDep) -> UsageOut:
     org = await session.get(Organization, ctx.org_id)
     if org is None:
         raise HTTPException(status_code=404, detail="organization not found")
-    st = await credit_status(session, organization_id=org.id, plan=org.plan, now=datetime.now(UTC))
+    st = await credit_status(
+        session,
+        organization_id=org.id,
+        plan=org.plan,
+        now=datetime.now(UTC),
+        period_start_at=org.current_period_start,
+    )
     return UsageOut(
         plan=org.plan,
         used=st.used,

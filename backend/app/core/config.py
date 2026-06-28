@@ -54,6 +54,14 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     xai_api_key: str = ""
 
+    # --- Billing (Stripe) ---
+    # Key-gated: blank = billing disabled (free tier only, no checkout). Stripe hosts all payment
+    # entry (Checkout + Portal); we never see card data. Prices are the Stripe Price IDs per plan.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_pro: str = ""
+    stripe_price_premium: str = ""
+
     # --- People-data providers (Rail B: licensed search/enrich APIs) ---
     # Platform-key mode. Leave blank to fall back to the synthetic demo provider.
     pdl_api_key: str = ""
