@@ -32,6 +32,7 @@ from app.models import (
     UserStatus,
     Workspace,
 )
+from app.services.billing.credits import credit_status
 from app.services.insights import audit
 from app.services.workspace.settings import (
     ConnectionOut,
@@ -50,6 +51,35 @@ WORKSPACE_DEFAULTS: JsonObject = {
     "daily_cap_email": 120,
     "daily_cap_linkedin": 80,
 }
+
+
+class UsageOut(BaseModel):
+    plan: str
+    used: int
+    allowance: int
+    over: bool
+    pct: int
+    period_start: datetime
+    breakdown: dict[str, int]  # emails / inmails / sourced counts this period
+
+
+@router.get("/usage", response_model=UsageOut)
+async def account_usage(ctx: ContextDep, session: SessionDep) -> UsageOut:
+    """The account's pooled monthly credit usage vs. its plan allowance — a soft limit (overage is
+    allowed). Powers the usage meter + the over-allowance warning."""
+    org = await session.get(Organization, ctx.org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="organization not found")
+    st = await credit_status(session, organization_id=org.id, plan=org.plan, now=datetime.now(UTC))
+    return UsageOut(
+        plan=org.plan,
+        used=st.used,
+        allowance=st.allowance,
+        over=st.over,
+        pct=st.pct,
+        period_start=st.period_start,
+        breakdown={"emails": st.emails, "inmails": st.inmails, "sourced": st.sourced},
+    )
 
 
 class MemberOut(BaseModel):
