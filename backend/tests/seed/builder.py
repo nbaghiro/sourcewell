@@ -24,6 +24,7 @@ from app.models import (
     AgentRun,
     AgentStep,
     AuditEvent,
+    AutonomyLevel,
     AutonomyMode,
     Campaign,
     CampaignStatus,
@@ -389,6 +390,12 @@ async def _seed_workspace(
                 name=spec["name"],
                 status=CampaignStatus(spec["status"]),
                 autonomy_mode=AutonomyMode(spec["autonomy_mode"]),
+                # Keep the two autonomy fields in sync: "auto" mode = full autonomy.
+                autonomy_level=(
+                    AutonomyLevel.full
+                    if spec["autonomy_mode"] == "auto"
+                    else AutonomyLevel.assisted
+                ),
                 from_email=from_email,
                 criteria=spec["criteria"],
                 sequence=[
