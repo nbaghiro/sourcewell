@@ -259,10 +259,22 @@ async def inbox(ctx: ContextDep, session: SessionDep) -> list[InboxItemOut]:
     for m in rows.scalars().all():
         by_enrollment.setdefault(m.enrollment_id, []).append(m)
 
+    # Batch-load each thread's enrollment + contact in one query (was an N+1 of 2 gets per thread).
+    enr_contact: dict[str, tuple[Enrollment, Contact | None]] = {}
+    if by_enrollment:
+        joined = await session.execute(
+            select(Enrollment, Contact)
+            .outerjoin(Contact, Enrollment.contact_id == Contact.id)
+            .where(Enrollment.id.in_(by_enrollment.keys()))
+        )
+        for enr, c in joined.tuples().all():
+            enr_contact[enr.id] = (enr, c)
+
     items: list[InboxItemOut] = []
     for enrollment_id, messages in by_enrollment.items():
-        enrollment = await session.get(Enrollment, enrollment_id)
-        contact = await session.get(Contact, enrollment.contact_id) if enrollment else None
+        pair = enr_contact.get(enrollment_id)
+        enrollment = pair[0] if pair else None
+        contact = pair[1] if pair else None
         last = messages[-1]
         has_unread = last.direction == MessageDirection.inbound and (
             enrollment is None

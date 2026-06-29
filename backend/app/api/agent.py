@@ -10,9 +10,9 @@ service and maps the returned dataclass to the Pydantic response model.
 import json
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.chat import run_chat, run_chat_stream
@@ -36,6 +36,7 @@ from app.services.insights.agent import (
 )
 from app.services.outreach.messaging import draft_sequence, rewrite_message
 from app.services.sourcing.briefs import parse_brief
+from app.targeting import Targeting
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -85,13 +86,14 @@ class AgentState(BaseModel):
 
 class ChatTurn(BaseModel):
     role: str  # "user" | "assistant"
-    text: str
+    text: str = Field(max_length=8_000)
 
 
 class ChatIn(BaseModel):
-    message: str
+    # Bounded — every turn + the message are forwarded verbatim to the (per-token-billed) LLM.
+    message: str = Field(max_length=8_000)
     campaign_id: str | None = None
-    history: list[ChatTurn] = []  # prior turns the client carries, oldest→newest
+    history: list[ChatTurn] = Field(default_factory=list, max_length=40)
 
 
 class ChatOut(BaseModel):
@@ -139,7 +141,9 @@ def _agent_state(st: StateData) -> AgentState:
 
 
 @router.get("/activity", response_model=list[ActivityEvent])
-async def activity(ctx: ContextDep, session: SessionDep, limit: int = 40) -> list[ActivityEvent]:
+async def activity(
+    ctx: ContextDep, session: SessionDep, limit: int = Query(40, ge=1, le=200)
+) -> list[ActivityEvent]:
     """A merged, humanized stream of the agent's recent actions, newest first."""
     ws = require_workspace(ctx)
     events = await build_activity_stream(session, workspace_id=ws, limit=limit)
@@ -261,7 +265,7 @@ async def _campaign_in_workspace(
 
 @router.get("/runs", response_model=list[AgentRunOut])
 async def runs(
-    ctx: ContextDep, session: SessionDep, campaign_id: str, limit: int = 20
+    ctx: ContextDep, session: SessionDep, campaign_id: str, limit: int = Query(20, ge=1, le=200)
 ) -> list[AgentRunOut]:
     """The agent-run trace feed for a campaign — the narrated activity tab."""
     ws = require_workspace(ctx)
@@ -417,7 +421,11 @@ async def apply_audience(body: ApplyAudienceIn, ctx: ContextDep, session: Sessio
     """Apply a previewed audience (a human action) — set the criteria and pin the section."""
     ws = require_workspace(ctx)
     campaign = await _campaign_in_workspace(session, body.campaign_id, ws)
-    campaign.criteria = body.criteria
+    try:  # validate against Targeting (parity with PATCH /campaigns) — don't store arbitrary JSON
+        criteria = Targeting.model_validate(body.criteria).model_dump(exclude_unset=True)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail="invalid audience criteria") from exc
+    campaign.criteria = criteria
     campaign.field_owners = {**campaign.field_owners, "audience": "human"}
     await session.flush()
     return DesignOut(status="applied", criteria=campaign.criteria, sequence=campaign.sequence)
