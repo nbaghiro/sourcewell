@@ -17,6 +17,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, cast
 
 from app.core.config import Settings
+from app.core.logging import logger
 from app.core.runtime import (
     AgentLLM,
     AssistantTurn,
@@ -415,5 +416,8 @@ async def complete_text(s: Settings, *, system: str, user: str, max_tokens: int)
     try:
         text = await client.complete(system=system, user=user, max_tokens=max_tokens)
     except Exception:
+        # A configured provider failing (bad/rotated key, rate limit, network) silently degrades to
+        # the deterministic path — log so an operator can tell it apart from "no provider set".
+        logger.warning("one-off LLM completion failed (%s)", s.agent_provider, exc_info=True)
         return None
     return text.strip() or None

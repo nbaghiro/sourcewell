@@ -205,14 +205,14 @@ async def run_agent(
                 if not turn.tool_calls:
                     status, text = "done", turn.text
                     break
+                if tokens > token_budget:  # stop before this turn's tools run their side effects
+                    status = "over_budget"
+                    break
                 history.append(AssistantTurn(turn.text, turn.tool_calls))
                 results: list[tuple[str, JsonObject]] = []
                 for tc in turn.tool_calls:
-                    results.append((tc.id, await _exec_tool(trace, by_name, tc)))
+                    results.append((tc.id, await _exec_tool(session, trace, by_name, tc)))
                 history.append(ToolResults(results))
-                if tokens > token_budget:
-                    status = "over_budget"
-                    break
     except TimeoutError:
         status = "timeout"
     except Exception as exc:  # a tool or the LLM blew up — fail the run, don't crash the worker
@@ -282,29 +282,39 @@ async def stream_agent(
                 if not turn.tool_calls:
                     status, text = "done", turn.text
                     break
+                if tokens > token_budget:  # stop before this turn's tools run their side effects
+                    status = "over_budget"
+                    break
                 history.append(AssistantTurn(turn.text, turn.tool_calls))
                 results: list[tuple[str, JsonObject]] = []
                 for tc in turn.tool_calls:
-                    results.append((tc.id, await _exec_tool(trace, by_name, tc)))
+                    results.append((tc.id, await _exec_tool(session, trace, by_name, tc)))
                 history.append(ToolResults(results))
-                if tokens > token_budget:
-                    status = "over_budget"
-                    break
     except TimeoutError:
         status = "timeout"
     except Exception as exc:  # a tool or the stream blew up — end the run cleanly
         status = "error"
         trace.record("result", None, {"error": str(exc)})
+    finally:
+        # Always finalize — incl. on GeneratorExit (client disconnect mid-stream), which neither
+        # except catches; otherwise the AgentRun would stay stuck in "running" forever.
+        run.status = status
+        run.tokens = tokens
+        run.ended_at = datetime.now(UTC)
+        run.summary = text[:500]
+        try:
+            await session.flush()
+        except Exception:  # session may be unusable on disconnect — never raise from finally
+            pass
 
-    run.status = status
-    run.tokens = tokens
-    run.ended_at = datetime.now(UTC)
-    run.summary = text[:500]
-    await session.flush()
 
+async def _exec_tool(
+    session: AsyncSession, trace: _Trace, by_name: dict[str, Tool], tc: ToolCall
+) -> JsonObject:
+    """Run one tool call (allow-list + light input validation), tracing the call and its result.
 
-async def _exec_tool(trace: _Trace, by_name: dict[str, Tool], tc: ToolCall) -> JsonObject:
-    """Run one tool call (allow-list + light input validation), tracing the call and its result."""
+    The tool's writes run in a savepoint so a failed flush (e.g. an IntegrityError) rolls back just
+    that tool, not the whole run's session."""
     trace.record("tool_call", tc.name, tc.input)
     tool = by_name.get(tc.name)
     if tool is None:  # allow-list: the model requested an unknown tool
@@ -313,7 +323,8 @@ async def _exec_tool(trace: _Trace, by_name: dict[str, Tool], tc: ToolCall) -> J
         result = {"error": f"invalid input for tool: {tc.name}"}
     else:
         try:
-            result = await tool.run(tc.input)
+            async with session.begin_nested():
+                result = await tool.run(tc.input)
         except Exception as exc:
             result = {"error": str(exc)}
     trace.record("result", tc.name, result)

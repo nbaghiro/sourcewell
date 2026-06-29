@@ -203,17 +203,21 @@ async def chat_stream(body: ChatIn, ctx: ContextDep) -> StreamingResponse:
             return
         # the request-scoped session is closed by the time this body streams — use a fresh one.
         async with SessionLocal() as session:
-            async for ev in run_chat_stream(
-                session,
-                llm=client,
-                workspace_id=ws,
-                organization_id=org_id,
-                message=body.message,
-                campaign_id=body.campaign_id,
-                history=[(t.role, t.text) for t in body.history],
-            ):
-                yield _sse(ev)
-            await session.commit()
+            try:
+                async for ev in run_chat_stream(
+                    session,
+                    llm=client,
+                    workspace_id=ws,
+                    organization_id=org_id,
+                    message=body.message,
+                    campaign_id=body.campaign_id,
+                    history=[(t.role, t.text) for t in body.history],
+                ):
+                    yield _sse(ev)
+            finally:
+                # Commit even on client disconnect (GeneratorExit) so the finalized AgentRun
+                # persists and never stays stuck in "running".
+                await session.commit()
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 
