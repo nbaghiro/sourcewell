@@ -19,6 +19,7 @@ from app.models import (
     Organization,
     SeatType,
     User,
+    UserStatus,
     Workspace,
     WorkspaceKind,
 )
@@ -123,6 +124,19 @@ async def provision_user(
     ).scalar_one_or_none()
     if existing is not None:
         return existing
+    # An invited teammate signing in via SSO for the first time has no `sso_subject` yet — link them
+    # to the org they were invited into (matched by email), not a brand-new org of their own.
+    if email:
+        invited = (
+            await session.execute(
+                select(User).where(User.email == email, User.sso_subject.is_(None)).limit(1)
+            )
+        ).scalar_one_or_none()
+        if invited is not None:
+            invited.sso_subject = subject
+            invited.status = UserStatus.active
+            await session.flush()
+            return invited
     domain = email.split("@")[-1].split(".")[0] if email and "@" in email else "workspace"
     org = Organization(name=domain.capitalize(), slug=f"{domain}-{new_id()[:8].lower()}")
     session.add(org)

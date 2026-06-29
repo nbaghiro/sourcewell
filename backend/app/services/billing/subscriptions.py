@@ -168,8 +168,9 @@ async def handle_event(session: AsyncSession, s: Settings, event: JsonObject) ->
             org.stripe_customer_id = str(obj["customer"])
         if isinstance(obj.get("subscription"), str):
             org.stripe_subscription_id = str(obj["subscription"])
-        if isinstance(meta, dict) and isinstance(meta.get("plan"), str):
-            org.plan = str(meta["plan"])
+        plan = meta.get("plan") if isinstance(meta, dict) else None
+        if isinstance(plan, str) and plan in PAID_PLANS:  # never trust an arbitrary metadata string
+            org.plan = plan
         return "checkout applied"
 
     if etype in ("customer.subscription.created", "customer.subscription.updated"):

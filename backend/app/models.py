@@ -178,7 +178,7 @@ class Organization(IdMixin, TimestampMixin, Base):
 
     name: Mapped[str] = mapped_column(String(200))
     slug: Mapped[str] = mapped_column(String(100), unique=True)
-    plan: Mapped[str] = mapped_column(String(50), default="trial")
+    plan: Mapped[str] = mapped_column(String(50), default="free")
     data_region: Mapped[str] = mapped_column(String(20), default="us")
     # Stripe billing (the webhook is the source of truth; blank until a subscription is created).
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

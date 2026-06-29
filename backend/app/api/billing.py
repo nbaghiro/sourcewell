@@ -75,7 +75,9 @@ async def stripe_webhook(request: Request, session: SessionDep) -> WebhookOut:
     """Stripe-called (unauthenticated; verified by signature). Updates the org's plan + period."""
     s = get_settings()
     if not subscriptions.is_enabled():
-        raise HTTPException(status_code=503, detail="Billing is not configured.")
+        # Acknowledge with 200, not 5xx — Stripe treats 5xx as a delivery failure and retries the
+        # event for up to 72h. A transient missing key shouldn't trigger a retry storm.
+        return WebhookOut(status="ignored")
     payload = await request.body()
     sig = request.headers.get("Stripe-Signature", "")
     try:

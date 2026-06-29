@@ -20,8 +20,9 @@ from app.models import Channel, Enrollment, Message, MessageDirection, MessageSt
 # paid people-data providers; email is cheap.
 CREDIT_WEIGHTS = {"email": 1, "inmail": 2, "sourced": 1}
 
-# Monthly credit allowance by plan. trial / demo / unknown fall back to a generous default.
-PLAN_CREDITS = {"free": 200, "pro": 5_000, "premium": 25_000}
+# Monthly credit allowance by plan. "trial" is free-tier (not a Pro-level giveaway); demo / unknown
+# fall back to a generous default (so the seeded demo isn't throttled).
+PLAN_CREDITS = {"free": 200, "trial": 200, "pro": 5_000, "premium": 25_000}
 _DEFAULT_CREDITS = 5_000
 
 
