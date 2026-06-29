@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Meter, usageTone } from "@/components/ui/meter";
 import { useAccountUsage } from "@/lib/api/queries";
 
 interface Cost {
@@ -35,18 +36,12 @@ const COSTS: Cost[] = [
   },
 ];
 
-function tone(pct: number, over: boolean): string {
-  if (over) return "var(--destructive)";
-  if (pct >= 80) return "var(--warning)";
-  return "var(--score-to)";
-}
-
 /** A glanceable credit meter for the sidebar that opens a "how credits work" modal. */
 export function CreditMeter() {
   const { data } = useAccountUsage();
   if (!data) return null;
   const pct = Math.min(100, data.pct);
-  const bar = tone(data.pct, data.over);
+  const bar = usageTone(data.pct, data.over);
   const emails = data.breakdown.emails ?? 0;
   const inmails = data.breakdown.inmails ?? 0;
   const sourced = data.breakdown.sourced ?? 0;
@@ -61,9 +56,7 @@ export function CreditMeter() {
             </span>
             <span className="text-sidebar-foreground/80">{data.pct}%</span>
           </div>
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-black/25">
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: bar }} />
-          </div>
+          <Meter pct={pct} tone={bar} className="mt-1.5 h-1.5 bg-black/25" />
           <div className="mt-1.5 text-[0.65rem] text-sidebar-foreground/70">
             {data.used.toLocaleString()} / {data.allowance.toLocaleString()} used
           </div>
@@ -89,9 +82,7 @@ export function CreditMeter() {
               of {data.allowance.toLocaleString()} · {data.pct}%
             </span>
           </div>
-          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-secondary">
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: bar }} />
-          </div>
+          <Meter pct={pct} tone={bar} className="mt-2" />
           {data.over ? (
             <p className="mt-2 text-xs text-destructive">
               You're {data.pct - 100}% over — work keeps going; overage is reconciled at billing.

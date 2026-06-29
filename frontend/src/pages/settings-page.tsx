@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Meter, usageTone } from "@/components/ui/meter";
 import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -125,11 +126,7 @@ function PlanUsageTab() {
       </Card>
     );
   const pct = Math.min(100, data.pct);
-  const tone = data.over
-    ? "var(--destructive)"
-    : data.pct >= 80
-      ? "var(--warning)"
-      : "var(--primary)";
+  const tone = usageTone(data.pct, data.over);
   return (
     <Card>
       <CardHeader>
@@ -153,12 +150,7 @@ function PlanUsageTab() {
               of {data.allowance.toLocaleString()} credits · {data.pct}%
             </span>
           </div>
-          <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-secondary">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{ width: `${pct}%`, background: tone }}
-            />
-          </div>
+          <Meter pct={pct} tone={tone} className="mt-2 h-2.5" />
         </div>
 
         {data.over ? (
