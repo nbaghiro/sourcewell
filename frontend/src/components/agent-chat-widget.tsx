@@ -13,6 +13,7 @@ interface ChatMessage {
   role: "user" | "agent";
   text: string;
   entities?: unknown;
+  done?: boolean; // the stream for this turn has settled — stop the spinner
 }
 
 /** The campaign id when the chat is on a campaign route, else undefined (general chat). */
@@ -32,7 +33,11 @@ export function AgentChatWidget() {
   const [input, setInput] = React.useState("");
   const [streaming, setStreaming] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const abortRef = React.useRef<AbortController | null>(null);
   const campaignId = campaignIdFrom(useLocation().pathname);
+
+  // Cancel any in-flight stream on unmount (releases the connection — see streamAgentChat).
+  React.useEffect(() => () => abortRef.current?.abort(), []);
 
   // Mutate the trailing agent message (the one being streamed) in place.
   function patchLastAgent(patch: (m: ChatMessage) => ChatMessage) {
@@ -66,13 +71,17 @@ export function AgentChatWidget() {
     // append the user turn + an empty agent turn that the stream fills in.
     setMessages((m) => [...m, { role: "user", text: trimmed }, { role: "agent", text: "" }]);
     setStreaming(true);
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     try {
       await streamAgentChat(
         { message: trimmed, campaign_id: campaignId, history },
         {
           onToken: (t) => patchLastAgent((m) => ({ ...m, text: m.text + t })),
-          onDone: (entities) => patchLastAgent((m) => ({ ...m, entities })),
+          onDone: (entities) => patchLastAgent((m) => ({ ...m, entities, done: true })),
         },
+        ctrl.signal,
       );
     } catch {
       patchLastAgent((m) => ({
@@ -80,6 +89,8 @@ export function AgentChatWidget() {
         text: m.text || "Sorry — I couldn't reach the agent just now. Try again?",
       }));
     } finally {
+      // settle the turn even if the stream ended with no text + no done event (entities-only reply)
+      patchLastAgent((m) => ({ ...m, done: true }));
       setStreaming(false);
     }
   }
@@ -147,7 +158,11 @@ export function AgentChatWidget() {
                       {m.text ? (
                         <Markdown>{m.text}</Markdown>
                       ) : (
-                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                        // spinner only while streaming; a settled text-less reply (entities-only)
+                        // shows its cards below, not a perpetual spinner.
+                        !m.done && (
+                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                        )
                       )}
                     </div>
                   </div>

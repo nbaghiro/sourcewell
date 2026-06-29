@@ -51,6 +51,8 @@ export function PipelinePage() {
       const r = await api<{ processed: number }>("/admin/run-due", { method: "POST" });
       toast.success(`Processed ${r.processed} due enrollment${r.processed === 1 ? "" : "s"}`);
       qc.invalidateQueries({ queryKey: ["enrollments"] });
+    } catch {
+      toast.error("Couldn't run due enrollments — try again.");
     } finally {
       setRunning(false);
     }

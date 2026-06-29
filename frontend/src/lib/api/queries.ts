@@ -472,8 +472,10 @@ export function useConnections() {
 }
 
 export function usePeopleProviders() {
+  const ws = useWorkspaceId();
   return useQuery({
-    queryKey: ["peopleProviders"],
+    queryKey: ["peopleProviders", ws],
+    enabled: !!ws,
     queryFn: async () => unwrap(await client.GET("/people/providers")),
   });
 }
@@ -504,8 +506,10 @@ export function useImportPeople() {
 // ---- agent experience (shared read-model behind every UI variant) ----
 
 export function useAgentActivity() {
+  const ws = useWorkspaceId();
   return useQuery({
-    queryKey: ["agentActivity"],
+    queryKey: ["agentActivity", ws],
+    enabled: !!ws,
     queryFn: async () =>
       unwrap(await client.GET("/agent/activity", { params: { query: { limit: 40 } } })),
     refetchInterval: 15000,
@@ -513,8 +517,10 @@ export function useAgentActivity() {
 }
 
 export function useAgentState() {
+  const ws = useWorkspaceId();
   return useQuery({
-    queryKey: ["agentState"],
+    queryKey: ["agentState", ws],
+    enabled: !!ws,
     queryFn: async () => unwrap(await client.GET("/agent/state")),
     refetchInterval: 15000,
   });
@@ -542,21 +548,30 @@ export async function streamAgentChat(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const frames = buffer.split("\n\n");
-    buffer = frames.pop() ?? ""; // keep the trailing partial frame for the next read
-    for (const frame of frames) {
-      const line = frame.trim();
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload) continue;
-      const ev = JSON.parse(payload) as { type: string; text?: string; entities?: unknown };
-      if (ev.type === "token" && ev.text) handlers.onToken(ev.text);
-      else if (ev.type === "done") handlers.onDone(ev.entities);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? ""; // keep the trailing partial frame for the next read
+      for (const frame of frames) {
+        const line = frame.trim();
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload) continue;
+        let ev: { type: string; text?: string; entities?: unknown };
+        try {
+          ev = JSON.parse(payload);
+        } catch {
+          continue; // skip one malformed frame rather than tearing down the whole stream
+        }
+        if (ev.type === "token" && ev.text) handlers.onToken(ev.text);
+        else if (ev.type === "done") handlers.onDone(ev.entities);
+      }
     }
+  } finally {
+    await reader.cancel().catch(() => {}); // release the connection on break / throw / abort
   }
 }
 
@@ -578,9 +593,10 @@ export function useDraftSequence() {
 
 /** The connected LinkedIn account's active job postings (for the "pull from LinkedIn" intake). */
 export function useLinkedInJobs(enabled: boolean) {
+  const ws = useWorkspaceId();
   return useQuery({
-    queryKey: ["linkedin-jobs"],
-    enabled,
+    queryKey: ["linkedin-jobs", ws],
+    enabled: enabled && !!ws,
     queryFn: async () => unwrap(await client.GET("/agent/linkedin-jobs")),
   });
 }
@@ -634,8 +650,10 @@ export function useApplyAudience() {
 }
 
 export function useDataProviders() {
+  const ws = useWorkspaceId();
   return useQuery({
-    queryKey: ["dataProviders"],
+    queryKey: ["dataProviders", ws],
+    enabled: !!ws,
     queryFn: async () => unwrap(await client.GET("/settings/data-providers")),
   });
 }
@@ -683,8 +701,10 @@ export function useVerifyDataProvider() {
 export type Suppression = S["SuppressionOut"];
 
 export function useSuppressions() {
+  const ws = useWorkspaceId();
   return useQuery({
-    queryKey: ["suppressions"],
+    queryKey: ["suppressions", ws],
+    enabled: !!ws,
     queryFn: async () => unwrap(await client.GET("/suppressions")),
   });
 }
@@ -804,13 +824,18 @@ export function useSearch(q: string) {
 
 // ---------- invalidation helpers ----------
 
+// Campaign aggregates (list "N to approve" badges + the cockpit funnel) shift on approve/reply/enroll.
+const CAMPAIGN_KEYS = ["campaign", "campaigns", "campaignFunnel"];
+
 function invalidateInbox(qc: ReturnType<typeof useQueryClient>) {
-  for (const key of ["inbox", "conversation", "notifications", "dashboard", "analytics", "audit"]) {
+  const keys = ["inbox", "conversation", "notifications", "dashboard", "analytics", "audit"];
+  for (const key of [...keys, ...CAMPAIGN_KEYS]) {
     qc.invalidateQueries({ queryKey: [key] });
   }
 }
 function invalidatePipeline(qc: ReturnType<typeof useQueryClient>) {
-  for (const key of ["enrollments", "dashboard", "analytics", "approvals", "audit"]) {
+  const keys = ["enrollments", "dashboard", "analytics", "approvals", "audit"];
+  for (const key of [...keys, ...CAMPAIGN_KEYS]) {
     qc.invalidateQueries({ queryKey: [key] });
   }
 }

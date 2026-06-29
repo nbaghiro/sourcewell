@@ -31,6 +31,8 @@
   --muted-foreground: #6b7a71;
   --accent: #dcefe8; /* emerald-weak (hover/selected) */
   --accent-foreground: #0b5d4e;
+  --accent-line: #b3dccd; /* emerald hairline — accent borders */
+  --accent-strong: #0e7c66; /* strong emerald — accent emphasis text */
 
   /* status */
   --destructive: #b4422e;
@@ -80,6 +82,8 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-line: var(--accent-line);
+  --color-accent-strong: var(--accent-strong);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
