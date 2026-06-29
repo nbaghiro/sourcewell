@@ -9,8 +9,11 @@ from app.models import (
     ConnectionStatus,
     MembershipRole,
     MembershipScope,
+    User,
+    UserStatus,
 )
 from app.services.workspace.connections import (
+    provision_user,
     seat_account_id,
     upsert_seat,
     workspace_seat_account_id,
@@ -80,6 +83,31 @@ async def test_workspace_seat_resolves_via_membership(db_session: AsyncSession) 
     )
     found = await workspace_seat_account_id(db_session, workspace_id=ws.id, provider=_LINKEDIN)
     assert found == "acct-ws"
+
+
+@pytest.mark.db
+async def test_provision_user_links_invited_member_by_email(db_session: AsyncSession) -> None:
+    """An invited teammate (sso_subject=None) signing in via SSO links to their org by email —
+    not a brand-new org of their own (the split-billing / split-team regression)."""
+    org = await make_org(db_session, slug="cx-invite")
+    invited = User(
+        organization_id=org.id,
+        email="invitee@co.com",
+        name="Invitee",
+        sso_subject=None,
+        status=UserStatus.invited,
+    )
+    db_session.add(invited)
+    await db_session.flush()
+
+    user = await provision_user(
+        db_session, subject="wos-new", name="Invitee", email="invitee@co.com"
+    )
+
+    assert user.id == invited.id  # linked to the existing user, NOT provisioned a new org
+    assert user.organization_id == org.id
+    assert user.sso_subject == "wos-new"
+    assert user.status == UserStatus.active
 
 
 def test_unipile_provider_uses_passed_account_id() -> None:
