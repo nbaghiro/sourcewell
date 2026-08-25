@@ -27,6 +27,7 @@ from app.models import (
 from app.services.outreach.enrollment import tick
 
 _POLL_SECONDS = 10
+_MAX_BACKOFF_SECONDS = 300
 _SOURCE_LIMIT = 20
 _SOURCE_INTERVAL_HOURS = 6
 _ACTIONABLE = (
@@ -50,9 +51,16 @@ async def run_due(session: AsyncSession, *, now: datetime, limit: int = 200) -> 
         .with_for_update(skip_locked=True)
     )
     due = list((await session.execute(stmt)).scalars().all())
+    processed = 0
     for enrollment in due:
-        await tick(session, enrollment=enrollment, now=now)
-    return {"processed": len(due)}
+        try:
+            # Isolate each tick: a failure (e.g. a send error) can't roll back the others.
+            async with session.begin_nested():
+                await tick(session, enrollment=enrollment, now=now)
+            processed += 1
+        except Exception:
+            logger.exception("worker: tick failed for enrollment %s", enrollment.id)
+    return {"processed": processed}
 
 
 async def _tokens_today(session: AsyncSession, *, campaign_id: str, now: datetime) -> int:
@@ -116,42 +124,57 @@ async def run_source_due(
         .with_for_update(skip_locked=True)
     )
     due = list((await session.execute(stmt)).scalars().all())
+    sourced = 0
     for campaign in due:
-        ws = await session.get(Workspace, campaign.workspace_id)
-        if ws is None:
-            continue
-        over_budget = (
-            client is not None
-            and await _tokens_today(session, campaign_id=campaign.id, now=now)
-            >= CAMPAIGN_DAILY_TOKEN_BUDGET
-        )
-        if client is not None and not over_budget:
-            await run_sourcing(
-                session, llm=client, campaign=campaign, organization_id=ws.organization_id
-            )
-        else:
-            await deterministic_source(
-                session, campaign=campaign, organization_id=ws.organization_id
-            )
-        await _auto_approve(session, campaign=campaign, now=now)
-        campaign.next_source_at = now + timedelta(hours=_SOURCE_INTERVAL_HOURS)
-    return {"sourced": len(due)}
+        try:
+            async with session.begin_nested():  # isolate each campaign's sourcing pass
+                ws = await session.get(Workspace, campaign.workspace_id)
+                if ws is None:
+                    continue
+                over_budget = (
+                    client is not None
+                    and await _tokens_today(session, campaign_id=campaign.id, now=now)
+                    >= CAMPAIGN_DAILY_TOKEN_BUDGET
+                )
+                if client is not None and not over_budget:
+                    await run_sourcing(
+                        session, llm=client, campaign=campaign, organization_id=ws.organization_id
+                    )
+                else:
+                    await deterministic_source(
+                        session, campaign=campaign, organization_id=ws.organization_id
+                    )
+                await _auto_approve(session, campaign=campaign, now=now)
+                campaign.next_source_at = now + timedelta(hours=_SOURCE_INTERVAL_HOURS)
+            sourced += 1
+        except Exception:
+            logger.exception("worker: sourcing failed for campaign %s", campaign.id)
+    return {"sourced": sourced}
 
 
 async def _loop() -> None:
+    errors = 0
     while True:
-        async with SessionLocal() as session:
-            now = datetime.now(UTC)
-            sent = await run_due(session, now=now)
-            sourced = await run_source_due(session, now=now)
-            await session.commit()
-        if sent["processed"] or sourced["sourced"]:
-            logger.info(
-                "worker: ticked %s enrollment(s), sourced %s campaign(s)",
-                sent["processed"],
-                sourced["sourced"],
-            )
-        await asyncio.sleep(_POLL_SECONDS)
+        try:
+            async with SessionLocal() as session:
+                now = datetime.now(UTC)
+                sent = await run_due(session, now=now)
+                sourced = await run_source_due(session, now=now)
+                await session.commit()
+            errors = 0
+            if sent["processed"] or sourced["sourced"]:
+                logger.info(
+                    "worker: ticked %s enrollment(s), sourced %s campaign(s)",
+                    sent["processed"],
+                    sourced["sourced"],
+                )
+            await asyncio.sleep(_POLL_SECONDS)
+        except Exception:
+            # Never let a transient failure kill the worker — log and back off, then retry.
+            errors += 1
+            delay = min(_POLL_SECONDS * 2**errors, _MAX_BACKOFF_SECONDS)
+            logger.exception("worker: loop iteration failed; backing off %ss", delay)
+            await asyncio.sleep(delay)
 
 
 def main() -> None:

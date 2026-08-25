@@ -12,6 +12,7 @@ from app.api.agent import router as agent_router
 from app.api.analytics import router as analytics_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
+from app.api.billing import router as billing_router
 from app.api.campaigns import router as campaigns_router
 from app.api.contacts import router as contacts_router
 from app.api.dashboard import router as dashboard_router
@@ -100,6 +101,7 @@ def create_app() -> FastAPI:
     app.include_router(messaging_router)
     app.include_router(dashboard_router)
     app.include_router(settings_router)
+    app.include_router(billing_router)
     app.include_router(notifications_router)
     app.include_router(search_router)
     app.include_router(people_router)

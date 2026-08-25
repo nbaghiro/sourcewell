@@ -157,14 +157,19 @@ async def create_campaign_endpoint(
     body: CampaignIn, ctx: ContextDep, session: SessionDep
 ) -> CampaignOut:
     ws = require_workspace(ctx)
+    # Keep the autonomy fields in sync — any "full autonomy" signal sets both. The gates read
+    # autonomy_level; a lagging autonomy_mode would otherwise split-brain the campaign.
+    mode, level = body.autonomy_mode, body.autonomy_level
+    if mode == AutonomyMode.auto or level == AutonomyLevel.full:
+        mode, level = AutonomyMode.auto, AutonomyLevel.full
     campaign = await create_campaign(
         session,
         workspace_id=ws,
         name=body.name,
         criteria=body.criteria.model_dump(),
         sequence=[s.model_dump() for s in body.sequence],
-        autonomy_mode=body.autonomy_mode,
-        autonomy_level=body.autonomy_level,
+        autonomy_mode=mode,
+        autonomy_level=level,
         authored_by=body.authored_by,
         objective=body.objective,
         seed_contact_ids=body.seed_contact_ids,
@@ -259,6 +264,9 @@ async def update_campaign(
         campaign.autonomy_mode = body.autonomy_mode
     if body.autonomy_level is not None:
         campaign.autonomy_level = body.autonomy_level
+    if campaign.autonomy_mode == AutonomyMode.auto or campaign.autonomy_level == AutonomyLevel.full:
+        campaign.autonomy_mode = AutonomyMode.auto  # keep the two autonomy fields consistent
+        campaign.autonomy_level = AutonomyLevel.full
     if body.objective is not None:
         campaign.objective = body.objective
     if body.from_email is not None:

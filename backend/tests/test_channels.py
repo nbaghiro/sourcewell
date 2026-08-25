@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
+    AutonomyLevel,
     AutonomyMode,
     Campaign,
     CampaignStatus,
@@ -52,6 +53,7 @@ async def test_linkedin_step_sends_dry_run_and_advances(db_session: AsyncSession
         name="C",
         status=CampaignStatus.active,
         autonomy_mode=AutonomyMode.auto,
+        autonomy_level=AutonomyLevel.full,
         criteria={},
         sequence=[{"channel": "linkedin", "delay_days": 0}],
     )

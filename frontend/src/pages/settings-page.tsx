@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Meter, usageTone } from "@/components/ui/meter";
 import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -35,6 +36,8 @@ import {
   type DataProvider,
   useAccountUsage,
   useAddSuppression,
+  useOpenBillingPortal,
+  useStartCheckout,
   useConnect,
   useConnections,
   useDataProviders,
@@ -110,6 +113,10 @@ export function SettingsPage() {
 
 function PlanUsageTab() {
   const { data } = useAccountUsage();
+  const checkout = useStartCheckout();
+  const portal = useOpenBillingPortal();
+  const busy = checkout.isPending || portal.isPending;
+  const onErr = () => toast.error("Billing action failed — try again.");
   if (!data)
     return (
       <Card>
@@ -119,11 +126,7 @@ function PlanUsageTab() {
       </Card>
     );
   const pct = Math.min(100, data.pct);
-  const tone = data.over
-    ? "var(--destructive)"
-    : data.pct >= 80
-      ? "var(--warning)"
-      : "var(--primary)";
+  const tone = usageTone(data.pct, data.over);
   return (
     <Card>
       <CardHeader>
@@ -147,12 +150,7 @@ function PlanUsageTab() {
               of {data.allowance.toLocaleString()} credits · {data.pct}%
             </span>
           </div>
-          <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-secondary">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{ width: `${pct}%`, background: tone }}
-            />
-          </div>
+          <Meter pct={pct} tone={tone} className="mt-2 h-2.5" />
         </div>
 
         {data.over ? (
@@ -171,6 +169,44 @@ function PlanUsageTab() {
           <UsageStat label="InMails sent" weight="×2" value={data.breakdown.inmails ?? 0} />
           <UsageStat label="Sourced" weight="×1" value={data.breakdown.sourced ?? 0} />
         </div>
+
+        {data.billing_enabled ? (
+          <div className="flex flex-wrap gap-2 border-t border-border/60 pt-4">
+            {data.plan !== "pro" && data.plan !== "premium" && (
+              <Button
+                size="sm"
+                onClick={() => checkout.mutate("pro", { onError: onErr })}
+                disabled={busy}
+              >
+                Upgrade to Pro
+              </Button>
+            )}
+            {data.plan !== "premium" && (
+              <Button
+                size="sm"
+                variant={data.plan === "pro" ? "default" : "outline"}
+                onClick={() => checkout.mutate("premium", { onError: onErr })}
+                disabled={busy}
+              >
+                Upgrade to Premium
+              </Button>
+            )}
+            {(data.plan === "pro" || data.plan === "premium") && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => portal.mutate(undefined, { onError: onErr })}
+                disabled={busy}
+              >
+                Manage billing
+              </Button>
+            )}
+          </div>
+        ) : (
+          <p className="border-t border-border/60 pt-4 text-xs text-muted-foreground">
+            Billing isn't set up yet — connect Stripe to enable upgrades.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

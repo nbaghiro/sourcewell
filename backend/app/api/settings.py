@@ -31,6 +31,7 @@ from app.models import (
     UserStatus,
     Workspace,
 )
+from app.services.billing import subscriptions
 from app.services.billing.credits import credit_status
 from app.services.insights import audit
 from app.services.workspace import auth as auth_service
@@ -61,6 +62,7 @@ class UsageOut(BaseModel):
     pct: int
     period_start: datetime
     breakdown: dict[str, int]  # emails / inmails / sourced counts this period
+    billing_enabled: bool  # whether Stripe is configured (gates the upgrade / portal UI)
 
 
 @router.get("/usage", response_model=UsageOut)
@@ -70,7 +72,13 @@ async def account_usage(ctx: ContextDep, session: SessionDep) -> UsageOut:
     org = await session.get(Organization, ctx.org_id)
     if org is None:
         raise HTTPException(status_code=404, detail="organization not found")
-    st = await credit_status(session, organization_id=org.id, plan=org.plan, now=datetime.now(UTC))
+    st = await credit_status(
+        session,
+        organization_id=org.id,
+        plan=org.plan,
+        now=datetime.now(UTC),
+        period_start_at=org.current_period_start,
+    )
     return UsageOut(
         plan=org.plan,
         used=st.used,
@@ -79,6 +87,7 @@ async def account_usage(ctx: ContextDep, session: SessionDep) -> UsageOut:
         pct=st.pct,
         period_start=st.period_start,
         breakdown={"emails": st.emails, "inmails": st.inmails, "sourced": st.sourced},
+        billing_enabled=subscriptions.is_enabled(),
     )
 
 

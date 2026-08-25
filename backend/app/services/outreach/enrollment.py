@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.types import JsonList
 from app.models import (
-    AutonomyMode,
+    AutonomyLevel,
     Campaign,
     Channel,
     Contact,
@@ -98,7 +98,11 @@ async def tick(session: AsyncSession, *, enrollment: Enrollment, now: datetime) 
     elif enrollment.state == EnrollmentState.scheduled:
         await _send_touchpoint(session, enrollment, campaign, contact, sequence, now)
     elif enrollment.state == EnrollmentState.awaiting_reply:
-        if enrollment.current_step < len(sequence):
+        if enrollment.reply_pending:
+            # A reply is waiting to be handled — don't fire the next touchpoint over it. Re-check
+            # later; once the reply is handled (reply_pending cleared) the sequence resumes.
+            enrollment.next_run_at = now + timedelta(days=_FINAL_GRACE_DAYS)
+        elif enrollment.current_step < len(sequence):
             enrollment.state = EnrollmentState.active
             enrollment.next_run_at = now
         else:
@@ -134,7 +138,9 @@ async def _draft_touchpoint(
     session.add(message)
     await session.flush()
 
-    if campaign.autonomy_mode == AutonomyMode.auto:
+    # Gate on autonomy_level (the unifying field used by every other gate) — not autonomy_mode,
+    # which can lag it and split-brain the campaign.
+    if campaign.autonomy_level == AutonomyLevel.full:
         message.status = MessageStatus.approved
         enrollment.state = EnrollmentState.scheduled
         enrollment.next_run_at = now

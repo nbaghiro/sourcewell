@@ -17,6 +17,8 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, cast
 
 from app.core.config import Settings
+from app.core.db import new_id
+from app.core.logging import logger
 from app.core.runtime import (
     AgentLLM,
     AssistantTurn,
@@ -327,13 +329,15 @@ class GeminiLLM:
         tool_calls: list[ToolCall] = []
         cand = resp.candidates[0] if resp.candidates else None
         parts_out = cand.content.parts if cand and cand.content and cand.content.parts else []
-        for i, part in enumerate(parts_out):
+        for part in parts_out:
             if part.text:
                 text += part.text
             fc = part.function_call
             if fc is not None:
                 inp: JsonObject = {str(k): v for k, v in fc.args.items()} if fc.args else {}
-                tool_calls.append(ToolCall(id=fc.id or f"call_{i}", name=fc.name or "", input=inp))
+                # The synthetic id must be unique across turns, else multi-step history correlation
+                # (id → function name) gets overwritten and corrupts the Gemini conversation.
+                tool_calls.append(ToolCall(id=fc.id or new_id(), name=fc.name or "", input=inp))
         um = resp.usage_metadata
         return LLMTurn(
             text=text,
@@ -415,5 +419,8 @@ async def complete_text(s: Settings, *, system: str, user: str, max_tokens: int)
     try:
         text = await client.complete(system=system, user=user, max_tokens=max_tokens)
     except Exception:
+        # A configured provider failing (bad/rotated key, rate limit, network) silently degrades to
+        # the deterministic path — log so an operator can tell it apart from "no provider set".
+        logger.warning("one-off LLM completion failed (%s)", s.agent_provider, exc_info=True)
         return None
     return text.strip() or None
