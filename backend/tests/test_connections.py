@@ -13,6 +13,7 @@ from app.models import (
     UserStatus,
 )
 from app.services.workspace.connections import (
+    home_org_id,
     provision_user,
     seat_account_id,
     upsert_seat,
@@ -26,7 +27,7 @@ _LINKEDIN = ConnectionProvider.linkedin
 @pytest.mark.db
 async def test_upsert_seat_creates_then_updates(db_session: AsyncSession) -> None:
     org = await make_org(db_session, slug="cx-upsert")
-    user = await make_user(db_session, org=org)
+    user = await make_user(db_session)
     seat = await upsert_seat(
         db_session, organization_id=org.id, user_id=user.id, provider=_LINKEDIN, account_id="acct-1"
     )
@@ -41,7 +42,7 @@ async def test_upsert_seat_creates_then_updates(db_session: AsyncSession) -> Non
 @pytest.mark.db
 async def test_seat_account_id_resolves_healthy_only(db_session: AsyncSession) -> None:
     org = await make_org(db_session, slug="cx-resolve")
-    user = await make_user(db_session, org=org)
+    user = await make_user(db_session)
     assert await seat_account_id(db_session, user_id=user.id, provider=_LINKEDIN) is None
 
     await upsert_seat(
@@ -65,7 +66,7 @@ async def test_seat_account_id_resolves_healthy_only(db_session: AsyncSession) -
 async def test_workspace_seat_resolves_via_membership(db_session: AsyncSession) -> None:
     org = await make_org(db_session, slug="cx-ws")
     ws = await make_workspace(db_session, org=org)
-    user = await make_user(db_session, org=org)
+    user = await make_user(db_session)
     await make_membership(
         db_session,
         user=user,
@@ -91,21 +92,24 @@ async def test_provision_user_links_invited_member_by_email(db_session: AsyncSes
     not a brand-new org of their own (the split-billing / split-team regression)."""
     org = await make_org(db_session, slug="cx-invite")
     invited = User(
-        organization_id=org.id,
-        email="invitee@co.com",
-        name="Invitee",
-        sso_subject=None,
-        status=UserStatus.invited,
+        email="invitee@co.com", name="Invitee", sso_subject=None, status=UserStatus.invited
     )
     db_session.add(invited)
     await db_session.flush()
+    await make_membership(
+        db_session,
+        user=invited,
+        org=org,
+        scope=MembershipScope.organization,
+        role=MembershipRole.member,
+    )
 
     user = await provision_user(
         db_session, subject="wos-new", name="Invitee", email="invitee@co.com"
     )
 
     assert user.id == invited.id  # linked to the existing user, NOT provisioned a new org
-    assert user.organization_id == org.id
+    assert await home_org_id(db_session, user_id=user.id) == org.id
     assert user.sso_subject == "wos-new"
     assert user.status == UserStatus.active
 

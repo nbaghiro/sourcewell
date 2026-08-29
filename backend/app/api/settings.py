@@ -287,21 +287,24 @@ class RolePatch(BaseModel):
 @router.post("/members/invite", response_model=InviteOut)
 async def invite_member(body: InviteRequest, ctx: ContextDep, session: SessionDep) -> InviteOut:
     require_org_admin(ctx)
-    dupe = (
-        await session.execute(
-            select(User).where(User.organization_id == ctx.org_id, User.email == body.email)
-        )
+    # Identity is global: an existing user is invited into this org, not duplicated.
+    user = (
+        await session.execute(select(User).where(User.email == body.email))
     ).scalar_one_or_none()
-    if dupe is not None:
-        raise HTTPException(status_code=409, detail="a user with that email already exists")
-    user = User(
-        organization_id=ctx.org_id,
-        email=body.email,
-        name=body.name,
-        status=UserStatus.invited,
-    )
-    session.add(user)
-    await session.flush()
+    if user is None:
+        user = User(email=body.email, name=body.name, status=UserStatus.invited)
+        session.add(user)
+        await session.flush()
+    else:
+        already = (
+            await session.execute(
+                select(Membership).where(
+                    Membership.user_id == user.id, Membership.organization_id == ctx.org_id
+                )
+            )
+        ).first()
+        if already is not None:
+            raise HTTPException(status_code=409, detail="that person is already a member")
     session.add(
         Membership(
             user_id=user.id,
@@ -340,10 +343,21 @@ async def remove_member(user_id: str, ctx: ContextDep, session: SessionDep) -> S
     require_org_admin(ctx)
     if user_id == ctx.user_id:
         raise HTTPException(status_code=400, detail="you can't remove yourself")
-    user = await session.get(User, user_id)
-    if user is None or user.organization_id != ctx.org_id:
+    rows = list(
+        (
+            await session.execute(
+                select(Membership).where(
+                    Membership.user_id == user_id, Membership.organization_id == ctx.org_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
         raise HTTPException(status_code=404, detail="member not found")
-    await session.delete(user)
+    for row in rows:
+        await session.delete(row)
     await session.flush()
     return StatusIdOut(status="removed", id=user_id)
 

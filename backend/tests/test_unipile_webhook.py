@@ -132,7 +132,7 @@ async def test_unipile_webhook_account_credentials_flips_seat(
 ) -> None:
     _with_secret(monkeypatch)
     org = await make_org(db_session, slug="uw-acct")
-    user = await make_user(db_session, org=org)
+    user = await make_user(db_session)
     seat = await upsert_seat(
         db_session,
         organization_id=org.id,

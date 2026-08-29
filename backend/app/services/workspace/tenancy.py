@@ -27,7 +27,7 @@ async def signup(
     session.add(org)
     await session.flush()
 
-    user = User(organization_id=org.id, email=admin_email, name=admin_name)
+    user = User(email=admin_email, name=admin_name)
     session.add(user)
     await session.flush()
 
@@ -71,8 +71,8 @@ async def get_workspace(
     return ws
 
 
-async def create_user(session: AsyncSession, *, org_id: str, email: str, name: str) -> User:
-    user = User(organization_id=org_id, email=email, name=name, status=UserStatus.invited)
+async def create_user(session: AsyncSession, *, email: str, name: str) -> User:
+    user = User(email=email, name=name, status=UserStatus.invited)
     session.add(user)
     await session.flush()
     return user
@@ -88,7 +88,7 @@ async def add_membership(
     workspace_id: str | None,
 ) -> Membership:
     user = await session.get(User, user_id)
-    if user is None or user.organization_id != org_id:
+    if user is None:
         raise HTTPException(status_code=404, detail="user not found")
     if scope == MembershipScope.workspace:
         if workspace_id is None:

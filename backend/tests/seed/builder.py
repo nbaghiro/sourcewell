@@ -190,9 +190,24 @@ async def _reset(session: AsyncSession) -> None:
     org = (
         await session.execute(select(Organization).where(Organization.slug == DEMO_ORG_SLUG))
     ).scalar_one_or_none()
-    if org is not None:
-        await session.delete(org)  # FKs are ON DELETE CASCADE
-        await session.flush()
+    if org is None:
+        return
+    # Users are global — the org cascade doesn't reach them, so drop this org's members by hand.
+    members = (
+        (
+            await session.execute(
+                select(User)
+                .join(Membership, Membership.user_id == User.id)
+                .where(Membership.organization_id == org.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for member in members:
+        await session.delete(member)
+    await session.delete(org)  # FKs are ON DELETE CASCADE
+    await session.flush()
 
 
 async def _org_and_admin(session: AsyncSession) -> tuple[Organization, User]:
@@ -203,7 +218,6 @@ async def _org_and_admin(session: AsyncSession) -> tuple[Organization, User]:
     await session.flush()
     s = get_settings()
     admin = User(
-        organization_id=org.id,
         email=s.demo_admin_email,
         name="Avery Brooks",
         password_hash=hash_password(s.demo_password),
@@ -241,7 +255,7 @@ async def _seed_team(session: AsyncSession, *, org: Organization, admin: User) -
     ]
     users: dict[str, User] = {}
     for name, email, scope, role in team:
-        user = User(organization_id=org.id, email=email, name=name)
+        user = User(email=email, name=name)
         session.add(user)
         await session.flush()
         session.add(Membership(user_id=user.id, organization_id=org.id, scope=scope, role=role))

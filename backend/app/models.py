@@ -208,12 +208,11 @@ class Workspace(IdMixin, TimestampMixin, Base):
 
 
 class User(IdMixin, TimestampMixin, Base):
+    """Global identity. No organization owns a user; `Membership` is the sole user↔org link."""
+
     __tablename__ = "app_user"  # "user" is reserved in Postgres
 
-    organization_id: Mapped[str] = mapped_column(
-        ForeignKey("organization.id", ondelete="CASCADE"), index=True
-    )
-    email: Mapped[str] = mapped_column(String(320))
+    email: Mapped[str] = mapped_column(String(320), unique=True)
     name: Mapped[str] = mapped_column(String(200))
     status: Mapped[UserStatus] = mapped_column(sa_enum(UserStatus), default=UserStatus.active)
     # The federated identity key: the LinkedIn member_urn from Unipile hosted-auth sign-in.
@@ -223,8 +222,6 @@ class User(IdMixin, TimestampMixin, Base):
     notifications_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-
-    __table_args__ = (UniqueConstraint("organization_id", "email", name="uq_user_org_email"),)
 
 
 class LoginAttempt(IdMixin, TimestampMixin, Base):

@@ -25,7 +25,7 @@ async def test_tenancy_round_trip(db_session: AsyncSession) -> None:
     db_session.add(ws)
     await db_session.flush()
 
-    user = User(organization_id=org.id, email="r@acme.com", name="Recruiter")
+    user = User(email="r@acme.com", name="Recruiter")
     db_session.add(user)
     await db_session.flush()
 
@@ -50,7 +50,7 @@ async def test_tenancy_round_trip(db_session: AsyncSession) -> None:
 
     assert len(org.id) == 26  # ULID
     assert ws.organization_id == org.id
-    assert user.organization_id == org.id
+    assert member.organization_id == org.id
     assert member.scope == MembershipScope.workspace
     assert member.workspace_id == ws.id
     assert member.role == MembershipRole.member

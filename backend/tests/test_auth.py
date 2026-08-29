@@ -10,7 +10,7 @@ from app.core.config import Settings
 from app.core.crypto import hash_password
 from app.models import LoginAttempt, User
 from app.services.workspace import auth
-from tests.factories import make_org, make_user
+from tests.factories import make_user
 
 _DSN = "https://api1.unipile.com:1234"
 
@@ -20,8 +20,7 @@ _DSN = "https://api1.unipile.com:1234"
 
 @pytest.mark.db
 async def test_session_mint_and_resolve(db_session: AsyncSession) -> None:
-    org = await make_org(db_session, slug="auth-sess")
-    user = await make_user(db_session, org=org)
+    user = await make_user(db_session)
     sealed = auth.mint_session(user.id)
     assert await auth._session_user_id(db_session, sealed) == user.id
     assert await auth._session_user_id(db_session, "garbage") is None  # bad cookie → no user
@@ -70,17 +69,10 @@ async def test_finish_pending_returns_none(db_session: AsyncSession) -> None:
 
 
 async def _seed_password_user(session: AsyncSession, *, slug: str) -> str:
-    org = await make_org(session, slug=slug)
-    session.add(
-        User(
-            organization_id=org.id,
-            email="agent@acme.test",
-            name="Agent",
-            password_hash=hash_password("testpass"),
-        )
-    )
+    email = f"agent-{slug}@acme.test"
+    session.add(User(email=email, name="Agent", password_hash=hash_password("testpass")))
     await session.flush()
-    return "agent@acme.test"
+    return email
 
 
 @pytest.mark.db

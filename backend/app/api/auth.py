@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from app.api.context import ContextDep, SessionDep
 from app.core.config import get_settings
-from app.models import Organization, User, Workspace
+from app.models import Membership, Organization, User, Workspace, WorkspaceKind
 from app.services.workspace import auth as auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -125,13 +125,15 @@ class OrgSummary(BaseModel):
 
 class WorkspaceSummary(BaseModel):
     id: str
+    organization_id: str
     name: str
-    kind: str
+    kind: WorkspaceKind
 
 
 class MeResponse(BaseModel):
     user: UserSummary | None
     organization: OrgSummary | None
+    organizations: list[OrgSummary]
     is_org_admin: bool
     current_workspace_id: str | None
     workspaces: list[WorkspaceSummary]
@@ -141,7 +143,7 @@ class MeResponse(BaseModel):
 async def me(ctx: ContextDep, session: SessionDep) -> MeResponse:
     user = await session.get(User, ctx.user_id)
     org = await session.get(Organization, ctx.org_id)
-    workspaces = (
+    workspaces = list(
         (
             await session.execute(
                 select(Workspace)
@@ -152,12 +154,28 @@ async def me(ctx: ContextDep, session: SessionDep) -> MeResponse:
         .scalars()
         .all()
     )
+    orgs = list(
+        (
+            await session.execute(
+                select(Organization)
+                .join(Membership, Membership.organization_id == Organization.id)
+                .where(Membership.user_id == ctx.user_id)
+                .order_by(Organization.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return MeResponse(
         user=UserSummary(id=user.id, email=user.email, name=user.name) if user else None,
         organization=OrgSummary(id=org.id, name=org.name) if org else None,
+        organizations=[OrgSummary(id=o.id, name=o.name) for o in orgs],
         is_org_admin=ctx.is_org_admin,
         current_workspace_id=ctx.current_workspace_id,
-        workspaces=[WorkspaceSummary(id=w.id, name=w.name, kind=w.kind.value) for w in workspaces],
+        workspaces=[
+            WorkspaceSummary(id=w.id, organization_id=w.organization_id, name=w.name, kind=w.kind)
+            for w in workspaces
+        ],
     )
 
 

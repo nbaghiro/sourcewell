@@ -163,7 +163,7 @@ async def test_linkedin_send_uses_seat_inmail_and_captures_thread(
     msg = _outbound(enr, Channel.linkedin, idempotency_key="idem-1")
     db_session.add(msg)
     await db_session.flush()
-    user = await make_user(db_session, org=org)
+    user = await make_user(db_session)
     seat = _seat(org.id, user.id, ConnectionProvider.linkedin, external_id="acct-li")
 
     await deliver_outbound(db_session, message=msg, contact=contact, seat=seat, sender="rec@x.com")
@@ -187,7 +187,7 @@ async def test_needs_reauth_seat_is_permanent_failure(
     msg = _outbound(enr, Channel.linkedin)
     db_session.add(msg)
     await db_session.flush()
-    user = await make_user(db_session, org=org)
+    user = await make_user(db_session)
     seat = _seat(org.id, user.id, ConnectionProvider.linkedin, status=ConnectionStatus.needs_reauth)
     with pytest.raises(PermanentSendError):
         await deliver_outbound(
@@ -312,7 +312,7 @@ async def test_hard_bounce_suppresses_and_fails(
 @pytest.mark.db
 async def test_per_seat_daily_cap_reached(db_session: AsyncSession) -> None:
     org, _contact, enr = await _thread(db_session, slug="cap")
-    user = await make_user(db_session, org=org)
+    user = await make_user(db_session)
     seat = _seat(
         org.id, user.id, ConnectionProvider.linkedin, external_id="acct-cap", caps={"daily_cap": 1}
     )
@@ -347,7 +347,7 @@ async def test_linkedin_reply_threads_and_forwards_idempotency_key(
     msg = _outbound(enr, Channel.linkedin, idempotency_key="idem-r")
     db_session.add(msg)
     await db_session.flush()
-    user = await make_user(db_session, org=org)
+    user = await make_user(db_session)
     seat = _seat(org.id, user.id, ConnectionProvider.linkedin, external_id="acct-li")
 
     await deliver_outbound(
@@ -477,8 +477,8 @@ async def test_linkedin_dryrun_still_simulates(db_session: AsyncSession) -> None
 @pytest.mark.db
 async def test_resolve_channel_seat_prefers_healthy(db_session: AsyncSession) -> None:
     org = await make_org(db_session, slug="seatpref")
-    u1 = await make_user(db_session, org=org, email="u1@x.com")
-    u2 = await make_user(db_session, org=org, email="u2@x.com")
+    u1 = await make_user(db_session, email="u1@x.com")
+    u2 = await make_user(db_session, email="u2@x.com")
     db_session.add_all(
         [
             _seat(

@@ -34,10 +34,8 @@ async def make_workspace(
     return ws
 
 
-async def make_user(
-    session: AsyncSession, *, org: Organization, name: str = "User", email: str | None = None
-) -> User:
-    user = User(organization_id=org.id, email=email or f"{new_id()}@example.com", name=name)
+async def make_user(session: AsyncSession, *, name: str = "User", email: str | None = None) -> User:
+    user = User(email=email or f"{new_id()}@example.com", name=name)
     session.add(user)
     await session.flush()
     return user
@@ -65,7 +63,7 @@ async def make_membership(
 
 
 async def make_org_admin(session: AsyncSession, *, org: Organization, name: str = "Admin") -> User:
-    user = await make_user(session, org=org, name=name)
+    user = await make_user(session, name=name)
     await make_membership(
         session,
         user=user,

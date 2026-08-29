@@ -10,7 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ext.unipile import UnipileConnection
 from app.models import ConnectionProvider
-from app.services.workspace.connections import provision_from_linkedin, seat_account_id
+from app.services.workspace.connections import (
+    home_org_id,
+    provision_from_linkedin,
+    seat_account_id,
+)
 
 _DSN = "https://api1.unipile.com:1234"
 _LINKEDIN = ConnectionProvider.linkedin
@@ -29,7 +33,7 @@ async def test_provision_first_login_creates_user_and_seat(db_session: AsyncSess
         account_id="acct-1",
     )
     assert user.sso_subject == "urn:li:1"
-    assert user.organization_id  # org + workspace + membership provisioned
+    assert await home_org_id(db_session, user_id=user.id)  # org + workspace + membership
     assert await seat_account_id(db_session, user_id=user.id, provider=_LINKEDIN) == "acct-1"
 
 

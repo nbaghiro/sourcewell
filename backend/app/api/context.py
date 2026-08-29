@@ -12,14 +12,17 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, Response
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
-from app.models import Membership, MembershipRole, MembershipScope, User, Workspace
+from app.models import Membership, MembershipRole, User, Workspace
 from app.services.workspace import auth
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+# Org roles that reach every workspace in their organization without an explicit grant.
+_ORG_WIDE_ROLES = {MembershipRole.org_admin, MembershipRole.compliance}
 
 
 @dataclass(frozen=True)
@@ -45,39 +48,71 @@ async def get_context(request: Request, response: Response, session: SessionDep)
         .scalars()
         .all()
     )
-    roles = frozenset(m.role for m in memberships)
-    is_org_admin = any(
-        m.scope == MembershipScope.organization and m.role == MembershipRole.org_admin
-        for m in memberships
-    )
-    # Org-scoped members (org_admin / compliance) see every workspace in the org;
-    # workspace-scoped members see only their assigned workspaces.
-    org_scoped = any(m.scope == MembershipScope.organization for m in memberships)
-    if org_scoped:
-        ws_ids = frozenset(
-            (
-                await session.execute(
-                    select(Workspace.id).where(Workspace.organization_id == user.organization_id)
+    if not memberships:
+        raise HTTPException(status_code=403, detail="no organization membership")
+
+    org_ids = {m.organization_id for m in memberships}
+    org_wide = {m.organization_id for m in memberships if m.role in _ORG_WIDE_ROLES}
+    granted = await _granted_workspace_ids(session, user_id=user_id)
+    reachable = (
+        (
+            await session.execute(
+                select(Workspace.id, Workspace.organization_id).where(
+                    or_(
+                        Workspace.organization_id.in_(org_wide),
+                        Workspace.id.in_(granted),
+                    )
                 )
             )
-            .scalars()
-            .all()
         )
-    else:
-        ws_ids = frozenset(m.workspace_id for m in memberships if m.workspace_id is not None)
+        .tuples()
+        .all()
+    )
+    workspace_org = dict(reachable)
+    ws_ids = frozenset(workspace_org)
 
     current = request.headers.get("X-Workspace-Id")
     if current is not None and current not in ws_ids:
         raise HTTPException(status_code=403, detail="workspace not accessible")
 
+    if current is not None:
+        org_id = workspace_org[current]
+    elif len(org_ids) == 1:
+        org_id = next(iter(org_ids))
+    else:
+        header_org = request.headers.get("X-Organization-Id")
+        if header_org is None or header_org not in org_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="X-Organization-Id is required and must name one of your organizations",
+            )
+        org_id = header_org
+
+    roles = frozenset(m.role for m in memberships if m.organization_id == org_id)
     return TenantContext(
         user_id=user_id,
-        org_id=user.organization_id,
+        org_id=org_id,
         roles=roles,
-        is_org_admin=is_org_admin,
+        is_org_admin=MembershipRole.org_admin in roles,
         allowed_workspace_ids=ws_ids,
         current_workspace_id=current,
     )
+
+
+async def _granted_workspace_ids(session: AsyncSession, *, user_id: str) -> frozenset[str]:
+    """Workspaces reached by an explicit per-workspace membership row."""
+    rows = (
+        (
+            await session.execute(
+                select(Membership.workspace_id).where(
+                    Membership.user_id == user_id, Membership.workspace_id.is_not(None)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return frozenset(ws_id for ws_id in rows if ws_id is not None)
 
 
 ContextDep = Annotated[TenantContext, Depends(get_context)]

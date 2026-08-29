@@ -148,9 +148,7 @@ async def get_workspace_endpoint(
 @router.post("/users", response_model=UserRead, status_code=201)
 async def create_user_endpoint(body: UserCreate, ctx: ContextDep, session: SessionDep) -> User:
     require_org_admin(ctx)
-    return await tenancy_service.create_user(
-        session, org_id=ctx.org_id, email=body.email, name=body.name
-    )
+    return await tenancy_service.create_user(session, email=body.email, name=body.name)
 
 
 @router.post("/memberships", response_model=MembershipRead, status_code=201)

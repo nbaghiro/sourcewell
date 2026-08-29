@@ -167,9 +167,7 @@ async def provision_user(
     session.add(
         Workspace(organization_id=org.id, name="Default workspace", kind=WorkspaceKind.team)
     )
-    await session.flush()
     user = User(
-        organization_id=org.id,
         email=email or f"{subject}@users.local",
         name=name or "User",
         sso_subject=subject,
@@ -188,6 +186,22 @@ async def provision_user(
     return user
 
 
+async def home_org_id(session: AsyncSession, *, user_id: str) -> str | None:
+    """The organization a user's seats belong to — their oldest membership."""
+    return (
+        (
+            await session.execute(
+                select(Membership.organization_id)
+                .where(Membership.user_id == user_id)
+                .order_by(Membership.created_at)
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+
+
 async def provision_from_linkedin(
     session: AsyncSession,
     *,
@@ -201,9 +215,12 @@ async def provision_from_linkedin(
     Unipile seat behind their Connection.
     """
     user = await provision_user(session, subject=member_urn, name=name, email=email)
+    org_id = await home_org_id(session, user_id=user.id)
+    if org_id is None:
+        return user
     await upsert_seat(
         session,
-        organization_id=user.organization_id,
+        organization_id=org_id,
         user_id=user.id,
         provider=ConnectionProvider.linkedin,
         account_id=account_id,

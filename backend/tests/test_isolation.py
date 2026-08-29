@@ -41,7 +41,7 @@ async def test_workspace_member_sees_only_assigned(db_session: AsyncSession) -> 
     org = await factories.make_org(db_session, slug="org")
     w1 = await factories.make_workspace(db_session, org=org, name="W1")
     w2 = await factories.make_workspace(db_session, org=org, name="W2")
-    user = await factories.make_user(db_session, org=org)
+    user = await factories.make_user(db_session)
     await factories.make_membership(
         db_session,
         user=user,
@@ -68,7 +68,7 @@ async def test_foreign_workspace_header_is_rejected(db_session: AsyncSession) ->
     w1 = await factories.make_workspace(db_session, org=org, name="W1")
     other = await factories.make_org(db_session, slug="other")
     foreign = await factories.make_workspace(db_session, org=other, name="OW")
-    user = await factories.make_user(db_session, org=org)
+    user = await factories.make_user(db_session)
     await factories.make_membership(
         db_session,
         user=user,

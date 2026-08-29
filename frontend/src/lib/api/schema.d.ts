@@ -3525,10 +3525,11 @@ export interface components {
         WorkspaceSummary: {
             /** Id */
             id: string;
-            /** Kind */
-            kind: string;
+            kind: components["schemas"]["WorkspaceKind"];
             /** Name */
             name: string;
+            /** Organization Id */
+            organization_id: string;
         };
         /** MeResponse */
         app__api__auth__MeResponse: {
@@ -3537,6 +3538,8 @@ export interface components {
             /** Is Org Admin */
             is_org_admin: boolean;
             organization: components["schemas"]["OrgSummary"] | null;
+            /** Organizations */
+            organizations: components["schemas"]["OrgSummary"][];
             user: components["schemas"]["UserSummary"] | null;
             /** Workspaces */
             workspaces: components["schemas"]["WorkspaceSummary"][];
