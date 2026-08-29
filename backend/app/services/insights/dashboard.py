@@ -31,7 +31,7 @@ class DashboardCampaignData:
     id: str
     name: str
     status: str
-    autonomy_mode: str
+    autonomy_level: str
     sourced: int
     awaiting: int
     replies: int
@@ -154,7 +154,7 @@ async def workspace_dashboard(session: AsyncSession, *, workspace_id: str) -> Da
             id=c.id,
             name=c.name,
             status=c.status.value,
-            autonomy_mode=c.autonomy_mode.value,
+            autonomy_level=c.autonomy_level.value,
             sourced=int(sourced_by.get(c.id, 0)),
             awaiting=int(awaiting_by.get(c.id, 0)),
             replies=int(replies_by.get(c.id, 0)),

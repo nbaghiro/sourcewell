@@ -21,7 +21,7 @@ import { toast } from "sonner";
 
 import { AUTONOMY, AutonomyDial, stopFrom } from "@/components/autonomy-dial";
 import { CampaignActivity } from "@/components/campaign-activity";
-import { CampaignComposer, type Step } from "@/components/campaign-composer";
+import { CampaignComposer, toSteps, type Step } from "@/components/campaign-composer";
 import { CandidateSheet } from "@/components/candidate-sheet";
 import { PageHeader } from "@/components/page-header";
 import { PageLayout } from "@/components/page-layout";
@@ -54,41 +54,11 @@ import {
   useRankCampaign,
   useSourceNow,
   useUpdateCampaign,
+  type EnrollmentRow,
 } from "@/lib/api/queries";
 import { longAgo } from "@/lib/format";
 import { toTargeting, type Targeting } from "@/lib/targeting";
 import { cn } from "@/lib/utils";
-
-interface Campaign {
-  id: string;
-  name: string;
-  status: string;
-  autonomy_mode: string;
-  autonomy_level: string;
-  criteria: Partial<Targeting>;
-  sequence: { channel: "email" | "linkedin"; delay_days: number; subject: string | null; body: string }[];
-  next_source_at: string | null;
-}
-
-interface Enrollment {
-  id: string;
-  contact_id: string;
-  contact_name: string;
-  contact_title: string | null;
-  contact_avatar: string | null;
-  score: number;
-  score_rationale: string | null;
-  state: string;
-  current_step: number;
-}
-
-interface AgentRun {
-  id: string;
-  role: string;
-  status: string;
-  summary: string;
-  created_at: string;
-}
 
 const IN_SEQUENCE = ["active", "awaiting_approval", "scheduled", "awaiting_reply"];
 const STAGES: { value: string; label: string; match: (s: string) => boolean }[] = [
@@ -102,8 +72,7 @@ const STAGES: { value: string; label: string; match: (s: string) => boolean }[] 
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const { data: campaignData } = useCampaign(id ?? "");
-  const campaign = campaignData as Campaign | undefined;
+  const { data: campaign } = useCampaign(id ?? "");
   const { data: enrollments } = useCampaignEnrollments(id ?? "");
   const { data: pool } = useContacts();
   // `sourcing` drives a live feedback loop: fast-poll runs + watch the new run to completion.
@@ -120,7 +89,7 @@ export function CampaignDetailPage() {
   const [setupOpen, setSetupOpen] = React.useState(false);
   const [setupTab, setSetupTab] = React.useState("design");
   const [activityOpen, setActivityOpen] = React.useState(false);
-  const [openCandidate, setOpenCandidate] = React.useState<Enrollment | null>(null);
+  const [openCandidate, setOpenCandidate] = React.useState<EnrollmentRow | null>(null);
   const busy = rankCampaign.isPending || bulkApprove.isPending;
 
   // Editable copies of the audience + sequence, autosaved via PATCH (edited in the Setup drawer).
@@ -131,14 +100,7 @@ export function CampaignDetailPage() {
   React.useEffect(() => {
     if (!campaign || criteria !== null) return;
     setCriteria(toTargeting(campaign.criteria));
-    setSteps(
-      campaign.sequence.map((s) => ({
-        channel: s.channel,
-        delay_days: s.delay_days,
-        subject: s.subject ?? "",
-        body: s.body,
-      })),
-    );
+    setSteps(toSteps(campaign.sequence));
   }, [campaign, criteria]);
 
   React.useEffect(() => {
@@ -153,7 +115,7 @@ export function CampaignDetailPage() {
   // Watch the requested sourcing run to completion, then refresh the pipeline into Proposed.
   React.useEffect(() => {
     if (!sourcing || !sourcingBaseline.current) return;
-    const fresh = ((runs ?? []) as AgentRun[]).find(
+    const fresh = (runs ?? []).find(
       (r) =>
         r.role === "sourcing" &&
         !sourcingBaseline.current!.has(r.id) &&
@@ -182,7 +144,7 @@ export function CampaignDetailPage() {
     return () => clearTimeout(t);
   }, [sourcing]);
 
-  const all = (enrollments ?? []) as Enrollment[];
+  const all = enrollments ?? [];
   const count = (m: (s: string) => boolean) => all.filter((e) => m(e.state)).length;
   const activeStage = STAGES.find((s) => s.value === stage)!;
   const rows = all.filter((e) => activeStage.match(e.state));
@@ -192,7 +154,7 @@ export function CampaignDetailPage() {
   const handed = count((s) => s === "handed_off");
   const opted = count((s) => s === "opted_out");
   const needsYou = count((s) => s === "awaiting_approval");
-  const sourcedRun = ((runs ?? []) as AgentRun[]).find((r) => r.role === "sourcing");
+  const sourcedRun = (runs ?? []).find((r) => r.role === "sourcing");
   const sourcingStatus = sourcing
     ? "sourcing now…"
     : sourcedRun
@@ -205,7 +167,7 @@ export function CampaignDetailPage() {
     if (!campaign) return;
     sourceNow.mutate(campaign.id, {
       onSuccess: () => {
-        sourcingBaseline.current = new Set(((runs ?? []) as AgentRun[]).map((r) => r.id));
+        sourcingBaseline.current = new Set((runs ?? []).map((r) => r.id));
         setSourcing(true);
         setActivityOpen(true);
         toast.success("Sourcing started — watch the agent work");
@@ -252,7 +214,6 @@ export function CampaignDetailPage() {
             <StateBadge state={campaign.status} />
             <AutonomyDial
               level={campaign.autonomy_level}
-              mode={campaign.autonomy_mode}
               onChange={(patch) => updateCampaign.mutate({ id: campaign.id, patch })}
             />
             <Button variant="outline" size="sm" onClick={() => setSetupOpen(true)}>
@@ -274,7 +235,7 @@ export function CampaignDetailPage() {
               </span>
               <div>
                 <div className="text-sm font-semibold">
-                  {AUTONOMY[stopFrom(campaign.autonomy_level, campaign.autonomy_mode)].label}
+                  {AUTONOMY[stopFrom(campaign.autonomy_level)].label}
                   <span className="font-normal text-muted-foreground"> · {sourcingStatus}</span>
                 </div>
                 <div className="text-xs text-muted-foreground">
@@ -459,7 +420,6 @@ export function CampaignDetailPage() {
                 <AutonomyDial
                   variant="cards"
                   level={campaign.autonomy_level}
-                  mode={campaign.autonomy_mode}
                   onChange={(patch) => updateCampaign.mutate({ id: campaign.id, patch })}
                 />
                 <p className="text-xs text-muted-foreground">

@@ -24,6 +24,7 @@ from app.models import (
     ConnectionStatus,
     Contact,
     Enrollment,
+    EnrollmentState,
     Message,
     MessageDirection,
     MessageStatus,
@@ -66,9 +67,9 @@ class SendRequest(BaseModel):
 class MessageOut(BaseModel):
     id: str
     enrollment_id: str
-    direction: str
-    channel: str
-    status: str
+    direction: MessageDirection
+    channel: Channel
+    status: MessageStatus
     subject: str | None
     body: str
     sent_at: str | None
@@ -81,9 +82,9 @@ def dump_message(m: Message) -> MessageOut:
     return MessageOut(
         id=m.id,
         enrollment_id=m.enrollment_id,
-        direction=m.direction.value,
-        channel=m.channel.value,
-        status=m.status.value,
+        direction=m.direction,
+        channel=m.channel,
+        status=m.status,
         subject=m.subject,
         body=m.body,
         sent_at=m.sent_at.isoformat() if m.sent_at else None,
@@ -108,9 +109,9 @@ class InboxItemOut(BaseModel):
     contact_title: str | None
     contact_company: str | None
     contact_avatar: str | None
-    state: str | None
+    state: EnrollmentState | None
     outcome: str | None
-    channel: str
+    channel: Channel
     message_count: int
     unread: bool
     last_at: str | None
@@ -119,7 +120,7 @@ class InboxItemOut(BaseModel):
 
 class ConvEnrollment(BaseModel):
     id: str
-    state: str
+    state: EnrollmentState
     score: int
     current_step: int
     outcome: str | None
@@ -147,7 +148,7 @@ class ConversationOut(BaseModel):
     enrollment: ConvEnrollment
     contact: ConvContact
     campaign: ConvCampaign
-    channel: str
+    channel: Channel
     messages: list[MessageOut]
 
 
@@ -299,9 +300,9 @@ async def inbox(ctx: ContextDep, session: SessionDep) -> list[InboxItemOut]:
                 contact_title=contact.title if contact else None,
                 contact_company=contact.company if contact else None,
                 contact_avatar=contact.avatar_url if contact else None,
-                state=enrollment.state.value if enrollment else None,
+                state=enrollment.state if enrollment else None,
                 outcome=enrollment.outcome if enrollment else None,
-                channel=messages[0].channel.value,  # the channel the outreach started on
+                channel=messages[0].channel,  # the channel the outreach started on
                 message_count=len(messages),
                 unread=has_unread,
                 last_at=last.created_at.isoformat() if last.created_at else None,
@@ -323,11 +324,11 @@ async def conversation(enrollment_id: str, ctx: ContextDep, session: SessionDep)
     campaign = await session.get(Campaign, enrollment.campaign_id)
     messages = await list_thread(session, workspace_id=ws, enrollment_id=enrollment_id)
     # Primary channel = the channel of the most recent message.
-    channel = messages[-1].channel.value if messages else "email"
+    channel = messages[-1].channel if messages else Channel.email
     return ConversationOut(
         enrollment=ConvEnrollment(
             id=enrollment.id,
-            state=enrollment.state.value,
+            state=enrollment.state,
             score=enrollment.score,
             current_step=enrollment.current_step,
             outcome=enrollment.outcome,

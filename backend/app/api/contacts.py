@@ -10,8 +10,10 @@ from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.models import (
     Campaign,
+    Channel,
     Contact,
     Enrollment,
+    EnrollmentState,
     Message,
     MessageDirection,
     MessageStatus,
@@ -81,16 +83,16 @@ class ContactEnrollmentOut(BaseModel):
     id: str
     campaign_id: str
     campaign_name: str
-    state: str
+    state: EnrollmentState
     score: int
     current_step: int
 
 
 class ContactActivityOut(BaseModel):
     id: str
-    direction: str
-    channel: str
-    status: str
+    direction: MessageDirection
+    channel: Channel
+    status: MessageStatus
     subject: str | None
     body: str
     created_at: str | None
@@ -277,7 +279,7 @@ async def get_contact(contact_id: str, ctx: ContextDep, session: SessionDep) -> 
             id=e.id,
             campaign_id=e.campaign_id,
             campaign_name=c.name,
-            state=e.state.value,
+            state=e.state,
             score=e.score,
             current_step=e.current_step,
         )
@@ -305,9 +307,9 @@ async def get_contact(contact_id: str, ctx: ContextDep, session: SessionDep) -> 
     activity = [
         ContactActivityOut(
             id=m.id,
-            direction=m.direction.value,
-            channel=m.channel.value,
-            status=m.status.value,
+            direction=m.direction,
+            channel=m.channel,
+            status=m.status,
             subject=m.subject,
             body=m.body,
             created_at=m.created_at.isoformat() if m.created_at else None,

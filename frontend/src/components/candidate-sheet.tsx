@@ -10,25 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useConversation } from "@/lib/api/queries";
+import { useConversation, type EnrollmentRow } from "@/lib/api/queries";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-export interface CandidateEnrollment {
-  id: string;
-  contact_id: string;
-  contact_name: string;
-  contact_title: string | null;
-  contact_avatar: string | null;
-  score: number;
-  score_rationale: string | null;
-  state: string;
-}
-
-interface Conv {
-  contact: { company: string | null; email: string | null; linkedin_url: string | null; skills: string[] };
-  messages: { id: string; direction: string; subject: string | null; body: string; status: string }[];
-}
 
 /** A read-rich peek at one enrolled candidate without leaving the pipeline. */
 export function CandidateSheet({
@@ -37,13 +21,12 @@ export function CandidateSheet({
   onApprove,
   approving,
 }: {
-  enrollment: CandidateEnrollment | null;
+  enrollment: EnrollmentRow | null;
   onClose: () => void;
   onApprove: (id: string) => void;
   approving: boolean;
 }) {
-  const { data } = useConversation(enrollment?.id ?? null);
-  const conv = data as Conv | undefined;
+  const { data: conv } = useConversation(enrollment?.id ?? null);
   const contact = conv?.contact;
   const messages = (conv?.messages ?? []).filter((m) => m.status !== "draft");
   const proposed = enrollment?.state === "proposed";

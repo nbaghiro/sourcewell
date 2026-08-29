@@ -59,7 +59,7 @@ async def test_full_loop_approve_each(db_client: AsyncClient) -> None:
             "name": "Backend hire",
             "criteria": _CRITERIA,
             "sequence": _SEQUENCE,
-            "autonomy_mode": "approve_each",
+            "autonomy_level": "assisted",
         },
         headers=h,
     )
@@ -115,7 +115,7 @@ async def test_auto_mode_sends_without_message_approval(db_client: AsyncClient) 
                 "name": "Auto",
                 "criteria": _CRITERIA,
                 "sequence": _SEQUENCE,
-                "autonomy_mode": "auto",
+                "autonomy_level": "full",
             },
             headers=h,
         )

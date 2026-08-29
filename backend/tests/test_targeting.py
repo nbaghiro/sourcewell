@@ -1,12 +1,17 @@
 """Pins the unified targeting evaluator across a canonical case table — one row per scoring path.
 
-`src/lib/targeting.ts` is a byte-for-byte mirror and MUST produce identical scores. When you change
-the scoring model, update both sides and these expected values (run the cases through `evaluate`).
+`frontend/src/lib/targeting.ts` is a byte-for-byte mirror and MUST produce identical scores. The
+case table lives in `shared/targeting-cases.json`, consumed by this test AND the frontend's
+`src/lib/targeting.test.ts` — change the scoring model on both sides and update the table once.
 """
 
-from typing import TypedDict
+import json
+from pathlib import Path
+from typing import TypedDict, cast
 
 from app.targeting import Targeting, evaluate, reachability
+
+CASES_PATH = Path(__file__).resolve().parents[2] / "shared" / "targeting-cases.json"
 
 
 class TargetingCase(TypedDict, total=False):
@@ -36,70 +41,18 @@ class ContactCase(TypedDict, total=False):
     function: str
 
 
-# Fit is now the weighted fraction of *specified* criteria matched (0-100), independent of whether
-# we have an email (that's `reachability`). (name, targeting, contact, expected fit)
-CASES: list[tuple[str, TargetingCase, ContactCase, int]] = [
-    (
-        "titles substring (SVP ⊇ VP)",
-        {"titles": ["VP of Sales"]},
-        {"title": "SVP of Sales Ops"},
-        100,
-    ),
-    ("skills partial 1of2", {"skills": ["Go", "Rust"]}, {"skills": ["Go"]}, 50),
-    ("skills 0", {"skills": ["Go", "Rust"]}, {"skills": ["Java"]}, 0),
-    (
-        "title+industry+size all match",
-        {"titles": ["VP of Sales"], "industries": ["Fintech"], "company_sizes": ["501-1,000"]},
-        {"title": "VP of Sales", "industry": "Fintech", "company_size": "501-1,000"},
-        100,
-    ),
-    ("location EU alias", {"locations": ["EU"]}, {"location": "Berlin, DE"}, 100),
-    ("empty audience → 0", {}, {"email": "a@b.com"}, 0),
-    (
-        "perfect match → 100 (email doesn't matter)",
-        {"titles": ["Engineer"], "skills": ["Go"]},
-        {"title": "Staff Engineer", "skills": ["Go"]},
-        100,
-    ),
-    (
-        "exclude company disqualifies",
-        {"titles": ["VP of Sales"], "exclude_companies": ["Initech"]},
-        {"title": "VP of Sales", "company": "Initech"},
-        0,
-    ),
-    ("companies substring", {"companies": ["Globex"]}, {"company": "Globex Inc"}, 100),
-    (
-        "title match, skills miss (of two fields)",
-        {"titles": ["VP"], "skills": ["Go", "Rust"]},
-        {"title": "VP Sales", "skills": ["Java"]},
-        50,
-    ),
-    # --- seniority / function are now scored (were dropped before) ---
-    ("seniority match", {"seniorities": ["VP"]}, {"seniority": "vp"}, 100),
-    (
-        "seniority synonym (Vice President≡SVP)",
-        {"seniorities": ["Vice President"]},
-        {"seniority": "svp"},
-        100,
-    ),
-    ("function match", {"functions": ["Engineering"]}, {"function": "engineering"}, 100),
-    (
-        "title + seniority, both match",
-        {"titles": ["Engineer"], "seniorities": ["senior"]},
-        {"title": "Staff Engineer", "seniority": "senior"},
-        100,
-    ),
-    # --- word-boundary excludes: 'intern' must NOT exclude 'International' ---
-    (
-        "intern does not exclude International",
-        {"titles": ["Sales"], "exclude_titles": ["intern"]},
-        {"title": "International Sales Director"},
-        100,
-    ),
-    # --- search-only audience gets a floor instead of a hard 0 ---
-    ("keywords-only → floor", {"keywords": "fintech"}, {"title": "Anyone"}, 50),
-    ("technologies-only → floor", {"technologies": ["React"]}, {}, 50),
-]
+class SharedCase(TypedDict):
+    """One row of shared/targeting-cases.json. Fit is the weighted fraction of *specified*
+    criteria matched (0-100), independent of whether we have an email (that's `reachability`)."""
+
+    name: str
+    targeting: TargetingCase
+    contact: ContactCase
+    fit: int
+
+
+def load_cases() -> list[SharedCase]:
+    return cast(list[SharedCase], json.loads(CASES_PATH.read_text()))
 
 
 class _Contact:
@@ -138,9 +91,11 @@ class _Contact:
 
 
 def test_evaluator_canonical_scores() -> None:
-    for name, targeting, contact, expected in CASES:
-        score, _ = evaluate(_Contact(**contact), Targeting(**targeting))
-        assert score == expected, f"{name}: got {score}, want {expected}"
+    cases = load_cases()
+    assert cases, "shared/targeting-cases.json is missing or empty"
+    for case in cases:
+        score, _ = evaluate(_Contact(**case["contact"]), Targeting(**case["targeting"]))
+        assert score == case["fit"], f"{case['name']}: got {score}, want {case['fit']}"
 
 
 def test_exclude_overrides_positive_matches() -> None:

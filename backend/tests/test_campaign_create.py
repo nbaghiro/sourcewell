@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Authorship, AutonomyMode
+from app.models import Authorship
 from app.services.outreach.campaigns import create_campaign
 from tests.factories import make_org, make_workspace
 
@@ -20,7 +20,6 @@ async def test_create_campaign_schedules_sourcing_and_sets_provenance(
         name="Senior Backend Engineer",
         criteria={"titles": ["Senior Backend Engineer"]},
         sequence=[],
-        autonomy_mode=AutonomyMode.approve_each,
         from_email=None,
         objective="Hire a senior backend engineer",
         authored_by=Authorship.agent,
@@ -46,7 +45,6 @@ async def test_create_campaign_human_authored_leaves_sections_unowned(
         name="Manual",
         criteria={},
         sequence=[],
-        autonomy_mode=AutonomyMode.approve_each,
         from_email=None,
     )
     assert c.next_source_at is not None  # active campaigns still source

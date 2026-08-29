@@ -26,57 +26,11 @@ import {
   useMarkRead,
   useOptOut,
   useSendReply,
+  type Conversation,
+  type Message,
 } from "@/lib/api/queries";
 import { cn } from "@/lib/utils";
 
-// ---------- types (shapes flow from the generated API types; unions widened to string) ----------
-interface Message {
-  id: string;
-  direction: string;
-  channel: string;
-  status: string;
-  subject: string | null;
-  body: string;
-  created_at: string | null;
-  origin: string; // "ai" | "human"
-}
-interface Conversation {
-  enrollment: { state: string; score: number; current_step: number };
-  contact: {
-    id: string | null;
-    name: string | null;
-    title: string | null;
-    company: string | null;
-    location: string | null;
-    email: string | null;
-    linkedin_url: string | null;
-    avatar_url: string | null;
-    skills: string[];
-  };
-  campaign: { id: string | null; name: string | null; steps: number };
-  channel: string;
-  messages: Message[];
-}
-interface InboxItem {
-  enrollment_id: string;
-  contact_name: string | null;
-  contact_avatar: string | null;
-  channel: string;
-  state: string | null;
-  unread: boolean;
-  last_at: string | null;
-  last_message: { body: string };
-}
-/** A drafted outbound message awaiting approval (ApprovalOut), used to build its list row. */
-interface Approval {
-  enrollment_id: string;
-  channel: string;
-  subject: string | null;
-  body: string;
-  created_at: string | null;
-  contact_name: string;
-  contact_avatar: string | null;
-}
 /** One row in the unified message list — either an inbound conversation or an outbound draft. */
 interface Row {
   kind: "conversation" | "approval";
@@ -204,8 +158,8 @@ export function InboxPage() {
   // Unified message list: outbound drafts awaiting approval + inbound conversations,
   // one row per enrollment, each tagged with a state we can filter on.
   const rows = React.useMemo<Row[]>(() => {
-    const approvals = (approvalsData ?? []) as Approval[];
-    const inbox = (inboxData ?? []) as InboxItem[];
+    const approvals = approvalsData ?? [];
+    const inbox = inboxData ?? [];
     const apprEnrollments = new Set(approvals.map((a) => a.enrollment_id));
     return [
       ...approvals.map(

@@ -174,8 +174,7 @@ async def _draft_touchpoint(
     session.add(message)
     await session.flush()
 
-    # Gate on autonomy_level (the unifying field used by every other gate) — not autonomy_mode,
-    # which can lag it and split-brain the campaign.
+    # Gate on autonomy_level, the one field every gate reads.
     if campaign.autonomy_level == AutonomyLevel.full:
         message.status = MessageStatus.approved
         if not message.idempotency_key:

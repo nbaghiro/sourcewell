@@ -25,6 +25,9 @@ export type AuditEvent = S["AuditEventOut"];
 export type SearchResults = S["SearchOut"];
 export type DataProvider = S["DataProviderOut"];
 export type PersonHit = S["PersonHit"];
+export type AgentRun = S["AgentRunOut"];
+export type AgentState = S["AgentState"];
+export type ContactActivity = S["ContactActivityOut"];
 
 // Keys are namespaced by workspace so switching workspaces refetches; mutations invalidate by the
 // resource-name prefix (only mounted queries actually refetch).

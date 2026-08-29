@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
-    AutonomyMode,
+    AutonomyLevel,
     Campaign,
     CampaignStatus,
     Channel,
@@ -49,7 +49,7 @@ async def _setup(
         workspace_id=ws.id,
         name="C",
         status=CampaignStatus.active,
-        autonomy_mode=AutonomyMode.approve_each,
+        autonomy_level=AutonomyLevel.assisted,
         criteria={},
         sequence=[{"channel": "email", "delay_days": 0}, {"channel": "email", "delay_days": 3}],
     )

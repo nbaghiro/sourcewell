@@ -25,10 +25,13 @@ To drive the product end to end by hand (contacts → campaign → rank → appr
 follow **[the QA guide](.docs/qa-guide.md)**.
 
 ## Layout
-- `backend/app/` — FastAPI modular monolith: `core/` (kernel), `runtime/` (autonomous send engine),
-  and feature modules grouped into bounded contexts (`outreach/` · `people/` · `workspace/` ·
-  `insights/` · `agent/`), with shared `models.py` + `targeting.py`.
-- `frontend/` — React + Vite + Tailwind ("Wellspring" design), typed against the backend's OpenAPI.
+- `backend/app/` — FastAPI modular monolith: `api/` (routers) → `services/` (bounded contexts:
+  `outreach` · `sourcing` · `workspace` · `insights` · `billing`) over shared `models.py` +
+  `targeting.py`; `agents/` (LLM agents), `core/` (kernel incl. the agent runtime), `ext/`
+  (people-data + channel adapters), `worker.py` (the self-clocking send/source engine).
+- `frontend/` — React + Vite + Tailwind ("Wellspring" design), typed against the backend's OpenAPI
+  (`make gen-api` regenerates `src/lib/api/schema.d.ts` offline; CI fails if it goes stale).
+- `shared/` — the canonical targeting case table pinned by both test suites.
 - `infra/` — docker / local.
 
 ## License

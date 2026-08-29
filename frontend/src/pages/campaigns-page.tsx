@@ -65,7 +65,7 @@ export function CampaignsPage() {
                     <StateBadge state={c.status} />
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {AUTONOMY[stopFrom(c.autonomy_level, c.autonomy_mode)].label}
+                    {AUTONOMY[stopFrom(c.autonomy_level)].label}
                   </TableCell>
                   <TableCell>
                     {c.counts.sourced === 0 ? (

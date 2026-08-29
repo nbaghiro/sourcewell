@@ -1,4 +1,4 @@
-.PHONY: help up down install dev worker web-install web test test-fast lint fmt typecheck migrate revision check
+.PHONY: help up down install dev worker web-install web web-test gen-api test test-fast lint fmt typecheck migrate revision check
 
 help:
 	@echo "up/down      docker compose (postgres+mailpit)"
@@ -7,6 +7,8 @@ help:
 	@echo "worker       run the runtime worker"
 	@echo "web-install  npm install (frontend deps)"
 	@echo "web          run the React app on :8900"
+	@echo "web-test     frontend unit tests (vitest)"
+	@echo "gen-api      regenerate frontend/src/lib/api/schema.d.ts from the backend (offline)"
 	@echo "test         full test suite (needs 'make up')"
 	@echo "test-fast    unit/api tests only (no DB)"
 	@echo "lint/fmt     ruff check / format"
@@ -37,6 +39,13 @@ web-install:
 
 web:
 	cd frontend && npm run dev
+
+web-test:
+	cd frontend && npm test
+
+gen-api:
+	cd backend && uv run python -m app.openapi_export ../frontend/openapi.json
+	cd frontend && npm run gen:api
 
 test:
 	cd backend && uv run pytest -q

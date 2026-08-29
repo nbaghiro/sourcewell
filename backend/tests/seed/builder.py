@@ -25,7 +25,6 @@ from app.models import (
     AgentStep,
     AuditEvent,
     AutonomyLevel,
-    AutonomyMode,
     Campaign,
     CampaignStatus,
     Channel,
@@ -63,7 +62,7 @@ DEMO_ORG_SLUG = "acme-talent"
 class CampaignSpec(TypedDict):
     name: str
     status: str
-    autonomy_mode: str
+    autonomy_level: str
     criteria: JsonObject
     steps: list[SequenceStep]
 
@@ -82,7 +81,7 @@ RECRUIT_CAMPAIGNS: list[CampaignSpec] = [
     {
         "name": "Senior Backend Engineer",
         "status": "active",
-        "autonomy_mode": "approve_each",
+        "autonomy_level": "assisted",
         "criteria": {
             "titles": ["Senior Backend Engineer", "Staff Engineer"],
             "skills": ["Python", "Go"],
@@ -102,7 +101,7 @@ RECRUIT_CAMPAIGNS: list[CampaignSpec] = [
     {
         "name": "Data Platform Lead",
         "status": "active",
-        "autonomy_mode": "approve_each",
+        "autonomy_level": "assisted",
         "criteria": {"titles": ["Data Platform Engineer"], "skills": ["Spark", "dbt"]},
         "steps": [
             {"channel": "email", "delay_days": 0, "subject": "Data platform role"},
@@ -112,14 +111,14 @@ RECRUIT_CAMPAIGNS: list[CampaignSpec] = [
     {
         "name": "Frontend Engineer — H1",
         "status": "done",
-        "autonomy_mode": "approve_each",
+        "autonomy_level": "assisted",
         "criteria": {"titles": ["Frontend Engineer"], "skills": ["React"]},
         "steps": [{"channel": "email", "delay_days": 0}],
     },
     {
         "name": "ML Research Scientist",
         "status": "draft",
-        "autonomy_mode": "approve_each",
+        "autonomy_level": "assisted",
         "criteria": {"titles": ["ML Engineer"], "skills": ["PyTorch", "LLMs"]},
         "steps": [{"channel": "email", "delay_days": 0}],
     },
@@ -128,7 +127,7 @@ SALES_CAMPAIGNS: list[CampaignSpec] = [
     {
         "name": "Enterprise Outbound — Q3",
         "status": "active",
-        "autonomy_mode": "approve_each",
+        "autonomy_level": "assisted",
         "criteria": {
             "titles": ["VP of Sales", "Chief Revenue Officer"],
             "skills": ["Salesforce", "Enterprise"],
@@ -143,14 +142,14 @@ SALES_CAMPAIGNS: list[CampaignSpec] = [
     {
         "name": "RevOps Expansion",
         "status": "active",
-        "autonomy_mode": "auto",
+        "autonomy_level": "full",
         "criteria": {"titles": ["Head of RevOps"], "skills": ["HubSpot"]},
         "steps": [{"channel": "email", "delay_days": 0}, {"channel": "linkedin", "delay_days": 3}],
     },
     {
         "name": "Mid-Market Pilot",
         "status": "done",
-        "autonomy_mode": "approve_each",
+        "autonomy_level": "assisted",
         "criteria": {"titles": ["Director of Demand Gen"]},
         "steps": [{"channel": "email", "delay_days": 0}],
     },
@@ -159,7 +158,7 @@ PARTNER_CAMPAIGNS: list[CampaignSpec] = [
     {
         "name": "Agency Partner Program",
         "status": "active",
-        "autonomy_mode": "approve_each",
+        "autonomy_level": "assisted",
         "criteria": {
             "titles": ["Head of Partnerships", "Director of Business Development"],
             "skills": ["Channel"],
@@ -173,14 +172,14 @@ PARTNER_CAMPAIGNS: list[CampaignSpec] = [
     {
         "name": "Integration Partners",
         "status": "active",
-        "autonomy_mode": "approve_each",
+        "autonomy_level": "assisted",
         "criteria": {"titles": ["Ecosystem Lead", "VP Strategic Alliances"]},
         "steps": [{"channel": "email", "delay_days": 0}, {"channel": "linkedin", "delay_days": 4}],
     },
     {
         "name": "Reseller Outreach",
         "status": "draft",
-        "autonomy_mode": "approve_each",
+        "autonomy_level": "assisted",
         "criteria": {"titles": ["Founder & CEO"]},
         "steps": [{"channel": "email", "delay_days": 0}],
     },
@@ -394,13 +393,7 @@ async def _seed_workspace(
                 workspace_id=ws.id,
                 name=spec["name"],
                 status=CampaignStatus(spec["status"]),
-                autonomy_mode=AutonomyMode(spec["autonomy_mode"]),
-                # Keep the two autonomy fields in sync: "auto" mode = full autonomy.
-                autonomy_level=(
-                    AutonomyLevel.full
-                    if spec["autonomy_mode"] == "auto"
-                    else AutonomyLevel.assisted
-                ),
+                autonomy_level=AutonomyLevel(spec["autonomy_level"]),
                 from_email=from_email,
                 criteria=spec["criteria"],
                 sequence=[

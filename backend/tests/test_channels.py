@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     AutonomyLevel,
-    AutonomyMode,
     Campaign,
     CampaignStatus,
     Channel,
@@ -52,7 +51,6 @@ async def test_linkedin_step_sends_dry_run_and_advances(db_session: AsyncSession
         workspace_id=ws.id,
         name="C",
         status=CampaignStatus.active,
-        autonomy_mode=AutonomyMode.auto,
         autonomy_level=AutonomyLevel.full,
         criteria={},
         sequence=[{"channel": "linkedin", "delay_days": 0}],
@@ -91,7 +89,7 @@ async def test_inbound_webhook_threads_by_sender_email(db_session: AsyncSession)
         workspace_id=ws.id,
         name="C",
         status=CampaignStatus.active,
-        autonomy_mode=AutonomyMode.approve_each,
+        autonomy_level=AutonomyLevel.assisted,
         criteria={},
         sequence=[{"channel": "email", "delay_days": 0}],
     )

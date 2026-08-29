@@ -36,6 +36,19 @@ export interface Step {
 }
 export type { Targeting };
 
+/** Narrow an untyped sequence (JSONB from the API, or an LLM draft) into Steps. */
+export function toSteps(sequence: unknown[]): Step[] {
+  return sequence.map((s) => {
+    const o = (s ?? {}) as Record<string, unknown>;
+    return {
+      channel: o.channel === "linkedin" ? "linkedin" : "email",
+      delay_days: typeof o.delay_days === "number" ? o.delay_days : 0,
+      subject: typeof o.subject === "string" ? o.subject : "",
+      body: typeof o.body === "string" ? o.body : "",
+    };
+  });
+}
+
 type ContactLike = Parameters<typeof evaluateFit>[0];
 
 const TOKENS = ["{first_name}", "{company}", "{title}"];

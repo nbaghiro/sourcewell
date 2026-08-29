@@ -67,9 +67,9 @@ curl -sX POST localhost:8901/contacts/import \
 `criteria` is what the Evaluator scores against; `sequence` is the touchpoints. Use `delay_days: 0`
 on every step so you can step the whole sequence by hand without waiting real days.
 
-`autonomy_mode`:
-- `approve_each` — every drafted message waits in the approval queue (`GET /approvals`).
-- `auto` — drafts auto-approve and send on the next tick (no manual message approval).
+`autonomy_level`:
+- `manual` / `assisted` — every drafted message waits in the approval queue (`GET /approvals`).
+- `full` — drafts auto-approve and send on the next tick (no manual message approval).
 
 ```bash
 curl -sX POST localhost:8901/campaigns \
@@ -81,7 +81,7 @@ curl -sX POST localhost:8901/campaigns \
       {"channel":"email","delay_days":0,"subject":"Hi {first_name}","body":"Saw your work at {company} — open to a chat?"},
       {"channel":"email","delay_days":0,"subject":"Following up, {first_name}","body":"Still keen?"}
     ],
-    "autonomy_mode":"approve_each",
+    "autonomy_level":"assisted",
     "from_email":"recruiter@acme.com"
   }'
 ```

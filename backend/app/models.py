@@ -84,11 +84,6 @@ class CampaignStatus(enum.StrEnum):
     done = "done"
 
 
-class AutonomyMode(enum.StrEnum):
-    approve_each = "approve_each"
-    auto = "auto"
-
-
 class AutonomyLevel(enum.StrEnum):
     """Campaign-level autonomy — drives all three gates (campaign / candidate / message)."""
 
@@ -370,9 +365,6 @@ class Campaign(IdMixin, TimestampMixin, Base):
     status: Mapped[CampaignStatus] = mapped_column(
         sa_enum(CampaignStatus), default=CampaignStatus.draft
     )
-    autonomy_mode: Mapped[AutonomyMode] = mapped_column(
-        sa_enum(AutonomyMode), default=AutonomyMode.approve_each
-    )
     from_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     # criteria: {"titles": [...], "skills": [...]}
     criteria: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
@@ -382,7 +374,7 @@ class Campaign(IdMixin, TimestampMixin, Base):
     # --- Agent-native fields -------------------------------------------------
     # The natural-language brief that drives AI design (blank for a pure-manual campaign).
     objective: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Generalizes autonomy_mode across all three gates (campaign / candidate / message).
+    # The one autonomy field; drives all three gates (campaign / candidate / message).
     autonomy_level: Mapped[AutonomyLevel] = mapped_column(
         sa_enum(AutonomyLevel), default=AutonomyLevel.assisted, server_default="assisted"
     )

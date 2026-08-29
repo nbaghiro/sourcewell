@@ -7,12 +7,14 @@ maps these raw dataclasses to Pydantic response models.
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.types import JsonObject
 from app.models import (
+    AgentRole,
     AgentRun,
     AgentStep,
     Campaign,
@@ -39,7 +41,7 @@ class StepData:
 @dataclass
 class RunData:
     id: str
-    role: str
+    role: AgentRole
     trigger: str
     status: str
     summary: str
@@ -76,7 +78,7 @@ async def recent_runs(session: AsyncSession, *, campaign_id: str, limit: int = 2
         out.append(
             RunData(
                 id=run.id,
-                role=run.role.value,
+                role=run.role,
                 trigger=run.trigger,
                 status=run.status,
                 summary=run.summary,
@@ -362,7 +364,7 @@ class AgentCampaignData:
 
 @dataclass(frozen=True)
 class StateData:
-    status: str  # active | idle
+    status: Literal["active", "idle"]
     counts: dict[str, int]
     today: dict[str, int]
     needs_you: dict[str, int]

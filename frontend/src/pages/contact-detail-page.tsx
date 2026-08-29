@@ -25,20 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { type ContactDetail, useCampaigns, useContact, useDeleteContact, useEnrollContact, useForgetContact, useUpdateContact } from "@/lib/api/queries";
+import { type ContactActivity, type ContactDetail, useCampaigns, useContact, useDeleteContact, useEnrollContact, useForgetContact, useUpdateContact } from "@/lib/api/queries";
 import { cn } from "@/lib/utils";
-
-interface Activity {
-  id: string;
-  direction: string;
-  channel: string;
-  status: string;
-  subject: string | null;
-  body: string;
-  created_at: string | null;
-  scheduled_at: string | null;
-  campaign_name: string;
-}
 
 function shortDate(iso?: string | null): string {
   if (!iso) return "soon";
@@ -247,7 +235,7 @@ function Tile({ label, value, mono, small }: { label: string; value: string | nu
   );
 }
 
-function TimelineItem({ a, last }: { a: Activity; last: boolean }) {
+function TimelineItem({ a, last }: { a: ContactActivity; last: boolean }) {
   const out = a.direction === "outbound";
   const scheduled = a.status === "draft" && !!a.scheduled_at;
   return (

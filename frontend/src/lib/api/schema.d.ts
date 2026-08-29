@@ -4,15 +4,58 @@
  */
 
 export interface paths {
-    "/health": {
+    "/admin/enrollments/{enrollment_id}/fast-forward": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Health */
-        get: operations["health_health_get"];
+        get?: never;
+        put?: never;
+        /**
+         * Fast Forward
+         * @description Pull a future-scheduled touchpoint into the present so run-due picks it up now.
+         */
+        post: operations["fast_forward_admin_enrollments__enrollment_id__fast_forward_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/run-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Due Now
+         * @description Process every enrollment whose next_run_at is due, once. Call repeatedly to step.
+         */
+        post: operations["run_due_now_admin_run_due_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activity
+         * @description A merged, humanized stream of the agent's recent actions, newest first.
+         */
+        get: operations["activity_agent_activity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,7 +64,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/login": {
+    "/agent/apply-audience": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Audience
+         * @description Apply a previewed audience (a human action) — set the criteria and pin the section.
+         */
+        post: operations["apply_audience_agent_apply_audience_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat
+         * @description Main-agent chat: text + typed entities (catalog §12). Requires an LLM.
+         */
+        post: operations["chat_agent_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/chat/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat Stream
+         * @description Streaming Main-agent chat (SSE): `token` events as the narration streams, then a `done`
+         *     event carrying the typed entities. Requires an LLM.
+         */
+        post: operations["chat_stream_agent_chat_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/design": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Design
+         * @description Run the Strategy agent's cold-start design (LLM-free fallback when no key).
+         */
+        post: operations["design_agent_design_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/draft-sequence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Sequence Endpoint
+         * @description Draft a tailored outreach sequence from the objective + audience (the AI starter).
+         */
+        post: operations["draft_sequence_endpoint_agent_draft_sequence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/funnel": {
         parameters: {
             query?: never;
             header?: never;
@@ -29,10 +173,181 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Login
-         * @description Start WorkOS SSO (Google / Microsoft / email): redirect to AuthKit.
+         * Funnel
+         * @description The per-campaign funnel rollup — the cockpit header.
          */
-        get: operations["login_auth_login_get"];
+        get: operations["funnel_agent_funnel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/intake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Intake
+         * @description Parse a JD / brief into an objective + targeting (the create flow's step 0).
+         */
+        post: operations["intake_agent_intake_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/linkedin-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Linkedin Jobs
+         * @description The connected LinkedIn account's active job postings (the 'pull from LinkedIn' intake).
+         */
+        get: operations["linkedin_jobs_agent_linkedin_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/regenerate-message": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate Message Endpoint
+         * @description Regenerate one touchpoint's message — a fresh take on the same intent.
+         */
+        post: operations["regenerate_message_endpoint_agent_regenerate_message_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runs
+         * @description The agent-run trace feed for a campaign — the narrated activity tab.
+         */
+        get: operations["runs_agent_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * State
+         * @description Live snapshot: queue counts, today's throughput, what needs the human, governor headroom.
+         */
+        get: operations["state_agent_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Analytics */
+        get: operations["analytics_analytics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Approvals */
+        get: operations["list_approvals_approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Log */
+        get: operations["audit_log_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Callback
+         * @description Shared callback: WorkOS sends `code`, LinkedIn sends `state`. Mint the unified session.
+         */
+        get: operations["callback_auth_callback_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -61,26 +376,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Options
-         * @description Which sign-in methods are available, so the login screen renders the right buttons.
-         */
-        get: operations["options_auth_options_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/auth/linkedin/notify": {
         parameters: {
             query?: never;
@@ -101,7 +396,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/callback": {
+    "/auth/login": {
         parameters: {
             query?: never;
             header?: never;
@@ -109,10 +404,64 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Callback
-         * @description Shared callback: WorkOS sends `code`, LinkedIn sends `state`. Mint the unified session.
+         * Login
+         * @description Start WorkOS SSO (Google / Microsoft / email): redirect to AuthKit.
          */
-        get: operations["callback_auth_callback_get"];
+        get: operations["login_auth_login_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Me */
+        get: operations["me_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Options
+         * @description Which sign-in methods are available, so the login screen renders the right buttons.
+         */
+        get: operations["options_auth_options_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -141,15 +490,168 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/me": {
+    "/billing/checkout": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Me */
-        get: operations["me_auth_me_get"];
+        get?: never;
+        put?: never;
+        /**
+         * Checkout
+         * @description Start a Stripe Checkout for a paid plan; returns the hosted URL to redirect to.
+         */
+        post: operations["checkout_billing_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/billing/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Plan
+         * @description Self-serve upgrade/downgrade for the non-Stripe path: set the org's plan directly so the
+         *     plan-change experience works end-to-end without a payment provider. When Stripe is configured,
+         *     paid changes go through Checkout / the Customer Portal instead (this returns 409).
+         */
+        post: operations["change_plan_billing_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/billing/portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Portal
+         * @description Open the Stripe Customer Portal (manage/upgrade/cancel) for the org's billing account.
+         */
+        post: operations["portal_billing_portal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Campaigns Endpoint */
+        get: operations["list_campaigns_endpoint_campaigns_get"];
+        put?: never;
+        /** Create Campaign Endpoint */
+        post: operations["create_campaign_endpoint_campaigns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/{campaign_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Campaign Endpoint */
+        get: operations["get_campaign_endpoint_campaigns__campaign_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Campaign */
+        delete: operations["delete_campaign_campaigns__campaign_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Campaign */
+        patch: operations["update_campaign_campaigns__campaign_id__patch"];
+        trace?: never;
+    };
+    "/campaigns/{campaign_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Campaign */
+        post: operations["archive_campaign_campaigns__campaign_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/{campaign_id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Duplicate Campaign */
+        post: operations["duplicate_campaign_campaigns__campaign_id__duplicate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/{campaign_id}/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enroll Contact
+         * @description Add a single contact to a campaign as a scored, proposed enrollment.
+         */
+        post: operations["enroll_contact_campaigns__campaign_id__enroll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/{campaign_id}/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Enrollments */
+        get: operations["list_enrollments_campaigns__campaign_id__enrollments_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -158,49 +660,18 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/logout": {
+    "/campaigns/{campaign_id}/estimate": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Logout */
-        post: operations["logout_auth_logout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/organizations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Signup Endpoint */
-        post: operations["signup_endpoint_organizations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Me */
-        get: operations["me_me_get"];
+        /**
+         * Estimate Audience
+         * @description How many workspace contacts the evaluator considers a match for this campaign's criteria.
+         */
+        get: operations["estimate_audience_campaigns__campaign_id__estimate_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -209,69 +680,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces": {
+    "/campaigns/{campaign_id}/pause": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Workspaces Endpoint */
-        get: operations["list_workspaces_endpoint_workspaces_get"];
+        get?: never;
         put?: never;
-        /** Create Workspace Endpoint */
-        post: operations["create_workspace_endpoint_workspaces_post"];
+        /** Pause Campaign */
+        post: operations["pause_campaign_campaigns__campaign_id__pause_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspace_id}": {
+    "/campaigns/{campaign_id}/rank": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Workspace Endpoint */
-        get: operations["get_workspace_endpoint_workspaces__workspace_id__get"];
+        get?: never;
+        put?: never;
+        /** Rank Campaign */
+        post: operations["rank_campaign_campaigns__campaign_id__rank_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/{campaign_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Campaign */
+        post: operations["resume_campaign_campaigns__campaign_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/{campaign_id}/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Source Now
+         * @description Queue an immediate sourcing pass — the worker's next tick (~10s) runs the Sourcing agent.
+         */
+        post: operations["source_now_campaigns__campaign_id__source_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Contacts Endpoint */
+        get: operations["list_contacts_endpoint_contacts_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create User Endpoint */
-        post: operations["create_user_endpoint_users_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/memberships": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Membership */
-        post: operations["create_membership_memberships_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -306,23 +796,6 @@ export interface paths {
         put?: never;
         /** Sample */
         post: operations["sample_contacts_sample_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contacts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Contacts Endpoint */
-        get: operations["list_contacts_endpoint_contacts_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -368,216 +841,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/campaigns": {
+    "/dashboard/summary": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Campaigns Endpoint */
-        get: operations["list_campaigns_endpoint_campaigns_get"];
-        put?: never;
-        /** Create Campaign Endpoint */
-        post: operations["create_campaign_endpoint_campaigns_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Campaign Endpoint */
-        get: operations["get_campaign_endpoint_campaigns__campaign_id__get"];
+        /** Summary */
+        get: operations["summary_dashboard_summary_get"];
         put?: never;
         post?: never;
-        /** Delete Campaign */
-        delete: operations["delete_campaign_campaigns__campaign_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Campaign */
-        patch: operations["update_campaign_campaigns__campaign_id__patch"];
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}/pause": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Pause Campaign */
-        post: operations["pause_campaign_campaigns__campaign_id__pause_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}/resume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Resume Campaign */
-        post: operations["resume_campaign_campaigns__campaign_id__resume_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Archive Campaign */
-        post: operations["archive_campaign_campaigns__campaign_id__archive_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}/source": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Source Now
-         * @description Queue an immediate sourcing pass — the worker's next tick (~10s) runs the Sourcing agent.
-         */
-        post: operations["source_now_campaigns__campaign_id__source_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}/duplicate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Duplicate Campaign */
-        post: operations["duplicate_campaign_campaigns__campaign_id__duplicate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}/estimate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Estimate Audience
-         * @description How many workspace contacts the evaluator considers a match for this campaign's criteria.
-         */
-        get: operations["estimate_audience_campaigns__campaign_id__estimate_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}/rank": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Rank Campaign */
-        post: operations["rank_campaign_campaigns__campaign_id__rank_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}/enroll": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enroll Contact
-         * @description Add a single contact to a campaign as a scored, proposed enrollment.
-         */
-        post: operations["enroll_contact_campaigns__campaign_id__enroll_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/campaigns/{campaign_id}/enrollments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Enrollments */
-        get: operations["list_enrollments_campaigns__campaign_id__enrollments_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/enrollments/{enrollment_id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Approve Enrollment Endpoint */
-        post: operations["approve_enrollment_endpoint_enrollments__enrollment_id__approve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -604,6 +878,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/enrollments/{enrollment_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Enrollment Endpoint */
+        post: operations["approve_enrollment_endpoint_enrollments__enrollment_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/enrollments/{enrollment_id}/handoff": {
         parameters: {
             query?: never;
@@ -618,6 +909,23 @@ export interface paths {
          * @description Hand an interested candidate to the hiring team.
          */
         post: operations["hand_off_enrollments__enrollment_id__handoff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/enrollments/{enrollment_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Thread */
+        get: operations["thread_enrollments__enrollment_id__messages_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -644,58 +952,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/approvals": {
+    "/health": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Approvals */
-        get: operations["list_approvals_approvals_get"];
+        /** Health */
+        get: operations["health_health_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/messages/{message_id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Approve Message Endpoint */
-        post: operations["approve_message_endpoint_messages__message_id__approve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/messages/{message_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Edit Message
-         * @description Edit a draft before it's approved/sent.
-         */
-        patch: operations["edit_message_messages__message_id__patch"];
         trace?: never;
     };
     "/inbox": {
@@ -735,26 +1006,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/inbox/{enrollment_id}/reply": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Send Reply
-         * @description Send a manual outbound reply from the recruiter in this conversation.
-         */
-        post: operations["send_reply_inbox__enrollment_id__reply_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/inbox/{enrollment_id}/draft": {
         parameters: {
             query?: never;
@@ -769,6 +1020,43 @@ export interface paths {
          * @description AI-suggested reply for this conversation (Writer stub; Claude slots in here).
          */
         post: operations["draft_reply_endpoint_inbox__enrollment_id__draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inbox/{enrollment_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Read */
+        post: operations["mark_read_inbox__enrollment_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inbox/{enrollment_id}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Reply
+         * @description Send a manual outbound reply from the recruiter in this conversation.
+         */
+        post: operations["send_reply_inbox__enrollment_id__reply_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -795,32 +1083,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/inbox/{enrollment_id}/read": {
+    "/me": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Mark Read */
-        post: operations["mark_read_inbox__enrollment_id__read_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/enrollments/{enrollment_id}/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Thread */
-        get: operations["thread_enrollments__enrollment_id__messages_get"];
+        /** Me */
+        get: operations["me_me_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -829,7 +1100,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/webhooks/reply": {
+    "/memberships": {
         parameters: {
             query?: never;
             header?: never;
@@ -838,18 +1109,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Reply Webhook
-         * @description In-app / authed reply (used by the inbox 'simulate reply' and QA).
-         */
-        post: operations["reply_webhook_webhooks_reply_post"];
+        /** Create Membership */
+        post: operations["create_membership_memberships_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/webhooks/inbound": {
+    "/messages/{message_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -858,21 +1126,18 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Inbound Webhook
-         * @description System inbound from an email provider (HMAC-signed, no user session).
-         *
-         *     Threads to an enrollment by `enrollment_id` or by the sender's email. Payload (JSON):
-         *     `{"from": str, "text": str, "enrollment_id"?: str}`, signed in the `X-Signature` header.
-         */
-        post: operations["inbound_webhook_webhooks_inbound_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Edit Message
+         * @description Edit a draft before it's approved/sent.
+         */
+        patch: operations["edit_message_messages__message_id__patch"];
         trace?: never;
     };
-    "/webhooks/unipile": {
+    "/messages/{message_id}/approve": {
         parameters: {
             query?: never;
             header?: never;
@@ -881,29 +1146,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Unipile Webhook
-         * @description Public Unipile receiver (shared-secret): inbound messages → handle_reply, account events →
-         *     connection status. Prefers an HMAC signature (`X-Unipile-Signature`) over the raw body; falls
-         *     back to a shared token via the `X-Unipile-Token` header (or `?token=` for providers that can
-         *     only template the URL). Redelivered events are dropped by provider_message_id dedupe.
-         */
-        post: operations["unipile_webhook_webhooks_unipile_post"];
+        /** Approve Message Endpoint */
+        post: operations["approve_message_endpoint_messages__message_id__approve_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/dashboard/summary": {
+    "/notifications": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Summary */
-        get: operations["summary_dashboard_summary_get"];
+        /** Notifications */
+        get: operations["notifications_notifications_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -912,19 +1171,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/settings/usage": {
+    "/notifications/read": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
+        /** Mark All Read */
+        post: operations["mark_all_read_notifications_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Signup Endpoint */
+        post: operations["signup_endpoint_organizations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/enrich": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enrich Person */
+        post: operations["enrich_person_people_enrich_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import People */
+        post: operations["import_people_people_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         /**
-         * Account Usage
-         * @description The account's pooled monthly credit usage vs. its plan allowance — a soft limit (overage is
-         *     allowed). Powers the usage meter + the over-allowance warning.
+         * Parse Query
+         * @description Natural language -> search criteria (Claude when enabled, else the text as keywords).
          */
-        get: operations["account_usage_settings_usage_get"];
+        post: operations["parse_query_people_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Providers */
+        get: operations["list_providers_people_providers_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -933,15 +1276,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/settings/members": {
+    "/people/search": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Members */
-        get: operations["members_settings_members_get"];
+        get?: never;
+        put?: never;
+        /** Search People */
+        post: operations["search_people_people_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Usage */
+        get: operations["list_usage_people_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search */
+        get: operations["search_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -961,41 +1338,6 @@ export interface paths {
         get: operations["connections_settings_connections_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/settings/workspace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Workspace Settings */
-        get: operations["get_workspace_settings_settings_workspace_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Workspace Settings */
-        patch: operations["update_workspace_settings_settings_workspace_patch"];
-        trace?: never;
-    };
-    "/settings/connections/{provider}/connect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Connect */
-        post: operations["connect_settings_connections__provider__connect_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1036,7 +1378,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/settings/members/invite": {
+    "/settings/connections/{provider}/connect": {
         parameters: {
             query?: never;
             header?: never;
@@ -1045,30 +1387,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Invite Member */
-        post: operations["invite_member_settings_members_invite_post"];
+        /** Connect */
+        post: operations["connect_settings_connections__provider__connect_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/settings/members/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove Member */
-        delete: operations["remove_member_settings_members__user_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Member Role */
-        patch: operations["update_member_role_settings_members__user_id__patch"];
         trace?: never;
     };
     "/settings/data-providers": {
@@ -1146,97 +1470,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/billing/checkout": {
+    "/settings/members": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /**
-         * Checkout
-         * @description Start a Stripe Checkout for a paid plan; returns the hosted URL to redirect to.
-         */
-        post: operations["checkout_billing_checkout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/billing/plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Change Plan
-         * @description Self-serve upgrade/downgrade for the non-Stripe path: set the org's plan directly so the
-         *     plan-change experience works end-to-end without a payment provider. When Stripe is configured,
-         *     paid changes go through Checkout / the Customer Portal instead (this returns 409).
-         */
-        post: operations["change_plan_billing_plan_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/billing/portal": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Portal
-         * @description Open the Stripe Customer Portal (manage/upgrade/cancel) for the org's billing account.
-         */
-        post: operations["portal_billing_portal_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/webhooks/stripe": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Stripe Webhook
-         * @description Stripe-called (unauthenticated; verified by signature). Updates the org's plan + period.
-         */
-        post: operations["stripe_webhook_webhooks_stripe_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/notifications": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Notifications */
-        get: operations["notifications_notifications_get"];
+        /** Members */
+        get: operations["members_settings_members_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1245,7 +1487,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/notifications/read": {
+    "/settings/members/invite": {
         parameters: {
             query?: never;
             header?: never;
@@ -1254,111 +1496,45 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mark All Read */
-        post: operations["mark_all_read_notifications_read_post"];
+        /** Invite Member */
+        post: operations["invite_member_settings_members_invite_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/search": {
+    "/settings/members/{user_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Search */
-        get: operations["search_search_get"];
+        get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Remove Member */
+        delete: operations["remove_member_settings_members__user_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Member Role */
+        patch: operations["update_member_role_settings_members__user_id__patch"];
         trace?: never;
     };
-    "/people/providers": {
+    "/settings/usage": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Providers */
-        get: operations["list_providers_people_providers_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/people/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Search People */
-        post: operations["search_people_people_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/people/parse": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
         /**
-         * Parse Query
-         * @description Natural language -> search criteria (Claude when enabled, else the text as keywords).
+         * Account Usage
+         * @description The account's pooled monthly credit usage vs. its plan allowance — a soft limit (overage is
+         *     allowed). Powers the usage meter + the over-allowance warning.
          */
-        post: operations["parse_query_people_parse_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/people/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Import People */
-        post: operations["import_people_people_import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/people/usage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Usage */
-        get: operations["list_usage_people_usage_get"];
+        get: operations["account_usage_settings_usage_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1367,21 +1543,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/people/enrich": {
+    "/settings/workspace": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Workspace Settings */
+        get: operations["get_workspace_settings_settings_workspace_get"];
         put?: never;
-        /** Enrich Person */
-        post: operations["enrich_person_people_enrich_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Workspace Settings */
+        patch: operations["update_workspace_settings_settings_workspace_patch"];
         trace?: never;
     };
     "/suppressions": {
@@ -1439,315 +1616,138 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/analytics": {
+    "/users": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Analytics */
-        get: operations["analytics_analytics_get"];
+        get?: never;
+        put?: never;
+        /** Create User Endpoint */
+        post: operations["create_user_endpoint_users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/inbound": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inbound Webhook
+         * @description System inbound from an email provider (HMAC-signed, no user session).
+         *
+         *     Threads to an enrollment by `enrollment_id` or by the sender's email. Payload (JSON):
+         *     `{"from": str, "text": str, "enrollment_id"?: str}`, signed in the `X-Signature` header.
+         */
+        post: operations["inbound_webhook_webhooks_inbound_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply Webhook
+         * @description In-app / authed reply (used by the inbox 'simulate reply' and QA).
+         */
+        post: operations["reply_webhook_webhooks_reply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/stripe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stripe Webhook
+         * @description Stripe-called (unauthenticated; verified by signature). Updates the org's plan + period.
+         */
+        post: operations["stripe_webhook_webhooks_stripe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/unipile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unipile Webhook
+         * @description Public Unipile receiver (shared-secret): inbound messages → handle_reply, account events →
+         *     connection status. Prefers an HMAC signature (`X-Unipile-Signature`) over the raw body; falls
+         *     back to a shared token via the `X-Unipile-Token` header (or `?token=` for providers that can
+         *     only template the URL). Redelivered events are dropped by provider_message_id dedupe.
+         */
+        post: operations["unipile_webhook_webhooks_unipile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workspaces Endpoint */
+        get: operations["list_workspaces_endpoint_workspaces_get"];
+        put?: never;
+        /** Create Workspace Endpoint */
+        post: operations["create_workspace_endpoint_workspaces_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workspace Endpoint */
+        get: operations["get_workspace_endpoint_workspaces__workspace_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/audit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Audit Log */
-        get: operations["audit_log_audit_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/run-due": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run Due Now
-         * @description Process every enrollment whose next_run_at is due, once. Call repeatedly to step.
-         */
-        post: operations["run_due_now_admin_run_due_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/enrollments/{enrollment_id}/fast-forward": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Fast Forward
-         * @description Pull a future-scheduled touchpoint into the present so run-due picks it up now.
-         */
-        post: operations["fast_forward_admin_enrollments__enrollment_id__fast_forward_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/activity": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Activity
-         * @description A merged, humanized stream of the agent's recent actions, newest first.
-         */
-        get: operations["activity_agent_activity_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/state": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * State
-         * @description Live snapshot: queue counts, today's throughput, what needs the human, governor headroom.
-         */
-        get: operations["state_agent_state_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Chat
-         * @description Main-agent chat: text + typed entities (catalog §12). Requires an LLM.
-         */
-        post: operations["chat_agent_chat_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/chat/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Chat Stream
-         * @description Streaming Main-agent chat (SSE): `token` events as the narration streams, then a `done`
-         *     event carrying the typed entities. Requires an LLM.
-         */
-        post: operations["chat_stream_agent_chat_stream_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Runs
-         * @description The agent-run trace feed for a campaign — the narrated activity tab.
-         */
-        get: operations["runs_agent_runs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/funnel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Funnel
-         * @description The per-campaign funnel rollup — the cockpit header.
-         */
-        get: operations["funnel_agent_funnel_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/intake": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Intake
-         * @description Parse a JD / brief into an objective + targeting (the create flow's step 0).
-         */
-        post: operations["intake_agent_intake_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/linkedin-jobs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Linkedin Jobs
-         * @description The connected LinkedIn account's active job postings (the 'pull from LinkedIn' intake).
-         */
-        get: operations["linkedin_jobs_agent_linkedin_jobs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/draft-sequence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Draft Sequence Endpoint
-         * @description Draft a tailored outreach sequence from the objective + audience (the AI starter).
-         */
-        post: operations["draft_sequence_endpoint_agent_draft_sequence_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/regenerate-message": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Regenerate Message Endpoint
-         * @description Regenerate one touchpoint's message — a fresh take on the same intent.
-         */
-        post: operations["regenerate_message_endpoint_agent_regenerate_message_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/design": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Design
-         * @description Run the Strategy agent's cold-start design (LLM-free fallback when no key).
-         */
-        post: operations["design_agent_design_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent/apply-audience": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Apply Audience
-         * @description Apply a previewed audience (a human action) — set the criteria and pin the section.
-         */
-        post: operations["apply_audience_agent_apply_audience_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1760,29 +1760,23 @@ export interface components {
     schemas: {
         /** ActivityEvent */
         ActivityEvent: {
-            /** Id */
-            id: string;
-            /** Ts */
-            ts: string;
-            /** Kind */
-            kind: string;
-            /** Title */
-            title: string;
+            campaign?: components["schemas"]["Ref"] | null;
+            contact?: components["schemas"]["Ref"] | null;
             /** Detail */
             detail?: string | null;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
             /** Rationale */
             rationale?: string | null;
-            contact?: components["schemas"]["Ref"] | null;
-            campaign?: components["schemas"]["Ref"] | null;
+            /** Title */
+            title: string;
+            /** Ts */
+            ts: string;
         };
         /** ActivityOut */
         ActivityOut: {
-            /** Id */
-            id: string;
-            /** Type */
-            type: string;
-            /** Title */
-            title: string;
             /** Body */
             body: string;
             /** Campaign Name */
@@ -1791,79 +1785,93 @@ export interface components {
             channel: string;
             /** Created At */
             created_at: string | null;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
         };
         /** AgentCampaign */
         AgentCampaign: {
+            /** Active */
+            active: number;
             /** Id */
             id: string;
             /** Name */
             name: string;
             /** Status */
             status: string;
-            /** Active */
-            active: number;
         };
+        /**
+         * AgentRole
+         * @description Which agent produced a run.
+         * @enum {string}
+         */
+        AgentRole: "strategy" | "sourcing" | "outreach";
         /** AgentRunOut */
         AgentRunOut: {
+            /** Created At */
+            created_at: string;
             /** Id */
             id: string;
-            /** Role */
-            role: string;
-            /** Trigger */
-            trigger: string;
+            role: components["schemas"]["AgentRole"];
             /** Status */
             status: string;
+            /** Steps */
+            steps: components["schemas"]["AgentStepOut"][];
             /** Summary */
             summary: string;
             /** Tokens */
             tokens: number;
-            /** Created At */
-            created_at: string;
-            /** Steps */
-            steps: components["schemas"]["AgentStepOut"][];
+            /** Trigger */
+            trigger: string;
         };
         /** AgentState */
         AgentState: {
-            /** Status */
-            status: string;
+            /** Campaigns */
+            campaigns: components["schemas"]["AgentCampaign"][];
             /** Counts */
             counts: {
-                [key: string]: number;
-            };
-            /** Today */
-            today: {
-                [key: string]: number;
-            };
-            /** Needs You */
-            needs_you: {
                 [key: string]: number;
             };
             /** Governor */
             governor: {
                 [key: string]: components["schemas"]["GovernorChannel"];
             };
-            /** Campaigns */
-            campaigns: components["schemas"]["AgentCampaign"][];
+            /** Needs You */
+            needs_you: {
+                [key: string]: number;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "idle";
+            /** Today */
+            today: {
+                [key: string]: number;
+            };
         };
         /** AgentStepOut */
         AgentStepOut: {
-            /** Seq */
-            seq: number;
+            content: components["schemas"]["JsonObject"];
             /** Kind */
             kind: string;
+            /** Seq */
+            seq: number;
             /** Tool Name */
             tool_name: string | null;
-            content: components["schemas"]["JsonObject"];
         };
         /** AnalyticsOut */
         AnalyticsOut: {
-            funnel: components["schemas"]["FunnelOut"];
-            /** Channels */
-            channels: components["schemas"]["ChannelStatOut"][];
-            /** Campaigns */
-            campaigns: components["schemas"]["CampaignStatOut"][];
             /** Activity */
             activity: components["schemas"]["ActivityOut"][];
+            /** Campaigns */
+            campaigns: components["schemas"]["CampaignStatOut"][];
+            /** Channels */
+            channels: components["schemas"]["ChannelStatOut"][];
+            funnel: components["schemas"]["FunnelOut"];
         };
         /** ApplyAudienceIn */
         ApplyAudienceIn: {
@@ -1873,68 +1881,65 @@ export interface components {
         };
         /** ApprovalOut */
         ApprovalOut: {
-            /** Id */
-            id: string;
-            /** Enrollment Id */
-            enrollment_id: string;
-            /** Direction */
-            direction: string;
-            /** Channel */
-            channel: string;
-            /** Status */
-            status: string;
-            /** Subject */
-            subject: string | null;
             /** Body */
             body: string;
-            /** Sent At */
-            sent_at: string | null;
-            /** Scheduled At */
-            scheduled_at: string | null;
-            /** Created At */
-            created_at: string | null;
-            /** Origin */
-            origin: string;
+            channel: components["schemas"]["Channel"];
+            /** Contact Avatar */
+            contact_avatar: string | null;
+            /** Contact Company */
+            contact_company: string | null;
             /** Contact Name */
             contact_name: string;
             /** Contact Title */
             contact_title: string | null;
-            /** Contact Company */
-            contact_company: string | null;
-            /** Contact Avatar */
-            contact_avatar: string | null;
+            /** Created At */
+            created_at: string | null;
+            direction: components["schemas"]["MessageDirection"];
+            /** Enrollment Id */
+            enrollment_id: string;
+            /** Id */
+            id: string;
+            /** Origin */
+            origin: string;
+            /** Scheduled At */
+            scheduled_at: string | null;
             /** Score */
             score: number;
+            /** Sent At */
+            sent_at: string | null;
+            status: components["schemas"]["MessageStatus"];
             /** Step */
             step: number;
+            /** Subject */
+            subject: string | null;
         };
         /** AuditEventOut */
         AuditEventOut: {
-            /** Id */
-            id: string;
             /** Action */
             action: string;
-            /** Summary */
-            summary: string;
-            /** Target Type */
-            target_type: string | null;
-            /** Target Id */
-            target_id: string | null;
             /** Actor Name */
             actor_name: string | null;
-            /** Workspace Id */
-            workspace_id: string | null;
             /** Created At */
             created_at: string | null;
+            /** Id */
+            id: string;
+            /** Summary */
+            summary: string;
+            /** Target Id */
+            target_id: string | null;
+            /** Target Type */
+            target_type: string | null;
+            /** Workspace Id */
+            workspace_id: string | null;
         };
         /** AuthOptions */
         AuthOptions: {
-            /** Workos */
-            workos: boolean;
             /** Linkedin */
             linkedin: boolean;
             /** Password */
             password: boolean;
+            /** Workos */
+            workos: boolean;
         };
         /**
          * Authorship
@@ -1948,11 +1953,6 @@ export interface components {
          * @enum {string}
          */
         AutonomyLevel: "manual" | "assisted" | "full";
-        /**
-         * AutonomyMode
-         * @enum {string}
-         */
-        AutonomyMode: "approve_each" | "auto";
         /** BulkApproveOut */
         BulkApproveOut: {
             /** Approved */
@@ -1970,57 +1970,52 @@ export interface components {
          * @description Pipeline rollup shown on each campaign list row.
          */
         CampaignCounts: {
-            /** Sourced */
-            sourced: number;
-            /** In Sequence */
-            in_sequence: number;
             /** Handed Off */
             handed_off: number;
+            /** In Sequence */
+            in_sequence: number;
             /** Needs You */
             needs_you: number;
+            /** Sourced */
+            sourced: number;
         };
         /** CampaignFunnelOut */
         CampaignFunnelOut: {
-            /** Sourced */
-            sourced: number;
             /** Contacted */
             contacted: number;
-            /** Replied */
-            replied: number;
             /** Handed Off */
             handed_off: number;
+            /** Replied */
+            replied: number;
+            /** Sourced */
+            sourced: number;
         };
         /** CampaignIn */
         CampaignIn: {
-            /** Name */
-            name: string;
+            /** @default human */
+            authored_by: components["schemas"]["Authorship"];
+            /** @default assisted */
+            autonomy_level: components["schemas"]["AutonomyLevel"];
             /**
              * @default {
-             *       "titles": [],
-             *       "seniorities": [],
-             *       "functions": [],
-             *       "skills": [],
-             *       "locations": [],
              *       "companies": [],
-             *       "industries": [],
              *       "company_sizes": [],
-             *       "technologies": [],
              *       "exclude_companies": [],
-             *       "exclude_titles": []
+             *       "exclude_titles": [],
+             *       "functions": [],
+             *       "industries": [],
+             *       "locations": [],
+             *       "seniorities": [],
+             *       "skills": [],
+             *       "technologies": [],
+             *       "titles": []
              *     }
              */
             criteria: components["schemas"]["Targeting"];
-            /**
-             * Sequence
-             * @default []
-             */
-            sequence: components["schemas"]["SequenceStep"][];
-            /** @default approve_each */
-            autonomy_mode: components["schemas"]["AutonomyMode"];
-            /** @default assisted */
-            autonomy_level: components["schemas"]["AutonomyLevel"];
-            /** @default human */
-            authored_by: components["schemas"]["Authorship"];
+            /** From Email */
+            from_email?: string | null;
+            /** Name */
+            name: string;
             /** Objective */
             objective?: string | null;
             /**
@@ -2028,124 +2023,121 @@ export interface components {
              * @default []
              */
             seed_contact_ids: string[];
-            /** From Email */
-            from_email?: string | null;
+            /**
+             * Sequence
+             * @default []
+             */
+            sequence: components["schemas"]["SequenceStep"][];
         };
         /** CampaignOut */
         CampaignOut: {
+            authored_by: components["schemas"]["Authorship"];
+            autonomy_level: components["schemas"]["AutonomyLevel"];
+            criteria: components["schemas"]["JsonObject"];
+            field_owners: components["schemas"]["JsonObject"];
+            /** From Email */
+            from_email: string | null;
             /** Id */
             id: string;
             /** Name */
             name: string;
-            /** Status */
-            status: string;
-            /** Autonomy Mode */
-            autonomy_mode: string;
-            /** From Email */
-            from_email: string | null;
-            criteria: components["schemas"]["JsonObject"];
-            sequence: components["schemas"]["JsonList"];
-            /** Objective */
-            objective: string | null;
-            /** Autonomy Level */
-            autonomy_level: string;
-            /** Authored By */
-            authored_by: string;
-            field_owners: components["schemas"]["JsonObject"];
             /** Next Source At */
             next_source_at: string | null;
+            /** Objective */
+            objective: string | null;
+            sequence: components["schemas"]["JsonList"];
+            status: components["schemas"]["CampaignStatus"];
         };
         /** CampaignPatch */
         CampaignPatch: {
-            /** Name */
-            name?: string | null;
-            criteria?: components["schemas"]["Targeting"] | null;
-            /** Sequence */
-            sequence?: components["schemas"]["SequenceStep"][] | null;
-            autonomy_mode?: components["schemas"]["AutonomyMode"] | null;
             autonomy_level?: components["schemas"]["AutonomyLevel"] | null;
-            /** Objective */
-            objective?: string | null;
+            criteria?: components["schemas"]["Targeting"] | null;
             /** From Email */
             from_email?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Objective */
+            objective?: string | null;
+            /** Sequence */
+            sequence?: components["schemas"]["SequenceStep"][] | null;
             status?: components["schemas"]["CampaignStatus"] | null;
         };
         /** CampaignRowOut */
         CampaignRowOut: {
+            authored_by: components["schemas"]["Authorship"];
+            autonomy_level: components["schemas"]["AutonomyLevel"];
+            counts: components["schemas"]["CampaignCounts"];
+            criteria: components["schemas"]["JsonObject"];
+            field_owners: components["schemas"]["JsonObject"];
+            /** From Email */
+            from_email: string | null;
             /** Id */
             id: string;
             /** Name */
             name: string;
-            /** Status */
-            status: string;
-            /** Autonomy Mode */
-            autonomy_mode: string;
-            /** From Email */
-            from_email: string | null;
-            criteria: components["schemas"]["JsonObject"];
-            sequence: components["schemas"]["JsonList"];
-            /** Objective */
-            objective: string | null;
-            /** Autonomy Level */
-            autonomy_level: string;
-            /** Authored By */
-            authored_by: string;
-            field_owners: components["schemas"]["JsonObject"];
             /** Next Source At */
             next_source_at: string | null;
-            counts: components["schemas"]["CampaignCounts"];
+            /** Objective */
+            objective: string | null;
+            sequence: components["schemas"]["JsonList"];
+            status: components["schemas"]["CampaignStatus"];
         };
         /** CampaignStatOut */
         CampaignStatOut: {
+            /** Handed Off */
+            handed_off: number;
             /** Id */
             id: string;
             /** Name */
             name: string;
-            /** Status */
-            status: string;
-            /** Sourced */
-            sourced: number;
             /** Replied */
             replied: number;
-            /** Handed Off */
-            handed_off: number;
             /** Reply Rate */
             reply_rate: number;
+            /** Sourced */
+            sourced: number;
+            /** Status */
+            status: string;
         };
         /**
          * CampaignStatus
          * @enum {string}
          */
         CampaignStatus: "draft" | "active" | "paused" | "done";
+        /**
+         * Channel
+         * @enum {string}
+         */
+        Channel: "email" | "linkedin";
         /** ChannelStatOut */
         ChannelStatOut: {
             /** Channel */
             channel: string;
-            /** Sent */
-            sent: number;
             /** Replied */
             replied: number;
             /** Reply Rate */
             reply_rate: number;
+            /** Sent */
+            sent: number;
         };
         /** ChatIn */
         ChatIn: {
-            /** Message */
-            message: string;
             /** Campaign Id */
             campaign_id?: string | null;
             /** History */
             history?: components["schemas"]["ChatTurn"][];
+            /** Message */
+            message: string;
         };
         /** ChatOut */
         ChatOut: {
-            /** Reply */
-            reply: string;
-            /** Kind */
-            kind: string;
             data?: components["schemas"]["JsonObject"] | null;
             /** @default [] */
             entities: components["schemas"]["JsonList"];
+            /** Kind */
+            kind: string;
+            /** Reply */
+            reply: string;
         };
         /** ChatTurn */
         ChatTurn: {
@@ -2161,20 +2153,20 @@ export interface components {
         };
         /** ConnectionOut */
         ConnectionOut: {
+            /** Display Name */
+            display_name: string | null;
+            /** External Id */
+            external_id: string | null;
             /** Id */
             id: string;
             /** Provider */
             provider: string;
-            /** Status */
-            status: string;
             /** Seat Type */
             seat_type: string;
+            /** Status */
+            status: string;
             /** User Email */
             user_email: string;
-            /** External Id */
-            external_id: string | null;
-            /** Display Name */
-            display_name: string | null;
         };
         /**
          * ConnectionProvider
@@ -2183,176 +2175,172 @@ export interface components {
         ConnectionProvider: "gmail" | "graph" | "linkedin";
         /** ContactActivityOut */
         ContactActivityOut: {
-            /** Id */
-            id: string;
-            /** Direction */
-            direction: string;
-            /** Channel */
-            channel: string;
-            /** Status */
-            status: string;
-            /** Subject */
-            subject: string | null;
             /** Body */
             body: string;
-            /** Created At */
-            created_at: string | null;
-            /** Scheduled At */
-            scheduled_at: string | null;
             /** Campaign Name */
             campaign_name: string;
+            channel: components["schemas"]["Channel"];
+            /** Created At */
+            created_at: string | null;
+            direction: components["schemas"]["MessageDirection"];
+            /** Id */
+            id: string;
+            /** Scheduled At */
+            scheduled_at: string | null;
+            status: components["schemas"]["MessageStatus"];
+            /** Subject */
+            subject: string | null;
         };
         /** ContactDetailOut */
         ContactDetailOut: {
-            /** Id */
-            id: string;
-            /** Full Name */
-            full_name: string;
-            /** Title */
-            title: string | null;
+            /** Activity */
+            activity: components["schemas"]["ContactActivityOut"][];
+            /** Avatar Url */
+            avatar_url: string | null;
             /** Company */
             company: string | null;
-            /** Location */
-            location: string | null;
+            /** Company Size */
+            company_size: string | null;
             /** Email */
             email: string | null;
             /** Email Status */
             email_status: string;
+            /** Enrollments */
+            enrollments: components["schemas"]["ContactEnrollmentOut"][];
+            /** Full Name */
+            full_name: string;
+            /** Function */
+            function: string | null;
+            /** Id */
+            id: string;
+            /** Industry */
+            industry: string | null;
             /** Linkedin Url */
             linkedin_url: string | null;
-            /** Avatar Url */
-            avatar_url: string | null;
+            /** Location */
+            location: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Seniority */
+            seniority: string | null;
             /** Skills */
             skills: string[];
             /** Source */
             source: string;
-            /** Notes */
-            notes: string | null;
+            stats: components["schemas"]["ContactStatsOut"];
             /** Tags */
             tags: string[];
-            /** Company Size */
-            company_size: string | null;
-            /** Industry */
-            industry: string | null;
-            /** Seniority */
-            seniority: string | null;
-            /** Function */
-            function: string | null;
-            /** Enrollments */
-            enrollments: components["schemas"]["ContactEnrollmentOut"][];
-            /** Activity */
-            activity: components["schemas"]["ContactActivityOut"][];
-            stats: components["schemas"]["ContactStatsOut"];
+            /** Title */
+            title: string | null;
         };
         /** ContactEnrollmentOut */
         ContactEnrollmentOut: {
-            /** Id */
-            id: string;
             /** Campaign Id */
             campaign_id: string;
             /** Campaign Name */
             campaign_name: string;
-            /** State */
-            state: string;
-            /** Score */
-            score: number;
             /** Current Step */
             current_step: number;
+            /** Id */
+            id: string;
+            /** Score */
+            score: number;
+            state: components["schemas"]["EnrollmentState"];
         };
         /** ContactIn */
         ContactIn: {
-            /** Full Name */
-            full_name: string;
-            /** Title */
-            title?: string | null;
-            /** Company */
-            company?: string | null;
-            /** Location */
-            location?: string | null;
-            /** Email */
-            email?: string | null;
-            /** Linkedin Url */
-            linkedin_url?: string | null;
             /** Avatar Url */
             avatar_url?: string | null;
+            /** Company */
+            company?: string | null;
+            /** Company Size */
+            company_size?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Industry */
+            industry?: string | null;
+            /** Linkedin Url */
+            linkedin_url?: string | null;
+            /** Location */
+            location?: string | null;
+            /** Notes */
+            notes?: string | null;
             /**
              * Skills
              * @default []
              */
             skills: string[];
-            /** Notes */
-            notes?: string | null;
             /**
              * Tags
              * @default []
              */
             tags: string[];
-            /** Company Size */
-            company_size?: string | null;
-            /** Industry */
-            industry?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /** ContactOut */
         ContactOut: {
-            /** Id */
-            id: string;
-            /** Full Name */
-            full_name: string;
-            /** Title */
-            title: string | null;
+            /** Avatar Url */
+            avatar_url: string | null;
             /** Company */
             company: string | null;
-            /** Location */
-            location: string | null;
+            /** Company Size */
+            company_size: string | null;
             /** Email */
             email: string | null;
             /** Email Status */
             email_status: string;
+            /** Full Name */
+            full_name: string;
+            /** Function */
+            function: string | null;
+            /** Id */
+            id: string;
+            /** Industry */
+            industry: string | null;
             /** Linkedin Url */
             linkedin_url: string | null;
-            /** Avatar Url */
-            avatar_url: string | null;
+            /** Location */
+            location: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Seniority */
+            seniority: string | null;
             /** Skills */
             skills: string[];
             /** Source */
             source: string;
-            /** Notes */
-            notes: string | null;
             /** Tags */
             tags: string[];
-            /** Company Size */
-            company_size: string | null;
-            /** Industry */
-            industry: string | null;
-            /** Seniority */
-            seniority: string | null;
-            /** Function */
-            function: string | null;
+            /** Title */
+            title: string | null;
         };
         /** ContactPatch */
         ContactPatch: {
-            /** Full Name */
-            full_name?: string | null;
-            /** Title */
-            title?: string | null;
             /** Company */
             company?: string | null;
-            /** Location */
-            location?: string | null;
-            /** Email */
-            email?: string | null;
-            /** Linkedin Url */
-            linkedin_url?: string | null;
-            /** Skills */
-            skills?: string[] | null;
-            /** Notes */
-            notes?: string | null;
-            /** Tags */
-            tags?: string[] | null;
             /** Company Size */
             company_size?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Full Name */
+            full_name?: string | null;
             /** Industry */
             industry?: string | null;
+            /** Linkedin Url */
+            linkedin_url?: string | null;
+            /** Location */
+            location?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Skills */
+            skills?: string[] | null;
+            /** Tags */
+            tags?: string[] | null;
+            /** Title */
+            title?: string | null;
         };
         /** ContactStatsOut */
         ContactStatsOut: {
@@ -2360,10 +2348,10 @@ export interface components {
             best_score: number;
             /** Campaigns */
             campaigns: number;
-            /** Replies */
-            replies: number;
             /** Last Activity At */
             last_activity_at: string | null;
+            /** Replies */
+            replies: number;
         };
         /** ConvCampaign */
         ConvCampaign: {
@@ -2376,81 +2364,79 @@ export interface components {
         };
         /** ConvContact */
         ConvContact: {
-            /** Id */
-            id: string | null;
-            /** Name */
-            name: string | null;
-            /** Title */
-            title: string | null;
-            /** Company */
-            company: string | null;
-            /** Location */
-            location: string | null;
-            /** Email */
-            email: string | null;
-            /** Linkedin Url */
-            linkedin_url: string | null;
             /** Avatar Url */
             avatar_url: string | null;
+            /** Company */
+            company: string | null;
+            /** Email */
+            email: string | null;
+            /** Id */
+            id: string | null;
+            /** Linkedin Url */
+            linkedin_url: string | null;
+            /** Location */
+            location: string | null;
+            /** Name */
+            name: string | null;
             /** Skills */
             skills: string[];
+            /** Title */
+            title: string | null;
         };
         /** ConvEnrollment */
         ConvEnrollment: {
-            /** Id */
-            id: string;
-            /** State */
-            state: string;
-            /** Score */
-            score: number;
             /** Current Step */
             current_step: number;
+            /** Id */
+            id: string;
             /** Outcome */
             outcome: string | null;
+            /** Score */
+            score: number;
+            state: components["schemas"]["EnrollmentState"];
         };
         /** ConversationOut */
         ConversationOut: {
-            enrollment: components["schemas"]["ConvEnrollment"];
-            contact: components["schemas"]["ConvContact"];
             campaign: components["schemas"]["ConvCampaign"];
-            /** Channel */
-            channel: string;
+            channel: components["schemas"]["Channel"];
+            contact: components["schemas"]["ConvContact"];
+            enrollment: components["schemas"]["ConvEnrollment"];
             /** Messages */
             messages: components["schemas"]["MessageOut"][];
         };
         /** DashboardApproval */
         DashboardApproval: {
+            /** Contact Avatar */
+            contact_avatar: string | null;
+            /** Contact Name */
+            contact_name: string;
             /** Enrollment Id */
             enrollment_id: string;
             /** Message Id */
             message_id: string;
-            /** Contact Name */
-            contact_name: string;
-            /** Contact Avatar */
-            contact_avatar: string | null;
-            /** Title */
-            title: string | null;
-            /** Subject */
-            subject: string | null;
             /** Score */
             score: number;
+            /** Subject */
+            subject: string | null;
+            /** Title */
+            title: string | null;
         };
         /** DashboardCampaign */
         DashboardCampaign: {
+            /** Autonomy Level */
+            autonomy_level: string;
+            /** Awaiting */
+            awaiting: number;
             /** Id */
             id: string;
             /** Name */
             name: string;
-            /** Status */
-            status: string;
-            /** Autonomy Mode */
-            autonomy_mode: string;
-            /** Sourced */
-            sourced: number;
-            /** Awaiting */
-            awaiting: number;
             /** Replies */
             replies: number;
+            /** Sourced */
+            sourced: number;
+            /** Status */
+            status: string;
         };
         /** DashboardReply */
         DashboardReply: {
@@ -2465,22 +2451,22 @@ export interface components {
         DashboardStats: {
             /** Active Campaigns */
             active_campaigns: number;
-            /** Contacts */
-            contacts: number;
             /** Awaiting Approval */
             awaiting_approval: number;
+            /** Contacts */
+            contacts: number;
             /** Replies 7D */
             replies_7d: number;
         };
         /** DashboardSummary */
         DashboardSummary: {
-            stats: components["schemas"]["DashboardStats"];
-            /** Campaigns */
-            campaigns: components["schemas"]["DashboardCampaign"][];
             /** Approvals */
             approvals: components["schemas"]["DashboardApproval"][];
+            /** Campaigns */
+            campaigns: components["schemas"]["DashboardCampaign"][];
             /** Recent Replies */
             recent_replies: components["schemas"]["DashboardReply"][];
+            stats: components["schemas"]["DashboardStats"];
         };
         /** DataProviderIn */
         DataProviderIn: {
@@ -2496,29 +2482,29 @@ export interface components {
         };
         /** DataProviderOut */
         DataProviderOut: {
-            /** Key */
-            key: string;
-            /** Name */
-            name: string;
-            /** Live */
-            live: boolean;
-            /** Docs Url */
-            docs_url: string;
             /** Configured */
             configured: boolean;
+            /** Docs Url */
+            docs_url: string;
             /** Enabled */
             enabled: boolean;
+            /** Key */
+            key: string;
             /** Last4 */
             last4: string | null;
+            /** Live */
+            live: boolean;
+            /** Name */
+            name: string;
             /** Status */
             status: string;
         };
         /** DeleteOut */
         DeleteOut: {
-            /** Status */
-            status: string;
             /** Id */
             id: string;
+            /** Status */
+            status: string;
         };
         /** DesignIn */
         DesignIn: {
@@ -2527,10 +2513,10 @@ export interface components {
         };
         /** DesignOut */
         DesignOut: {
-            /** Status */
-            status: string;
             criteria: components["schemas"]["JsonObject"];
             sequence: components["schemas"]["JsonList"];
+            /** Status */
+            status: string;
         };
         /** DraftOut */
         DraftOut: {
@@ -2539,13 +2525,13 @@ export interface components {
         };
         /** DraftSequenceIn */
         DraftSequenceIn: {
+            /** @default {} */
+            criteria: components["schemas"]["JsonObject"];
             /**
              * Objective
              * @default
              */
             objective: string;
-            /** @default {} */
-            criteria: components["schemas"]["JsonObject"];
         };
         /** DraftSequenceOut */
         DraftSequenceOut: {
@@ -2553,21 +2539,21 @@ export interface components {
         };
         /** EditMessageRequest */
         EditMessageRequest: {
-            /** Subject */
-            subject?: string | null;
             /** Body */
             body?: string | null;
+            /** Subject */
+            subject?: string | null;
         };
         /** EnrichIn */
         EnrichIn: {
+            /** Company */
+            company?: string | null;
             /** Email */
             email?: string | null;
             /** Linkedin Url */
             linkedin_url?: string | null;
             /** Name */
             name?: string | null;
-            /** Company */
-            company?: string | null;
         };
         /** EnrichOut */
         EnrichOut: {
@@ -2582,62 +2568,60 @@ export interface components {
         EnrollmentActionOut: {
             /** Id */
             id: string;
-            /** State */
-            state: string;
-            /** Outcome */
-            outcome: string | null;
             /** Next Run At */
             next_run_at: string | null;
+            /** Outcome */
+            outcome: string | null;
+            /** State */
+            state: string;
         };
         /** EnrollmentOut */
         EnrollmentOut: {
-            /** Id */
-            id: string;
             /** Campaign Id */
             campaign_id: string;
             /** Contact Id */
             contact_id: string;
-            /** State */
-            state: string;
-            /** Score */
-            score: number;
-            /** Score Rationale */
-            score_rationale: string | null;
             /** Current Step */
             current_step: number;
+            /** Id */
+            id: string;
             /** Next Run At */
             next_run_at: string | null;
             /** Outcome */
             outcome: string | null;
+            /** Score */
+            score: number;
+            /** Score Rationale */
+            score_rationale: string | null;
+            state: components["schemas"]["EnrollmentState"];
         };
         /** EnrollmentRowOut */
         EnrollmentRowOut: {
-            /** Id */
-            id: string;
             /** Campaign Id */
             campaign_id: string;
+            /** Contact Avatar */
+            contact_avatar: string | null;
+            /** Contact Company */
+            contact_company: string | null;
             /** Contact Id */
             contact_id: string;
-            /** State */
-            state: string;
-            /** Score */
-            score: number;
-            /** Score Rationale */
-            score_rationale: string | null;
-            /** Current Step */
-            current_step: number;
-            /** Next Run At */
-            next_run_at: string | null;
-            /** Outcome */
-            outcome: string | null;
             /** Contact Name */
             contact_name: string;
             /** Contact Title */
             contact_title: string | null;
-            /** Contact Company */
-            contact_company: string | null;
-            /** Contact Avatar */
-            contact_avatar: string | null;
+            /** Current Step */
+            current_step: number;
+            /** Id */
+            id: string;
+            /** Next Run At */
+            next_run_at: string | null;
+            /** Outcome */
+            outcome: string | null;
+            /** Score */
+            score: number;
+            /** Score Rationale */
+            score_rationale: string | null;
+            state: components["schemas"]["EnrollmentState"];
         };
         /**
          * EnrollmentState
@@ -2646,95 +2630,95 @@ export interface components {
         EnrollmentState: "proposed" | "active" | "awaiting_approval" | "scheduled" | "awaiting_reply" | "handed_off" | "opted_out" | "completed";
         /** EstimateOut */
         EstimateOut: {
-            /** Total */
-            total: number;
             /** Matches */
             matches: number;
+            /** Total */
+            total: number;
         };
         /** ExportCampaign */
         ExportCampaign: {
+            criteria: components["schemas"]["JsonObject"];
             /** Id */
             id: string;
             /** Name */
             name: string;
             /** Status */
             status: string;
-            criteria: components["schemas"]["JsonObject"];
         };
         /** ExportContact */
         ExportContact: {
-            /** Id */
-            id: string;
-            /** Full Name */
-            full_name: string;
-            /** Title */
-            title: string | null;
             /** Company */
             company: string | null;
             /** Email */
             email: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Id */
+            id: string;
             /** Linkedin Url */
             linkedin_url: string | null;
             /** Location */
             location: string | null;
-            /** Skills */
-            skills: string[];
-            /** Tags */
-            tags: string[];
             /** Notes */
             notes: string | null;
+            /** Skills */
+            skills: string[];
             /** Source */
             source: string;
+            /** Tags */
+            tags: string[];
+            /** Title */
+            title: string | null;
         };
         /** ExportEnrollment */
         ExportEnrollment: {
-            /** Id */
-            id: string;
             /** Campaign Id */
             campaign_id: string;
             /** Contact Id */
             contact_id: string;
-            /** State */
-            state: string;
+            /** Id */
+            id: string;
             /** Score */
             score: number;
+            /** State */
+            state: string;
         };
         /** ExportMessage */
         ExportMessage: {
-            /** Id */
-            id: string;
-            /** Enrollment Id */
-            enrollment_id: string;
-            /** Direction */
-            direction: string;
+            /** Body */
+            body: string;
             /** Channel */
             channel: string;
+            /** Direction */
+            direction: string;
+            /** Enrollment Id */
+            enrollment_id: string;
+            /** Id */
+            id: string;
             /** Status */
             status: string;
             /** Subject */
             subject: string | null;
-            /** Body */
-            body: string;
         };
         /** ExportOrganization */
         ExportOrganization: {
+            /** Data Region */
+            data_region: string;
             /** Id */
             id: string;
             /** Name */
             name: string;
             /** Slug */
             slug: string;
-            /** Data Region */
-            data_region: string;
         };
         /** ExportWorkspace */
         ExportWorkspace: {
             /** Id */
             id: string;
-            /** Name */
-            name: string;
             /** Kind */
             kind: string;
+            /** Name */
+            name: string;
         };
         /** FastForwardOut */
         FastForwardOut: {
@@ -2745,23 +2729,23 @@ export interface components {
         };
         /** FunnelOut */
         FunnelOut: {
-            /** Sourced */
-            sourced: number;
             /** Contacted */
             contacted: number;
-            /** Replied */
-            replied: number;
             /** Handed Off */
             handed_off: number;
+            /** Replied */
+            replied: number;
+            /** Sourced */
+            sourced: number;
         };
         /** GovernorChannel */
         GovernorChannel: {
+            /** Blocked */
+            blocked: boolean;
             /** Cap */
             cap: number;
             /** Sent */
             sent: number;
-            /** Blocked */
-            blocked: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2780,36 +2764,34 @@ export interface components {
         };
         /** InboundWebhookOut */
         InboundWebhookOut: {
-            /** Status */
-            status: string;
             /** Intent */
             intent: string | null;
+            /** Status */
+            status: string;
         };
         /** InboxItemOut */
         InboxItemOut: {
-            /** Enrollment Id */
-            enrollment_id: string;
+            channel: components["schemas"]["Channel"];
+            /** Contact Avatar */
+            contact_avatar: string | null;
+            /** Contact Company */
+            contact_company: string | null;
             /** Contact Name */
             contact_name: string | null;
             /** Contact Title */
             contact_title: string | null;
-            /** Contact Company */
-            contact_company: string | null;
-            /** Contact Avatar */
-            contact_avatar: string | null;
-            /** State */
-            state: string | null;
-            /** Outcome */
-            outcome: string | null;
-            /** Channel */
-            channel: string;
-            /** Message Count */
-            message_count: number;
-            /** Unread */
-            unread: boolean;
+            /** Enrollment Id */
+            enrollment_id: string;
             /** Last At */
             last_at: string | null;
             last_message: components["schemas"]["MessageOut"];
+            /** Message Count */
+            message_count: number;
+            /** Outcome */
+            outcome: string | null;
+            state: components["schemas"]["EnrollmentState"] | null;
+            /** Unread */
+            unread: boolean;
         };
         /** IntakeIn */
         IntakeIn: {
@@ -2818,19 +2800,19 @@ export interface components {
         };
         /** IntakeOut */
         IntakeOut: {
-            /** Objective */
-            objective: string;
             criteria: components["schemas"]["JsonObject"];
             facts: components["schemas"]["JsonObject"];
+            /** Objective */
+            objective: string;
         };
         /** InviteOut */
         InviteOut: {
+            /** Email */
+            email: string;
             /** Id */
             id: string;
             /** Name */
             name: string;
-            /** Email */
-            email: string;
             /** Role */
             role: string;
         };
@@ -2849,21 +2831,21 @@ export interface components {
         };
         /** LinkedInJob */
         LinkedInJob: {
+            /** Description */
+            description: string;
             /** Id */
             id: string;
             /** Title */
             title: string;
-            /** Description */
-            description: string;
         };
         /** MemberOut */
         MemberOut: {
+            /** Email */
+            email: string;
             /** Id */
             id: string;
             /** Name */
             name: string;
-            /** Email */
-            email: string;
             /** Role */
             role: string;
             /** Scope */
@@ -2871,10 +2853,10 @@ export interface components {
         };
         /** MembershipCreate */
         MembershipCreate: {
+            role: components["schemas"]["MembershipRole"];
+            scope: components["schemas"]["MembershipScope"];
             /** User Id */
             user_id: string;
-            scope: components["schemas"]["MembershipScope"];
-            role: components["schemas"]["MembershipRole"];
             /** Workspace Id */
             workspace_id?: string | null;
         };
@@ -2882,10 +2864,10 @@ export interface components {
         MembershipRead: {
             /** Id */
             id: string;
+            role: components["schemas"]["MembershipRole"];
+            scope: components["schemas"]["MembershipScope"];
             /** User Id */
             user_id: string;
-            scope: components["schemas"]["MembershipScope"];
-            role: components["schemas"]["MembershipRole"];
             /** Workspace Id */
             workspace_id: string | null;
         };
@@ -2899,74 +2881,81 @@ export interface components {
          * @enum {string}
          */
         MembershipScope: "organization" | "workspace";
+        /**
+         * MessageDirection
+         * @enum {string}
+         */
+        MessageDirection: "outbound" | "inbound";
         /** MessageOut */
         MessageOut: {
-            /** Id */
-            id: string;
-            /** Enrollment Id */
-            enrollment_id: string;
-            /** Direction */
-            direction: string;
-            /** Channel */
-            channel: string;
-            /** Status */
-            status: string;
-            /** Subject */
-            subject: string | null;
             /** Body */
             body: string;
-            /** Sent At */
-            sent_at: string | null;
-            /** Scheduled At */
-            scheduled_at: string | null;
+            channel: components["schemas"]["Channel"];
             /** Created At */
             created_at: string | null;
+            direction: components["schemas"]["MessageDirection"];
+            /** Enrollment Id */
+            enrollment_id: string;
+            /** Id */
+            id: string;
             /** Origin */
             origin: string;
+            /** Scheduled At */
+            scheduled_at: string | null;
+            /** Sent At */
+            sent_at: string | null;
+            status: components["schemas"]["MessageStatus"];
+            /** Subject */
+            subject: string | null;
         };
+        /**
+         * MessageStatus
+         * @enum {string}
+         */
+        MessageStatus: "draft" | "approved" | "sent" | "failed" | "received";
         /** NotificationItem */
         NotificationItem: {
-            /** Id */
-            id: string;
-            /** Type */
-            type: string;
-            /** Title */
-            title: string;
             /** Body */
             body: string;
-            /** Contact Name */
-            contact_name: string;
             /** Contact Avatar */
             contact_avatar: string | null;
-            /** Enrollment Id */
-            enrollment_id: string;
+            /** Contact Name */
+            contact_name: string;
             /** Created At */
             created_at: string | null;
+            /** Enrollment Id */
+            enrollment_id: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
         };
         /** NotificationsOut */
         NotificationsOut: {
-            /** Items */
-            items: components["schemas"]["NotificationItem"][];
             /** Approvals Waiting */
             approvals_waiting: number;
+            /** Items */
+            items: components["schemas"]["NotificationItem"][];
             /** Unread */
             unread: number;
         };
         /** OrgExport */
         OrgExport: {
+            /** Campaigns */
+            campaigns: components["schemas"]["ExportCampaign"][];
+            /** Contacts */
+            contacts: components["schemas"]["ExportContact"][];
+            /** Enrollments */
+            enrollments: components["schemas"]["ExportEnrollment"][];
             /** Exported At */
             exported_at: string;
+            /** Messages */
+            messages: components["schemas"]["ExportMessage"][];
             organization: components["schemas"]["ExportOrganization"] | null;
             /** Workspaces */
             workspaces: components["schemas"]["ExportWorkspace"][];
-            /** Contacts */
-            contacts: components["schemas"]["ExportContact"][];
-            /** Campaigns */
-            campaigns: components["schemas"]["ExportCampaign"][];
-            /** Enrollments */
-            enrollments: components["schemas"]["ExportEnrollment"][];
-            /** Messages */
-            messages: components["schemas"]["ExportMessage"][];
         };
         /** OrgSummary */
         OrgSummary: {
@@ -2982,14 +2971,14 @@ export interface components {
         };
         /** ParseOut */
         ParseOut: {
-            /** Titles */
-            titles: string[];
-            /** Skills */
-            skills: string[];
-            /** Locations */
-            locations: string[];
             /** Keywords */
             keywords: string;
+            /** Locations */
+            locations: string[];
+            /** Skills */
+            skills: string[];
+            /** Titles */
+            titles: string[];
         };
         /** PasswordLoginRequest */
         PasswordLoginRequest: {
@@ -3005,52 +2994,15 @@ export interface components {
         /** PeopleSearchIn */
         PeopleSearchIn: {
             /**
-             * Titles
-             * @default []
-             */
-            titles: string[];
-            /**
-             * Seniorities
-             * @default []
-             */
-            seniorities: string[];
-            /**
-             * Functions
-             * @default []
-             */
-            functions: string[];
-            /**
-             * Skills
-             * @default []
-             */
-            skills: string[];
-            /**
-             * Locations
-             * @default []
-             */
-            locations: string[];
-            /**
              * Companies
              * @default []
              */
             companies: string[];
             /**
-             * Industries
-             * @default []
-             */
-            industries: string[];
-            /**
              * Company Sizes
              * @default []
              */
             company_sizes: string[];
-            /**
-             * Technologies
-             * @default []
-             */
-            technologies: string[];
-            /** Keywords */
-            keywords?: string | null;
             /**
              * Exclude Companies
              * @default []
@@ -3062,19 +3014,56 @@ export interface components {
              */
             exclude_titles: string[];
             /**
+             * Functions
+             * @default []
+             */
+            functions: string[];
+            /**
+             * Industries
+             * @default []
+             */
+            industries: string[];
+            /** Keywords */
+            keywords?: string | null;
+            /**
              * Limit
              * @default 25
              */
             limit: number;
+            /**
+             * Locations
+             * @default []
+             */
+            locations: string[];
             /** Providers */
             providers?: string[];
+            /**
+             * Seniorities
+             * @default []
+             */
+            seniorities: string[];
+            /**
+             * Skills
+             * @default []
+             */
+            skills: string[];
+            /**
+             * Technologies
+             * @default []
+             */
+            technologies: string[];
+            /**
+             * Titles
+             * @default []
+             */
+            titles: string[];
         };
         /** PeopleSearchOut */
         PeopleSearchOut: {
-            /** Results */
-            results: components["schemas"]["PersonHit"][];
             /** Providers */
             providers: string[];
+            /** Results */
+            results: components["schemas"]["PersonHit"][];
         };
         /**
          * PersonHit
@@ -3084,58 +3073,58 @@ export interface components {
          *     fit-scored with the exact same `evaluate()` the ranking pipeline uses.
          */
         PersonHit: {
-            /** Provider */
-            provider: string;
-            /** External Id */
-            external_id?: string | null;
-            /** Full Name */
-            full_name: string;
-            /** Title */
-            title?: string | null;
-            /** Company */
-            company?: string | null;
-            /** Location */
-            location?: string | null;
-            /** Email */
-            email?: string | null;
-            /** Email Status */
-            email_status?: string | null;
-            /** Linkedin Url */
-            linkedin_url?: string | null;
             /** Avatar Url */
             avatar_url?: string | null;
-            /**
-             * Skills
-             * @default []
-             */
-            skills: string[];
+            /** Company */
+            company?: string | null;
             /** Company Size */
             company_size?: string | null;
-            /** Industry */
-            industry?: string | null;
-            /** Phone */
-            phone?: string | null;
-            /** Seniority */
-            seniority?: string | null;
-            /** Function */
-            function?: string | null;
-            /**
-             * Technologies
-             * @default []
-             */
-            technologies: string[];
             /**
              * Confidence
              * @default 0
              */
             confidence: number;
+            /** Email */
+            email?: string | null;
+            /** Email Status */
+            email_status?: string | null;
+            /** External Id */
+            external_id?: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Function */
+            function?: string | null;
+            /** Industry */
+            industry?: string | null;
+            /** Linkedin Url */
+            linkedin_url?: string | null;
+            /** Location */
+            location?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Provider */
+            provider: string;
+            /** Rationale */
+            rationale?: string | null;
             /**
              * Score
              * @default 0
              */
             score: number;
-            /** Rationale */
-            rationale?: string | null;
+            /** Seniority */
+            seniority?: string | null;
+            /**
+             * Skills
+             * @default []
+             */
+            skills: string[];
+            /**
+             * Technologies
+             * @default []
+             */
+            technologies: string[];
+            /** Title */
+            title?: string | null;
         };
         /** PlanIn */
         PlanIn: {
@@ -3144,56 +3133,56 @@ export interface components {
         };
         /** PlanOut */
         PlanOut: {
-            /** Plan */
-            plan: string;
             /** Allowance */
             allowance: number;
+            /** Plan */
+            plan: string;
         };
         /** ProviderOut */
         ProviderOut: {
+            /** Enrich */
+            enrich: boolean;
             /** Key */
             key: string;
             /** Name */
             name: string;
             /** Search */
             search: boolean;
-            /** Enrich */
-            enrich: boolean;
             /** Verify Email */
             verify_email: boolean;
         };
         /** RankOut */
         RankOut: {
-            /** Proposed */
-            proposed: number;
             /** Enrollments */
             enrollments: components["schemas"]["EnrollmentOut"][];
+            /** Proposed */
+            proposed: number;
         };
         /** Ref */
         Ref: {
+            /** Avatar */
+            avatar?: string | null;
             /** Id */
             id: string;
             /** Name */
             name: string;
             /** Sub */
             sub?: string | null;
-            /** Avatar */
-            avatar?: string | null;
         };
         /** RegenerateIn */
         RegenerateIn: {
             /** Body */
             body: string;
             /**
-             * Objective
-             * @default
-             */
-            objective: string;
-            /**
              * Channel
              * @default email
              */
             channel: string;
+            /**
+             * Objective
+             * @default
+             */
+            objective: string;
         };
         /** RegenerateOut */
         RegenerateOut: {
@@ -3202,10 +3191,10 @@ export interface components {
         };
         /** RemovedOut */
         RemovedOut: {
-            /** Status */
-            status: string;
             /** Email */
             email: string;
+            /** Status */
+            status: string;
         };
         /** ReplyRequest */
         ReplyRequest: {
@@ -3250,47 +3239,49 @@ export interface components {
         };
         /** SearchContact */
         SearchContact: {
-            /** Id */
-            id: string;
-            /** Full Name */
-            full_name: string;
-            /** Title */
-            title: string | null;
             /** Avatar Url */
             avatar_url: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string | null;
         };
         /** SearchConversation */
         SearchConversation: {
-            /** Enrollment Id */
-            enrollment_id: string;
-            /** Contact Name */
-            contact_name: string;
             /** Avatar Url */
             avatar_url: string | null;
+            /** Contact Name */
+            contact_name: string;
+            /** Enrollment Id */
+            enrollment_id: string;
             /** State */
             state: string;
         };
         /** SearchOut */
         SearchOut: {
-            /** Contacts */
-            contacts: components["schemas"]["SearchContact"][];
             /** Campaigns */
             campaigns: components["schemas"]["SearchCampaign"][];
+            /** Contacts */
+            contacts: components["schemas"]["SearchContact"][];
             /** Conversations */
             conversations: components["schemas"]["SearchConversation"][];
         };
         /** SendRequest */
         SendRequest: {
-            /** Text */
-            text: string;
             /**
              * Origin
              * @default human
              */
             origin: string;
+            /** Text */
+            text: string;
         };
         /** SequenceStep */
         SequenceStep: {
+            /** Body */
+            body?: string | null;
             /**
              * Channel
              * @default email
@@ -3303,33 +3294,31 @@ export interface components {
             delay_days: number;
             /** Subject */
             subject?: string | null;
-            /** Body */
-            body?: string | null;
         };
         /** SignupRequest */
         SignupRequest: {
-            /** Org Name */
-            org_name: string;
-            /** Slug */
-            slug: string;
             /** Admin Email */
             admin_email: string;
             /** Admin Name */
             admin_name: string;
+            /** Org Name */
+            org_name: string;
+            /** Slug */
+            slug: string;
         };
         /** SignupResponse */
         SignupResponse: {
-            /** Organization Id */
-            organization_id: string;
             /** Admin User Id */
             admin_user_id: string;
+            /** Organization Id */
+            organization_id: string;
         };
         /** StatusIdOut */
         StatusIdOut: {
-            /** Status */
-            status: string;
             /** Id */
             id: string;
+            /** Status */
+            status: string;
         };
         /** StatusOut */
         StatusOut: {
@@ -3345,23 +3334,23 @@ export interface components {
         SuppressionIn: {
             /** Email */
             email: string;
-            /** @default manual */
-            reason: components["schemas"]["SuppressionReason"];
             /** Note */
             note?: string | null;
+            /** @default manual */
+            reason: components["schemas"]["SuppressionReason"];
         };
         /** SuppressionOut */
         SuppressionOut: {
-            /** Id */
-            id: string;
-            /** Email */
-            email: string;
-            /** Reason */
-            reason: string;
-            /** Note */
-            note: string | null;
             /** Created At */
             created_at: string | null;
+            /** Email */
+            email: string;
+            /** Id */
+            id: string;
+            /** Note */
+            note: string | null;
+            /** Reason */
+            reason: string;
         };
         /**
          * SuppressionReason
@@ -3375,52 +3364,15 @@ export interface components {
          */
         Targeting: {
             /**
-             * Titles
-             * @default []
-             */
-            titles: string[];
-            /**
-             * Seniorities
-             * @default []
-             */
-            seniorities: string[];
-            /**
-             * Functions
-             * @default []
-             */
-            functions: string[];
-            /**
-             * Skills
-             * @default []
-             */
-            skills: string[];
-            /**
-             * Locations
-             * @default []
-             */
-            locations: string[];
-            /**
              * Companies
              * @default []
              */
             companies: string[];
             /**
-             * Industries
-             * @default []
-             */
-            industries: string[];
-            /**
              * Company Sizes
              * @default []
              */
             company_sizes: string[];
-            /**
-             * Technologies
-             * @default []
-             */
-            technologies: string[];
-            /** Keywords */
-            keywords?: string | null;
             /**
              * Exclude Companies
              * @default []
@@ -3431,6 +3383,43 @@ export interface components {
              * @default []
              */
             exclude_titles: string[];
+            /**
+             * Functions
+             * @default []
+             */
+            functions: string[];
+            /**
+             * Industries
+             * @default []
+             */
+            industries: string[];
+            /** Keywords */
+            keywords?: string | null;
+            /**
+             * Locations
+             * @default []
+             */
+            locations: string[];
+            /**
+             * Seniorities
+             * @default []
+             */
+            seniorities: string[];
+            /**
+             * Skills
+             * @default []
+             */
+            skills: string[];
+            /**
+             * Technologies
+             * @default []
+             */
+            technologies: string[];
+            /**
+             * Titles
+             * @default []
+             */
+            titles: string[];
         };
         /** UrlOut */
         UrlOut: {
@@ -3446,10 +3435,10 @@ export interface components {
         };
         /** UserRead */
         UserRead: {
-            /** Id */
-            id: string;
             /** Email */
             email: string;
+            /** Id */
+            id: string;
             /** Name */
             name: string;
             status: components["schemas"]["UserStatus"];
@@ -3461,25 +3450,25 @@ export interface components {
         UserStatus: "active" | "invited" | "disabled";
         /** UserSummary */
         UserSummary: {
-            /** Id */
-            id: string;
             /** Email */
             email: string;
+            /** Id */
+            id: string;
             /** Name */
             name: string;
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
         /** WebhookOut */
         WebhookOut: {
@@ -3488,10 +3477,10 @@ export interface components {
         };
         /** WorkspaceCreate */
         WorkspaceCreate: {
-            /** Name */
-            name: string;
             /** @default client */
             kind: components["schemas"]["WorkspaceKind"];
+            /** Name */
+            name: string;
         };
         /**
          * WorkspaceKind
@@ -3500,31 +3489,31 @@ export interface components {
         WorkspaceKind: "client" | "department" | "team";
         /** WorkspacePatch */
         WorkspacePatch: {
-            /** Name */
-            name?: string | null;
             /** Brand Voice */
             brand_voice?: string | null;
+            /** Name */
+            name?: string | null;
             settings?: components["schemas"]["JsonObject"] | null;
         };
         /** WorkspaceRead */
         WorkspaceRead: {
             /** Id */
             id: string;
-            /** Organization Id */
-            organization_id: string;
+            kind: components["schemas"]["WorkspaceKind"];
             /** Name */
             name: string;
-            kind: components["schemas"]["WorkspaceKind"];
+            /** Organization Id */
+            organization_id: string;
             status: components["schemas"]["WorkspaceStatus"];
         };
         /** WorkspaceSettingsOut */
         WorkspaceSettingsOut: {
+            /** Brand Voice */
+            brand_voice: string | null;
             /** Id */
             id: string;
             /** Name */
             name: string;
-            /** Brand Voice */
-            brand_voice: string | null;
             settings: components["schemas"]["JsonObject"];
         };
         /**
@@ -3536,55 +3525,57 @@ export interface components {
         WorkspaceSummary: {
             /** Id */
             id: string;
-            /** Name */
-            name: string;
             /** Kind */
             kind: string;
+            /** Name */
+            name: string;
         };
         /** MeResponse */
         app__api__auth__MeResponse: {
-            user: components["schemas"]["UserSummary"] | null;
-            organization: components["schemas"]["OrgSummary"] | null;
-            /** Is Org Admin */
-            is_org_admin: boolean;
             /** Current Workspace Id */
             current_workspace_id: string | null;
+            /** Is Org Admin */
+            is_org_admin: boolean;
+            organization: components["schemas"]["OrgSummary"] | null;
+            user: components["schemas"]["UserSummary"] | null;
             /** Workspaces */
             workspaces: components["schemas"]["WorkspaceSummary"][];
         };
         /** ImportOut */
         app__api__contacts__ImportOut: {
-            /** Created */
-            created: number;
             /** Contacts */
             contacts: components["schemas"]["ContactOut"][];
+            /** Created */
+            created: number;
         };
         /** ImportOut */
         app__api__discovery__ImportOut: {
-            /** Imported */
-            imported: number;
             /** Contact Ids */
             contact_ids: string[];
+            /** Imported */
+            imported: number;
         };
         /** UsageOut */
         app__api__discovery__UsageOut: {
-            /** Provider */
-            provider: string;
-            /** Kind */
-            kind: string;
-            /** Day */
-            day: string;
             /** Count */
             count: number;
+            /** Day */
+            day: string;
+            /** Kind */
+            kind: string;
+            /** Provider */
+            provider: string;
         };
         /** UsageOut */
         app__api__settings__UsageOut: {
-            /** Plan */
-            plan: string;
-            /** Used */
-            used: number;
             /** Allowance */
             allowance: number;
+            /** Billing Enabled */
+            billing_enabled: boolean;
+            /** Breakdown */
+            breakdown: {
+                [key: string]: number;
+            };
             /** Over */
             over: boolean;
             /** Pct */
@@ -3594,27 +3585,25 @@ export interface components {
              * Format: date-time
              */
             period_start: string;
-            /** Breakdown */
-            breakdown: {
-                [key: string]: number;
-            };
-            /** Billing Enabled */
-            billing_enabled: boolean;
+            /** Plan */
+            plan: string;
+            /** Used */
+            used: number;
         };
         /** MeResponse */
         app__api__tenancy__MeResponse: {
-            /** User Id */
-            user_id: string;
-            /** Org Id */
-            org_id: string;
-            /** Roles */
-            roles: components["schemas"]["MembershipRole"][];
-            /** Is Org Admin */
-            is_org_admin: boolean;
             /** Allowed Workspace Ids */
             allowed_workspace_ids: string[];
             /** Current Workspace Id */
             current_workspace_id: string | null;
+            /** Is Org Admin */
+            is_org_admin: boolean;
+            /** Org Id */
+            org_id: string;
+            /** Roles */
+            roles: components["schemas"]["MembershipRole"][];
+            /** User Id */
+            user_id: string;
         };
     };
     responses: never;
@@ -3625,7 +3614,548 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_health_get: {
+    fast_forward_admin_enrollments__enrollment_id__fast_forward_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enrollment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FastForwardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_due_now_admin_run_due_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
+                };
+            };
+        };
+    };
+    activity_agent_activity_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityEvent"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_audience_agent_apply_audience_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyAudienceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_agent_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_stream_agent_chat_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    design_agent_design_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_sequence_endpoint_agent_draft_sequence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftSequenceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftSequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    funnel_agent_funnel_get: {
+        parameters: {
+            query: {
+                campaign_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignFunnelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    intake_agent_intake_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    linkedin_jobs_agent_linkedin_jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkedInJob"][];
+                };
+            };
+        };
+    };
+    regenerate_message_endpoint_agent_regenerate_message_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegenerateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    runs_agent_runs_get: {
+        parameters: {
+            query: {
+                campaign_id: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    state_agent_state_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentState"];
+                };
+            };
+        };
+    };
+    analytics_analytics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOut"];
+                };
+            };
+        };
+    };
+    list_approvals_approvals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalOut"][];
+                };
+            };
+        };
+    };
+    audit_log_audit_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    callback_auth_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    linkedin_login_auth_linkedin_login_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    linkedin_notify_auth_linkedin_notify_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3667,47 +4197,7 @@ export interface operations {
             };
         };
     };
-    linkedin_login_auth_linkedin_login_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    options_auth_options_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthOptions"];
-                };
-            };
-        };
-    };
-    linkedin_notify_auth_linkedin_notify_post: {
+    logout_auth_logout_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3729,12 +4219,9 @@ export interface operations {
             };
         };
     };
-    callback_auth_callback_get: {
+    me_auth_me_get: {
         parameters: {
-            query?: {
-                code?: string | null;
-                state?: string | null;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3747,16 +4234,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["app__api__auth__MeResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+        };
+    };
+    options_auth_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["AuthOptions"];
                 };
             };
         };
@@ -3794,49 +4292,7 @@ export interface operations {
             };
         };
     };
-    me_auth_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["app__api__auth__MeResponse"];
-                };
-            };
-        };
-    };
-    logout_auth_logout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    signup_endpoint_organizations_post: {
+    checkout_billing_checkout_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3845,17 +4301,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SignupRequest"];
+                "application/json": components["schemas"]["CheckoutIn"];
             };
         };
         responses: {
             /** @description Successful Response */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SignupResponse"];
+                    "application/json": components["schemas"]["UrlOut"];
                 };
             };
             /** @description Validation Error */
@@ -3869,47 +4325,7 @@ export interface operations {
             };
         };
     };
-    me_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["app__api__tenancy__MeResponse"];
-                };
-            };
-        };
-    };
-    list_workspaces_endpoint_workspaces_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceRead"][];
-                };
-            };
-        };
-    };
-    create_workspace_endpoint_workspaces_post: {
+    change_plan_billing_plan_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3918,137 +4334,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WorkspaceCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_workspace_endpoint_workspaces__workspace_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_user_endpoint_users_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UserCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_membership_memberships_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MembershipCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MembershipRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_contacts_contacts_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImportRequest"];
+                "application/json": components["schemas"]["PlanIn"];
             };
         };
         responses: {
@@ -4058,7 +4344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__api__contacts__ImportOut"];
+                    "application/json": components["schemas"]["PlanOut"];
                 };
             };
             /** @description Validation Error */
@@ -4072,47 +4358,9 @@ export interface operations {
             };
         };
     };
-    sample_contacts_sample_post: {
+    portal_billing_portal_post: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SampleRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["app__api__contacts__ImportOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_contacts_endpoint_contacts_get: {
-        parameters: {
-            query?: {
-                q?: string | null;
-                source?: string | null;
-                limit?: number;
-                offset?: number;
-            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4125,144 +4373,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContactOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_contact_contacts__contact_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContactDetailOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_contact_contacts__contact_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeleteOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_contact_contacts__contact_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContactPatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContactOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    forget_contact_contacts__contact_id__forget_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeleteOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["UrlOut"];
                 };
             };
         };
@@ -4417,100 +4528,7 @@ export interface operations {
             };
         };
     };
-    pause_campaign_campaigns__campaign_id__pause_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    resume_campaign_campaigns__campaign_id__resume_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     archive_campaign_campaigns__campaign_id__archive_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    source_now_campaigns__campaign_id__source_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -4559,68 +4577,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CampaignOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    estimate_audience_campaigns__campaign_id__estimate_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EstimateOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    rank_campaign_campaigns__campaign_id__rank_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RankOut"];
                 };
             };
             /** @description Validation Error */
@@ -4702,12 +4658,12 @@ export interface operations {
             };
         };
     };
-    approve_enrollment_endpoint_enrollments__enrollment_id__approve_post: {
+    estimate_audience_campaigns__campaign_id__estimate_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                enrollment_id: string;
+                campaign_id: string;
             };
             cookie?: never;
         };
@@ -4719,7 +4675,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnrollmentActionOut"];
+                    "application/json": components["schemas"]["EstimateOut"];
                 };
             };
             /** @description Validation Error */
@@ -4729,6 +4685,378 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_campaign_campaigns__campaign_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rank_campaign_campaigns__campaign_id__rank_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RankOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_campaign_campaigns__campaign_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_now_campaigns__campaign_id__source_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_contacts_endpoint_contacts_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                source?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_contacts_contacts_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__api__contacts__ImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sample_contacts_sample_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SampleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__api__contacts__ImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_contact_contacts__contact_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_contact_contacts__contact_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_contact_contacts__contact_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_contact_contacts__contact_id__forget_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_dashboard_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummary"];
                 };
             };
         };
@@ -4753,6 +5081,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkApproveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_enrollment_endpoint_enrollments__enrollment_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enrollment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentActionOut"];
                 };
             };
             /** @description Validation Error */
@@ -4797,6 +5156,37 @@ export interface operations {
             };
         };
     };
+    thread_enrollments__enrollment_id__messages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enrollment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     opt_out_enrollments__enrollment_id__opt_out_post: {
         parameters: {
             query?: never;
@@ -4828,7 +5218,7 @@ export interface operations {
             };
         };
     };
-    list_approvals_approvals_get: {
+    health_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4843,73 +5233,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApprovalOut"][];
-                };
-            };
-        };
-    };
-    approve_message_endpoint_messages__message_id__approve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                message_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessageOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    edit_message_messages__message_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                message_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EditMessageRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessageOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
         };
@@ -4965,41 +5291,6 @@ export interface operations {
             };
         };
     };
-    send_reply_inbox__enrollment_id__reply_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                enrollment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SendRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessageOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     draft_reply_endpoint_inbox__enrollment_id__draft_post: {
         parameters: {
             query?: never;
@@ -5018,37 +5309,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DraftOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    conversation_summary_inbox__enrollment_id__summary_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                enrollment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -5093,7 +5353,42 @@ export interface operations {
             };
         };
     };
-    thread_enrollments__enrollment_id__messages_get: {
+    send_reply_inbox__enrollment_id__reply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enrollment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    conversation_summary_inbox__enrollment_id__summary_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5110,7 +5405,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MessageOut"][];
+                    "application/json": components["schemas"]["SummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -5124,7 +5419,27 @@ export interface operations {
             };
         };
     };
-    reply_webhook_webhooks_reply_post: {
+    me_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__api__tenancy__MeResponse"];
+                };
+            };
+        };
+    };
+    create_membership_memberships_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5133,17 +5448,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReplyRequest"];
+                "application/json": components["schemas"]["MembershipCreate"];
             };
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReplyWebhookOut"];
+                    "application/json": components["schemas"]["MembershipRead"];
                 };
             };
             /** @description Validation Error */
@@ -5157,14 +5472,20 @@ export interface operations {
             };
         };
     };
-    inbound_webhook_webhooks_inbound_post: {
+    edit_message_messages__message_id__patch: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                message_id: string;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditMessageRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -5172,16 +5493,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InboundWebhookOut"];
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    unipile_webhook_webhooks_unipile_post: {
+    approve_message_endpoint_messages__message_id__approve_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                message_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -5192,12 +5524,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InboundWebhookOut"];
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    summary_dashboard_summary_get: {
+    notifications_notifications_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5212,12 +5553,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DashboardSummary"];
+                    "application/json": components["schemas"]["NotificationsOut"];
                 };
             };
         };
     };
-    account_usage_settings_usage_get: {
+    mark_all_read_notifications_read_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5232,12 +5573,144 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__api__settings__UsageOut"];
+                    "application/json": components["schemas"]["StatusOut"];
                 };
             };
         };
     };
-    members_settings_members_get: {
+    signup_endpoint_organizations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enrich_person_people_enrich_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrichIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrichOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_people_people_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__api__discovery__ImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_query_people_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_providers_people_providers_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5252,7 +5725,91 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemberOut"][];
+                    "application/json": components["schemas"]["ProviderOut"][];
+                };
+            };
+        };
+    };
+    search_people_people_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PeopleSearchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleSearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_usage_people_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__api__discovery__UsageOut"][];
+                };
+            };
+        };
+    };
+    search_search_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5273,90 +5830,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConnectionOut"][];
-                };
-            };
-        };
-    };
-    get_workspace_settings_settings_workspace_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceSettingsOut"];
-                };
-            };
-        };
-    };
-    update_workspace_settings_settings_workspace_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkspacePatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceSettingsOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    connect_settings_connections__provider__connect_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider: components["schemas"]["ConnectionProvider"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConnectionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5423,45 +5896,12 @@ export interface operations {
             };
         };
     };
-    invite_member_settings_members_invite_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InviteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InviteOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    remove_member_settings_members__user_id__delete: {
+    connect_settings_connections__provider__connect_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                user_id: string;
+                provider: components["schemas"]["ConnectionProvider"];
             };
             cookie?: never;
         };
@@ -5473,42 +5913,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StatusIdOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_member_role_settings_members__user_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RolePatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleOut"];
+                    "application/json": components["schemas"]["ConnectionOut"];
                 };
             };
             /** @description Validation Error */
@@ -5659,7 +6064,27 @@ export interface operations {
             };
         };
     };
-    checkout_billing_checkout_post: {
+    members_settings_members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"][];
+                };
+            };
+        };
+    };
+    invite_member_settings_members_invite_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5668,7 +6093,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CheckoutIn"];
+                "application/json": components["schemas"]["InviteRequest"];
             };
         };
         responses: {
@@ -5678,7 +6103,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UrlOut"];
+                    "application/json": components["schemas"]["InviteOut"];
                 };
             };
             /** @description Validation Error */
@@ -5692,18 +6117,16 @@ export interface operations {
             };
         };
     };
-    change_plan_billing_plan_post: {
+    remove_member_settings_members__user_id__delete: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                user_id: string;
+            };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanIn"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -5711,7 +6134,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlanOut"];
+                    "application/json": components["schemas"]["StatusIdOut"];
                 };
             };
             /** @description Validation Error */
@@ -5725,14 +6148,20 @@ export interface operations {
             };
         };
     };
-    portal_billing_portal_post: {
+    update_member_role_settings_members__user_id__patch: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                user_id: string;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RolePatch"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -5740,89 +6169,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UrlOut"];
-                };
-            };
-        };
-    };
-    stripe_webhook_webhooks_stripe_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WebhookOut"];
-                };
-            };
-        };
-    };
-    notifications_notifications_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NotificationsOut"];
-                };
-            };
-        };
-    };
-    mark_all_read_notifications_read_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusOut"];
-                };
-            };
-        };
-    };
-    search_search_get: {
-        parameters: {
-            query: {
-                q: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchOut"];
+                    "application/json": components["schemas"]["RoleOut"];
                 };
             };
             /** @description Validation Error */
@@ -5836,7 +6183,7 @@ export interface operations {
             };
         };
     };
-    list_providers_people_providers_get: {
+    account_usage_settings_usage_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5851,111 +6198,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProviderOut"][];
+                    "application/json": components["schemas"]["app__api__settings__UsageOut"];
                 };
             };
         };
     };
-    search_people_people_search_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PeopleSearchIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PeopleSearchOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    parse_query_people_parse_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ParseIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ParseOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_people_people_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImportIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["app__api__discovery__ImportOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_usage_people_usage_get: {
+    get_workspace_settings_settings_workspace_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5970,12 +6218,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__api__discovery__UsageOut"][];
+                    "application/json": components["schemas"]["WorkspaceSettingsOut"];
                 };
             };
         };
     };
-    enrich_person_people_enrich_post: {
+    update_workspace_settings_settings_workspace_patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -5984,7 +6232,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EnrichIn"];
+                "application/json": components["schemas"]["WorkspacePatch"];
             };
         };
         responses: {
@@ -5994,7 +6242,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnrichOut"];
+                    "application/json": components["schemas"]["WorkspaceSettingsOut"];
                 };
             };
             /** @description Validation Error */
@@ -6123,44 +6371,26 @@ export interface operations {
             };
         };
     };
-    analytics_analytics_get: {
+    create_user_endpoint_users_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AnalyticsOut"];
-                };
-            };
-        };
-    };
-    audit_log_audit_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditEventOut"][];
+                    "application/json": components["schemas"]["UserRead"];
                 };
             };
             /** @description Validation Error */
@@ -6174,7 +6404,7 @@ export interface operations {
             };
         };
     };
-    run_due_now_admin_run_due_post: {
+    inbound_webhook_webhooks_inbound_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6189,19 +6419,143 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: number;
-                    };
+                    "application/json": components["schemas"]["InboundWebhookOut"];
                 };
             };
         };
     };
-    fast_forward_admin_enrollments__enrollment_id__fast_forward_post: {
+    reply_webhook_webhooks_reply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyWebhookOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stripe_webhook_webhooks_stripe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookOut"];
+                };
+            };
+        };
+    };
+    unipile_webhook_webhooks_unipile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundWebhookOut"];
+                };
+            };
+        };
+    };
+    list_workspaces_endpoint_workspaces_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRead"][];
+                };
+            };
+        };
+    };
+    create_workspace_endpoint_workspaces_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_endpoint_workspaces__workspace_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                enrollment_id: string;
+                workspace_id: string;
             };
             cookie?: never;
         };
@@ -6213,372 +6567,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FastForwardOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    activity_agent_activity_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActivityEvent"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    state_agent_state_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentState"];
-                };
-            };
-        };
-    };
-    chat_agent_chat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    chat_stream_agent_chat_stream_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    runs_agent_runs_get: {
-        parameters: {
-            query: {
-                campaign_id: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentRunOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    funnel_agent_funnel_get: {
-        parameters: {
-            query: {
-                campaign_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignFunnelOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    intake_agent_intake_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IntakeIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    linkedin_jobs_agent_linkedin_jobs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LinkedInJob"][];
-                };
-            };
-        };
-    };
-    draft_sequence_endpoint_agent_draft_sequence_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DraftSequenceIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DraftSequenceOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    regenerate_message_endpoint_agent_regenerate_message_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegenerateIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegenerateOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    design_agent_design_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DesignIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DesignOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    apply_audience_agent_apply_audience_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApplyAudienceIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DesignOut"];
+                    "application/json": components["schemas"]["WorkspaceRead"];
                 };
             };
             /** @description Validation Error */

@@ -1,0 +1,108 @@
+[
+  {
+    "name": "titles substring (SVP ⊇ VP)",
+    "targeting": { "titles": ["VP of Sales"] },
+    "contact": { "title": "SVP of Sales Ops" },
+    "fit": 100
+  },
+  {
+    "name": "skills partial 1of2",
+    "targeting": { "skills": ["Go", "Rust"] },
+    "contact": { "skills": ["Go"] },
+    "fit": 50
+  },
+  {
+    "name": "skills 0",
+    "targeting": { "skills": ["Go", "Rust"] },
+    "contact": { "skills": ["Java"] },
+    "fit": 0
+  },
+  {
+    "name": "title+industry+size all match",
+    "targeting": {
+      "titles": ["VP of Sales"],
+      "industries": ["Fintech"],
+      "company_sizes": ["501-1,000"]
+    },
+    "contact": { "title": "VP of Sales", "industry": "Fintech", "company_size": "501-1,000" },
+    "fit": 100
+  },
+  {
+    "name": "location EU alias",
+    "targeting": { "locations": ["EU"] },
+    "contact": { "location": "Berlin, DE" },
+    "fit": 100
+  },
+  {
+    "name": "empty audience → 0",
+    "targeting": {},
+    "contact": { "email": "a@b.com" },
+    "fit": 0
+  },
+  {
+    "name": "perfect match → 100 (email doesn't matter)",
+    "targeting": { "titles": ["Engineer"], "skills": ["Go"] },
+    "contact": { "title": "Staff Engineer", "skills": ["Go"] },
+    "fit": 100
+  },
+  {
+    "name": "exclude company disqualifies",
+    "targeting": { "titles": ["VP of Sales"], "exclude_companies": ["Initech"] },
+    "contact": { "title": "VP of Sales", "company": "Initech" },
+    "fit": 0
+  },
+  {
+    "name": "companies substring",
+    "targeting": { "companies": ["Globex"] },
+    "contact": { "company": "Globex Inc" },
+    "fit": 100
+  },
+  {
+    "name": "title match, skills miss (of two fields)",
+    "targeting": { "titles": ["VP"], "skills": ["Go", "Rust"] },
+    "contact": { "title": "VP Sales", "skills": ["Java"] },
+    "fit": 50
+  },
+  {
+    "name": "seniority match",
+    "targeting": { "seniorities": ["VP"] },
+    "contact": { "seniority": "vp" },
+    "fit": 100
+  },
+  {
+    "name": "seniority synonym (Vice President≡SVP)",
+    "targeting": { "seniorities": ["Vice President"] },
+    "contact": { "seniority": "svp" },
+    "fit": 100
+  },
+  {
+    "name": "function match",
+    "targeting": { "functions": ["Engineering"] },
+    "contact": { "function": "engineering" },
+    "fit": 100
+  },
+  {
+    "name": "title + seniority, both match",
+    "targeting": { "titles": ["Engineer"], "seniorities": ["senior"] },
+    "contact": { "title": "Staff Engineer", "seniority": "senior" },
+    "fit": 100
+  },
+  {
+    "name": "intern does not exclude International",
+    "targeting": { "titles": ["Sales"], "exclude_titles": ["intern"] },
+    "contact": { "title": "International Sales Director" },
+    "fit": 100
+  },
+  {
+    "name": "keywords-only → floor",
+    "targeting": { "keywords": "fintech" },
+    "contact": { "title": "Anyone" },
+    "fit": 50
+  },
+  {
+    "name": "technologies-only → floor",
+    "targeting": { "technologies": ["React"] },
+    "contact": {},
+    "fit": 50
+  }
+]

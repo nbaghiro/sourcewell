@@ -3,3 +3,6 @@
 e2e/screens/
 test-results/
 playwright-report/
+
+# generated intermediate for gen:api (make gen-api exports it from the backend)
+openapi.json

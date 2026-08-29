@@ -76,7 +76,8 @@ preserved on inbound; manual reply really sends; webhook signature + replay/time
 
 ### Scoring model (post Phase 1+2 — shipped)
 `app/targeting.py::evaluate` — **deterministic**, byte-mirrored by `frontend/src/lib/targeting.ts`
-(17 canonical cases pinned in `tests/test_targeting.py`; verified 17/17 identical):
+(canonical cases in `shared/targeting-cases.json`, pinned on both sides by `tests/test_targeting.py`
+and `src/lib/targeting.test.ts`):
 - **Fit 0-100** = weighted fraction of *specified* scorable criteria matched. WEIGHTS: titles30, skills30,
   companies20, **seniorities20**, industries15, locations15, **functions10**, company_sizes10.
 - **Matching**: positive titles/companies = permissive substring (VP ⊇ SVP); **excludes = word-boundary**
@@ -112,7 +113,8 @@ preserved on inbound; manual reply really sends; webhook signature + replay/time
 ---
 
 ## Invariants / conventions to preserve
-- **targeting.py ↔ targeting.ts byte-for-byte** — change both + the `test_targeting.py` case table together.
+- **targeting.py ↔ targeting.ts byte-for-byte** — change both + `shared/targeting-cases.json`
+  together; the backend and frontend test suites both run the shared table.
 - **Deterministic bulk scoring** (so the composer's live "~N match" == server ranking).
 - **Everything degrades without keys** — no LLM → deterministic design/sourcing/scoring; no provider /
   dry-run → sends simulate.

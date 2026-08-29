@@ -9,6 +9,7 @@ service and maps the returned dataclass to the Pydantic response model.
 
 import json
 from collections.abc import AsyncIterator
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -24,7 +25,7 @@ from app.core.db import SessionLocal
 from app.core.runtime import default_llm
 from app.core.types import JsonList, JsonObject
 from app.ext.unipile import fetch_job_postings
-from app.models import Campaign, Workspace
+from app.models import AgentRole, Campaign, Workspace
 from app.services.insights.agent import (
     ActivityEventData,
     RefData,
@@ -76,7 +77,7 @@ class AgentCampaign(BaseModel):
 
 
 class AgentState(BaseModel):
-    status: str  # active | idle
+    status: Literal["active", "idle"]
     counts: dict[str, int]
     today: dict[str, int]
     needs_you: dict[str, int]
@@ -238,7 +239,7 @@ class AgentStepOut(BaseModel):
 
 class AgentRunOut(BaseModel):
     id: str
-    role: str
+    role: AgentRole
     trigger: str
     status: str
     summary: str

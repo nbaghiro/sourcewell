@@ -106,7 +106,7 @@ semi-structured data; pgvector column for contact embeddings.
 | **connection** | sending seat | organization_id, user_id, provider, external_id, seat_type, status, daily_sent, warmup_stage, token_ref(KMS) |
 | **contact** | the person | workspace_id, name, title, company, location, skills/experience jsonb, linkedin_url, email, email_status, sources jsonb, embedding vector |
 | **company** | employer | workspace_id, name, domain, … |
-| **campaign** | the program | workspace_id, name, status, criteria jsonb, channels, autonomy_mode, target_pipeline_size, score_threshold, daily_cap |
+| **campaign** | the program | workspace_id, name, status, criteria jsonb, channels, autonomy_level, target_pipeline_size, score_threshold, daily_cap |
 | **step** | a sequence touchpoint | campaign_id, order, channel, delay, template_id, conditions |
 | **template** | message template | workspace_id, name, channel, subject, body, approved |
 | **score** | fit | workspace_id, campaign_id, contact_id, overall, dimensions jsonb, rationale, recommended_action |

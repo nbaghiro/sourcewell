@@ -21,7 +21,7 @@ class DashboardCampaign(BaseModel):
     id: str
     name: str
     status: str
-    autonomy_mode: str
+    autonomy_level: str
     sourced: int
     awaiting: int
     replies: int
@@ -66,7 +66,7 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
                 id=c.id,
                 name=c.name,
                 status=c.status,
-                autonomy_mode=c.autonomy_mode,
+                autonomy_level=c.autonomy_level,
                 sourced=c.sourced,
                 awaiting=c.awaiting,
                 replies=c.replies,

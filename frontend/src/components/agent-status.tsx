@@ -1,23 +1,13 @@
 import { StateBadge } from "@/components/state-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAgentState } from "@/lib/api/queries";
+import { useAgentState, type AgentState } from "@/lib/api/queries";
 import { cn } from "@/lib/utils";
 
-interface Channel {
-  cap: number;
-  sent: number;
-  blocked: boolean;
-}
-
-interface AgentState {
-  status: string;
-  governor: { email: Channel; linkedin: Channel };
-}
+type Channel = AgentState["governor"][string];
 
 /** Compact agent status + per-channel send-cap headroom — a card on the dashboard. */
 export function AgentStatus() {
-  const { data } = useAgentState();
-  const state = data as AgentState | undefined;
+  const { data: state } = useAgentState();
   if (!state) return null;
 
   return (

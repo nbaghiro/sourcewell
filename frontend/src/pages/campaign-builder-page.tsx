@@ -3,7 +3,7 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-import { CampaignComposer, type Step } from "@/components/campaign-composer";
+import { CampaignComposer, toSteps, type Step } from "@/components/campaign-composer";
 import { CampaignIntake, type IntakeResult } from "@/components/campaign-intake";
 import { PageLayout } from "@/components/page-layout";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,6 @@ function CampaignBuilderInner() {
   const [name, setName] = React.useState("New campaign");
   const [objective, setObjective] = React.useState("");
   const [seedContactIds, setSeedContactIds] = React.useState<string[]>([]);
-  const [autonomy, setAutonomy] = React.useState<"approve_each" | "auto">("approve_each");
   const [autonomyLevel, setAutonomyLevel] = React.useState<"manual" | "assisted" | "full">(
     "assisted",
   );
@@ -71,15 +70,7 @@ function CampaignBuilderInner() {
         objective,
         criteria: c as unknown as Record<string, unknown>,
       });
-      const drafted = (res.steps ?? []).map((s) => {
-        const o = s as Record<string, unknown>;
-        return {
-          channel: o.channel === "linkedin" ? "linkedin" : "email",
-          delay_days: typeof o.delay_days === "number" ? o.delay_days : 0,
-          subject: typeof o.subject === "string" ? o.subject : "",
-          body: typeof o.body === "string" ? o.body : "",
-        } as Step;
-      });
+      const drafted = toSteps(res.steps ?? []);
       if (drafted.length) setSteps(drafted);
     } catch {
       // keep DEFAULT_STEPS
@@ -94,7 +85,6 @@ function CampaignBuilderInner() {
         name,
         criteria,
         sequence: steps,
-        autonomy_mode: autonomy,
         autonomy_level: autonomyLevel,
         authored_by: authoredBy,
         objective: objective || null,
@@ -154,11 +144,7 @@ function CampaignBuilderInner() {
           <span className="text-xs text-muted-foreground">Autonomy</span>
           <AutonomyDial
             level={autonomyLevel}
-            mode={autonomy}
-            onChange={({ autonomy_level, autonomy_mode }) => {
-              setAutonomyLevel(autonomy_level);
-              setAutonomy(autonomy_mode);
-            }}
+            onChange={({ autonomy_level }) => setAutonomyLevel(autonomy_level)}
           />
         </span>
         <Button variant="ghost" size="sm" onClick={() => setPhase("brief")}>

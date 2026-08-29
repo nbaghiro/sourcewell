@@ -10,7 +10,6 @@ from app.core.types import JsonList, JsonObject
 from app.models import (
     Authorship,
     AutonomyLevel,
-    AutonomyMode,
     Campaign,
     CampaignStatus,
 )
@@ -23,7 +22,6 @@ async def create_campaign(
     name: str,
     criteria: JsonObject,
     sequence: JsonList,
-    autonomy_mode: AutonomyMode,
     from_email: str | None,
     objective: str | None = None,
     autonomy_level: AutonomyLevel = AutonomyLevel.assisted,
@@ -35,7 +33,6 @@ async def create_campaign(
         workspace_id=workspace_id,
         name=name,
         status=CampaignStatus.active,
-        autonomy_mode=autonomy_mode,
         autonomy_level=autonomy_level,
         authored_by=authored_by,
         objective=objective,

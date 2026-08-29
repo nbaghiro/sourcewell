@@ -13,7 +13,6 @@ from app.core.types import JsonList, JsonObject
 from app.models import (
     Authorship,
     AutonomyLevel,
-    AutonomyMode,
     Campaign,
     CampaignStatus,
     Contact,
@@ -47,7 +46,6 @@ class CampaignIn(BaseModel):
     name: str
     criteria: Targeting = Targeting()
     sequence: list[SequenceStep] = []
-    autonomy_mode: AutonomyMode = AutonomyMode.approve_each
     autonomy_level: AutonomyLevel = AutonomyLevel.assisted
     authored_by: Authorship = Authorship.human
     objective: str | None = None
@@ -58,15 +56,14 @@ class CampaignIn(BaseModel):
 class CampaignOut(BaseModel):
     id: str
     name: str
-    status: str
-    autonomy_mode: str
+    status: CampaignStatus
     from_email: str | None
     criteria: JsonObject
     sequence: JsonList
     # Agent-native fields (the cockpit reads these).
     objective: str | None
-    autonomy_level: str
-    authored_by: str
+    autonomy_level: AutonomyLevel
+    authored_by: Authorship
     field_owners: JsonObject
     next_source_at: str | None
 
@@ -88,7 +85,7 @@ class EnrollmentOut(BaseModel):
     id: str
     campaign_id: str
     contact_id: str
-    state: str
+    state: EnrollmentState
     score: int
     score_rationale: str | None
     current_step: int
@@ -122,14 +119,13 @@ def dump(c: Campaign) -> CampaignOut:
     return CampaignOut(
         id=c.id,
         name=c.name,
-        status=c.status.value,
-        autonomy_mode=c.autonomy_mode.value,
+        status=c.status,
         from_email=c.from_email,
         criteria=c.criteria,
         sequence=c.sequence,
         objective=c.objective,
-        autonomy_level=c.autonomy_level.value,
-        authored_by=c.authored_by.value,
+        autonomy_level=c.autonomy_level,
+        authored_by=c.authored_by,
         field_owners=c.field_owners,
         next_source_at=c.next_source_at.isoformat() if c.next_source_at else None,
     )
@@ -140,7 +136,7 @@ def dump_enrollment(e: Enrollment) -> EnrollmentOut:
         id=e.id,
         campaign_id=e.campaign_id,
         contact_id=e.contact_id,
-        state=e.state.value,
+        state=e.state,
         score=e.score,
         score_rationale=e.score_rationale,
         current_step=e.current_step,
@@ -157,19 +153,13 @@ async def create_campaign_endpoint(
     body: CampaignIn, ctx: ContextDep, session: SessionDep
 ) -> CampaignOut:
     ws = require_workspace(ctx)
-    # Keep the autonomy fields in sync — any "full autonomy" signal sets both. The gates read
-    # autonomy_level; a lagging autonomy_mode would otherwise split-brain the campaign.
-    mode, level = body.autonomy_mode, body.autonomy_level
-    if mode == AutonomyMode.auto or level == AutonomyLevel.full:
-        mode, level = AutonomyMode.auto, AutonomyLevel.full
     campaign = await create_campaign(
         session,
         workspace_id=ws,
         name=body.name,
         criteria=body.criteria.model_dump(),
         sequence=[s.model_dump() for s in body.sequence],
-        autonomy_mode=mode,
-        autonomy_level=level,
+        autonomy_level=body.autonomy_level,
         authored_by=body.authored_by,
         objective=body.objective,
         seed_contact_ids=body.seed_contact_ids,
@@ -241,7 +231,6 @@ class CampaignPatch(BaseModel):
     name: str | None = None
     criteria: Targeting | None = None
     sequence: list[SequenceStep] | None = None
-    autonomy_mode: AutonomyMode | None = None
     autonomy_level: AutonomyLevel | None = None
     objective: str | None = None
     from_email: str | None = None
@@ -260,13 +249,8 @@ async def update_campaign(
         campaign.criteria = body.criteria.model_dump()
     if body.sequence is not None:
         campaign.sequence = [s.model_dump() for s in body.sequence]
-    if body.autonomy_mode is not None:
-        campaign.autonomy_mode = body.autonomy_mode
     if body.autonomy_level is not None:
         campaign.autonomy_level = body.autonomy_level
-    if campaign.autonomy_mode == AutonomyMode.auto or campaign.autonomy_level == AutonomyLevel.full:
-        campaign.autonomy_mode = AutonomyMode.auto  # keep the two autonomy fields consistent
-        campaign.autonomy_level = AutonomyLevel.full
     if body.objective is not None:
         campaign.objective = body.objective
     if body.from_email is not None:
@@ -319,10 +303,14 @@ async def duplicate_campaign(campaign_id: str, ctx: ContextDep, session: Session
         workspace_id=ws,
         name=f"{src.name} (copy)",
         status=CampaignStatus.draft,
-        autonomy_mode=src.autonomy_mode,
+        autonomy_level=src.autonomy_level,
+        authored_by=src.authored_by,
+        objective=src.objective,
         from_email=src.from_email,
         criteria=dict(src.criteria or {}),
         sequence=list(src.sequence or []),
+        constraints=dict(src.constraints or {}),
+        field_owners=dict(src.field_owners or {}),
     )
     session.add(copy)
     await session.flush()
