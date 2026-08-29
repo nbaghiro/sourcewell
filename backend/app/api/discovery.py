@@ -1,7 +1,7 @@
 """People discovery (Rail B): live provider search + import into the workspace contacts table.
 
-Search/enrich never touch the DB (pass-through); import is the only write. Works with zero keys
-(falls back to the demo provider), so the flow is exercisable in every environment.
+Search/enrich never touch the DB (pass-through); import is the only write. With no provider key
+configured (platform or BYO) the provider set is empty and search returns no results.
 """
 
 from collections import Counter

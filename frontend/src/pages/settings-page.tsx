@@ -340,7 +340,7 @@ function ProvidersTab() {
             ))}
             <p className="pt-4 text-xs text-muted-foreground">
               Keys are stored encrypted — only the last four digits are ever shown. Until a key is
-              added, people search falls back to demo data.
+              added, people search returns no results.
             </p>
           </>
         )}

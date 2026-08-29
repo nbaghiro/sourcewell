@@ -23,6 +23,7 @@ from app.models import (
 )
 from tests.factories import make_org, make_workspace
 from tests.fake_llm import FakeLLM, text_turn, tool_turn
+from tests.fakes import FakeSourceProvider
 
 
 async def _enrollments(session: AsyncSession, campaign_id: str) -> list[Enrollment]:
@@ -31,7 +32,9 @@ async def _enrollments(session: AsyncSession, campaign_id: str) -> list[Enrollme
 
 
 @pytest.mark.db
-async def test_full_autonomy_lifecycle(db_session: AsyncSession) -> None:
+async def test_full_autonomy_lifecycle(
+    db_session: AsyncSession, fake_source_providers: list[FakeSourceProvider]
+) -> None:
     org = await make_org(db_session, slug="e2e-full")
     ws = await make_workspace(db_session, org=org)
     now = datetime.now(UTC)
@@ -106,7 +109,9 @@ async def test_full_autonomy_lifecycle(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.db
-async def test_assisted_leaves_candidates_proposed(db_session: AsyncSession) -> None:
+async def test_assisted_leaves_candidates_proposed(
+    db_session: AsyncSession, fake_source_providers: list[FakeSourceProvider]
+) -> None:
     org = await make_org(db_session, slug="e2e-assist")
     ws = await make_workspace(db_session, org=org)
     now = datetime.now(UTC)
@@ -137,7 +142,9 @@ async def test_assisted_leaves_candidates_proposed(db_session: AsyncSession) -> 
 
 
 @pytest.mark.db
-async def test_over_budget_falls_back_to_deterministic(db_session: AsyncSession) -> None:
+async def test_over_budget_falls_back_to_deterministic(
+    db_session: AsyncSession, fake_source_providers: list[FakeSourceProvider]
+) -> None:
     org = await make_org(db_session, slug="e2e-budget")
     ws = await make_workspace(db_session, org=org)
     now = datetime.now(UTC)

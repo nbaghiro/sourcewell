@@ -69,7 +69,7 @@ Create‑flow step 0, three sources → `objective`: paste/upload JD · pull fro
 ## 9 · Build phases (each green + committed; deterministic fallback intact)
 1. **Data model + migration** (+ unit/integration tests).
 2. **Agent runtime** (tool‑use loop + guardrails + tracing + `FakeLLM` harness) on `anthropic` SDK.
-3. **Sourcing agent + tools** — tested vs demo provider + scripted sequences.
+3. **Sourcing agent + tools** — tested vs deterministic fake providers + scripted sequences.
 4. **`source_due` scheduler** + funnel/activity APIs.
 5. **Main agent** — cold‑start design + `parse_brief` + intake (Unipile stub) + provenance + scheduled review + strategy/suggestion(notification) APIs.
 6. **Outreach agent** — cold draft + rewrite + conversation loop + HITL + reply webhook.

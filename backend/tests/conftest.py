@@ -5,7 +5,7 @@ test. `client` is DB-free; `db_client` wires the same transactional session into
 """
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -41,7 +41,9 @@ os.environ.update(
 import app.models  # noqa: F401  (so Base.metadata is complete before create_all)
 from app.core.config import Settings, get_settings
 from app.core.db import Base, get_session
+from app.ext.base import SourceProvider
 from app.main import create_app
+from tests.fakes import FakeSourceProvider
 
 
 @pytest.fixture(scope="session")
@@ -94,3 +96,19 @@ async def db_client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def fake_source_providers(monkeypatch: pytest.MonkeyPatch) -> list[FakeSourceProvider]:
+    """Route the sourcing paths' provider resolution to a deterministic in-memory provider.
+
+    Tests are keyless (see the env blanking above), so `build_providers_for_org` resolves to an
+    empty set; sourcing-path tests that need hits opt in to this fake instead.
+    """
+    providers = [FakeSourceProvider()]
+
+    async def _build(*args: object, **kwargs: object) -> Sequence[SourceProvider]:
+        return providers
+
+    monkeypatch.setattr("app.agents.sourcing.build_providers_for_org", _build)
+    return providers

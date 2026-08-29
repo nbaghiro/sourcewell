@@ -1,4 +1,4 @@
-"""The Sourcing agent + its tools (against the demo provider + a scripted LLM)."""
+"""The Sourcing agent + its tools (against a deterministic fake provider + a scripted LLM)."""
 
 import pytest
 from sqlalchemy import select
@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.sourcing import SourcingContext, run_sourcing, sourcing_tools
 from app.core.runtime import Tool
-from app.ext.registry import build_providers_for_org
 from app.models import (
     Campaign,
     CampaignStatus,
@@ -19,6 +18,7 @@ from app.models import (
 from app.targeting import as_targeting
 from tests.factories import make_org, make_workspace
 from tests.fake_llm import FakeLLM, text_turn, tool_turn
+from tests.fakes import FakeSourceProvider
 
 
 async def _campaign(
@@ -38,16 +38,13 @@ async def _campaign(
     return org, ws, c
 
 
-async def _ctx(
-    session: AsyncSession, org: Organization, ws: Workspace, c: Campaign
-) -> SourcingContext:
-    providers = await build_providers_for_org(session, org.id)
+def _ctx(session: AsyncSession, org: Organization, ws: Workspace, c: Campaign) -> SourcingContext:
     return SourcingContext(
         session=session,
         workspace_id=ws.id,
         organization_id=org.id,
         campaign=c,
-        providers=providers,
+        providers=[FakeSourceProvider()],
         targeting=as_targeting(c.criteria),
     )
 
@@ -57,11 +54,11 @@ def _tools(ctx: SourcingContext) -> dict[str, Tool]:
 
 
 @pytest.mark.db
-async def test_search_tool_finds_demo_hits(db_session: AsyncSession) -> None:
+async def test_search_tool_finds_hits(db_session: AsyncSession) -> None:
     org, ws, c = await _campaign(db_session, slug="src-search")
-    tools = _tools(await _ctx(db_session, org, ws, c))
+    tools = _tools(_ctx(db_session, org, ws, c))
     res = await tools["search"].run({"limit": 8})
-    assert res["found"] == 8  # the demo provider returns the requested count
+    assert res["found"] == 8  # the fake provider serves the requested count
     sample = res["sample"]
     assert isinstance(sample, list) and sample
 
@@ -69,14 +66,14 @@ async def test_search_tool_finds_demo_hits(db_session: AsyncSession) -> None:
 @pytest.mark.db
 async def test_import_tool_creates_contacts_and_enrollments(db_session: AsyncSession) -> None:
     org, ws, c = await _campaign(db_session, slug="src-import")
-    ctx = await _ctx(db_session, org, ws, c)
+    ctx = _ctx(db_session, org, ws, c)
     tools = _tools(ctx)
     await tools["search"].run({"limit": 6})
     ids = list(ctx.hits.keys())[:4]
     res = await tools["import"].run({"ids": ids})
     assert res["imported"] == 4
     enrolled = res["enrolled"]
-    assert isinstance(enrolled, int) and enrolled >= 1  # qualifying demo hits → proposed
+    assert isinstance(enrolled, int) and enrolled >= 1  # qualifying hits → proposed
 
     contacts = (
         (await db_session.execute(select(Contact).where(Contact.workspace_id == ws.id)))
@@ -95,13 +92,15 @@ async def test_import_tool_creates_contacts_and_enrollments(db_session: AsyncSes
 @pytest.mark.db
 async def test_check_suppressed_tool(db_session: AsyncSession) -> None:
     org, ws, c = await _campaign(db_session, slug="src-supp")
-    tools = _tools(await _ctx(db_session, org, ws, c))
+    tools = _tools(_ctx(db_session, org, ws, c))
     res = await tools["check_suppressed"].run({"email": "nobody@example.com"})
     assert res["suppressed"] is False
 
 
 @pytest.mark.db
-async def test_sourcing_agent_end_to_end(db_session: AsyncSession) -> None:
+async def test_sourcing_agent_end_to_end(
+    db_session: AsyncSession, fake_source_providers: list[FakeSourceProvider]
+) -> None:
     org, _ws, c = await _campaign(db_session, slug="src-e2e")
     # Scripted LLM: search (populates h0..h5) → import the first four → finish.
     llm = FakeLLM(

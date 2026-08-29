@@ -1,7 +1,7 @@
 """LinkedIn people search/enrich via Unipile (Rail A — uses a connected LinkedIn seat).
 
 Key-gated by Unipile config (api key + dsn + account). Returns empty results when unconfigured, so
-the registry simply falls back to other providers / the demo provider.
+search simply proceeds with whatever other providers are enabled.
 """
 
 from datetime import UTC, datetime, timedelta

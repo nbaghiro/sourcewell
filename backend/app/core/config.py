@@ -63,11 +63,11 @@ class Settings(BaseSettings):
     stripe_price_premium: str = ""
 
     # --- People-data providers (Rail B: licensed search/enrich APIs) ---
-    # Platform-key mode. Leave blank to fall back to the synthetic demo provider.
+    # Platform-key mode; orgs can also bring their own key (ProviderCredential). With no key
+    # configured anywhere, people search returns no results.
     pdl_api_key: str = ""
     apollo_api_key: str = ""
     hunter_api_key: str = ""
-    people_providers_demo: bool = True  # include the synthetic demo provider as a fallback
 
     # --- LinkedIn / multichannel send (Unipile) ---
     # Blank = LinkedIn sends are a no-op (dry-run), so multichannel sequences still complete in QA.

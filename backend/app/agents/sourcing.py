@@ -65,10 +65,9 @@ def sourcing_tools(ctx: SourcingContext) -> list[Tool]:
         limit = min(_int(data, "limit", 25), 50)
         hits = await search_people(ctx.providers, ctx.targeting, limit=limit, use_cache=False)
         for p in ctx.providers:
-            if p.key != "demo":  # meter real provider calls (the demo provider is synthetic)
-                await usage.record(
-                    ctx.session, organization_id=ctx.organization_id, provider=p.key, kind="search"
-                )
+            await usage.record(
+                ctx.session, organization_id=ctx.organization_id, provider=p.key, kind="search"
+            )
         ctx.hits = {f"h{i}": h for i, h in enumerate(hits)}
         sample: JsonList = [
             {

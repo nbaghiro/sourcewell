@@ -1,9 +1,9 @@
 """Provider catalog + builders for the enabled set on a request.
 
 Resolution order per provider: a BYO org credential (ProviderCredential), else a platform key from
-settings, else nothing. The synthetic demo provider is appended as a fallback so discovery works
-before any real key is configured. Only "live" providers (those with an adapter factory) are built;
-keys for not-yet-live providers can still be stored, ready for when their adapter ships.
+settings, else nothing. With no key configured for any provider the built set is empty and people
+search returns no results. Only "live" providers (those with an adapter factory) are built; keys
+for not-yet-live providers can still be stored, ready for when their adapter ships.
 """
 
 from collections.abc import Callable, Sequence
@@ -17,7 +17,6 @@ from app.core.crypto import unseal
 from app.core.types import JsonObject
 from app.ext.apollo import ApolloProvider
 from app.ext.base import SourceProvider
-from app.ext.demo import DemoProvider
 from app.ext.hunter import HunterProvider
 from app.ext.pdl import PDLProvider
 from app.ext.unipile import UnipileProvider
@@ -91,15 +90,10 @@ def build_one(provider_key: str, api_key: str) -> SourceProvider | None:
 
 
 def build_providers(settings: Settings | None = None) -> Sequence[SourceProvider]:
-    """Platform-key + demo only (no org context)."""
+    """Platform-key only (no org context)."""
     settings = settings or get_settings()
     platform = _platform_keys(settings)
-    providers: list[SourceProvider] = [
-        factory(platform[key]) for key, factory in _FACTORIES.items() if platform.get(key)
-    ]
-    if settings.people_providers_demo or not providers:
-        providers.append(DemoProvider())
-    return providers
+    return [factory(platform[key]) for key, factory in _FACTORIES.items() if platform.get(key)]
 
 
 async def build_providers_for_org(
@@ -109,7 +103,7 @@ async def build_providers_for_org(
     *,
     selection: list[str] | None = None,
 ) -> Sequence[SourceProvider]:
-    """BYO org credentials first, then platform keys, then the demo fallback.
+    """BYO org credentials first, then platform keys.
 
     `selection` (an ordered list of provider keys from a workspace's settings) filters + orders the
     result; an empty / non-matching selection falls back to all.
@@ -135,6 +129,4 @@ async def build_providers_for_org(
         api_key = unseal(sealed) if sealed else platform.get(key)
         if api_key:
             providers.append(factory(api_key))
-    if settings.people_providers_demo or not providers:
-        providers.append(DemoProvider())
     return _apply_selection(providers, selection)

@@ -114,7 +114,6 @@ sourcing/
   adapters/
     base.py       # contract: PeopleQuery, PersonHit, EmailVerdict, SearchPage,
                   #           ProviderCapabilities, SourceProvider (Protocol)
-    demo.py       # DemoProvider — synthetic, zero-key fallback (deterministic)
     pdl.py        # PDLProvider — live POST /person/search + GET /person/enrich, normalized
     registry.py   # PROVIDER_CATALOG, build_providers(), build_providers_for_org()
   people.py       # dedupe_key, search_people, enrich_ref, import_hits
@@ -137,7 +136,7 @@ No second scoring path.
 
 ### Flow
 ```
-criteria ──▶ build_providers_for_org(session, org) ──▶ [PDLProvider?, …, DemoProvider]
+criteria ──▶ build_providers_for_org(session, org) ──▶ [PDLProvider?, ApolloProvider?, …]
          search (live, fan-out) ─▶ dedupe (email → linkedin → name+company) ─▶ evaluate() score ─▶ rank
          user selects ─▶ import_hits() ─▶ Contact rows (source=provider) ─▶ audience → rank → enroll
 ```
@@ -201,11 +200,10 @@ Credentials (`/settings/data-providers`, **org‑admin**):
 | Setting | Default | Effect |
 |---|---|---|
 | `PDL_API_KEY` | `""` | Platform‑key mode for PDL. Set to use the real provider org‑wide. |
-| `people_providers_demo` | `true` | Keep the synthetic demo provider as a fallback. |
 | `session_cookie_password` | `""` | When set, provider keys are Fernet‑encrypted at rest (`enc:`); else `plain:`. |
 
 **Go live with a real provider:** set `PDL_API_KEY` (platform‑wide) **or** save a key in Settings →
-Data providers (per org). Same endpoints, same UI; the demo provider stays as fallback.
+Data providers (per org). Same endpoints, same UI. Without any key, people search returns no results.
 
 ---
 

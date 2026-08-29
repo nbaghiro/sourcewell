@@ -21,6 +21,7 @@ from app.models import (
 from app.services.insights.agent import campaign_funnel, recent_runs
 from tests.factories import make_org, make_workspace
 from tests.fake_llm import FakeLLM, text_turn, tool_turn
+from tests.fakes import FakeSourceProvider
 
 
 def _due_campaign(ws_id: str, *, due: datetime) -> Campaign:
@@ -39,7 +40,9 @@ def _due_campaign(ws_id: str, *, due: datetime) -> Campaign:
 
 @pytest.mark.db
 async def test_source_due_deterministic(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_source_providers: list[FakeSourceProvider],
 ) -> None:
     monkeypatch.setattr(worker, "default_llm", lambda: None)  # force the LLM-free fallback
     org = await make_org(db_session, slug="sd-det")
@@ -61,7 +64,9 @@ async def test_source_due_deterministic(
 
 
 @pytest.mark.db
-async def test_source_due_agent_path(db_session: AsyncSession) -> None:
+async def test_source_due_agent_path(
+    db_session: AsyncSession, fake_source_providers: list[FakeSourceProvider]
+) -> None:
     org = await make_org(db_session, slug="sd-agent")
     ws = await make_workspace(db_session, org=org)
     now = datetime.now(UTC)

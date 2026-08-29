@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.sourcing import SourcingContext, sourcing_tools
+from app.core.config import Settings
 from app.ext.base import EmailVerdict, PersonHit, ProviderCapabilities, SearchPage
 from app.ext.registry import _apply_selection, build_providers_for_org, provider_selection
 from app.models import Campaign, ProviderUsage
@@ -53,7 +54,7 @@ def test_provider_selection_reads_settings() -> None:
 
 
 def test_apply_selection_filters_orders_and_falls_back() -> None:
-    a, b, c = _Stub("pdl"), _Stub("apollo"), _Stub("demo")
+    a, b, c = _Stub("pdl"), _Stub("apollo"), _Stub("hunter")
     providers = [a, b, c]
     assert _apply_selection(providers, None) == [a, b, c]  # None = all
     assert _apply_selection(providers, ["apollo", "pdl"]) == [b, a]  # filtered + reordered
@@ -63,18 +64,20 @@ def test_apply_selection_filters_orders_and_falls_back() -> None:
 @pytest.mark.db
 async def test_build_providers_respects_selection(db_session: AsyncSession) -> None:
     org = await make_org(db_session, slug="sel-build")
-    only_demo = await build_providers_for_org(db_session, org.id, selection=["demo"])
-    assert [p.key for p in only_demo] == ["demo"]
-    # a selection matching nothing configured falls back to the full (demo) set, never empty
-    fallback = await build_providers_for_org(db_session, org.id, selection=["pdl"])
-    assert fallback
+    # Hermetic: pin the platform keys so the developer's .env can't change the built set.
+    keys = Settings(pdl_api_key="pk", apollo_api_key="ak", hunter_api_key="", unipile_api_key="")
+    only_apollo = await build_providers_for_org(db_session, org.id, keys, selection=["apollo"])
+    assert [p.key for p in only_apollo] == ["apollo"]
+    # a selection matching nothing configured falls back to the full built set, never empty
+    fallback = await build_providers_for_org(db_session, org.id, keys, selection=["nope"])
+    assert [p.key for p in fallback] == ["pdl", "apollo"]
 
 
 # --- agent-path metering -----------------------------------------------------
 
 
 @pytest.mark.db
-async def test_search_tool_meters_real_providers(db_session: AsyncSession) -> None:
+async def test_search_tool_meters_every_provider(db_session: AsyncSession) -> None:
     org = await make_org(db_session, slug="sel-meter")
     ws = await make_workspace(db_session, org=org)
     c = Campaign(workspace_id=ws.id, name="C", criteria={}, sequence=[])
@@ -85,7 +88,7 @@ async def test_search_tool_meters_real_providers(db_session: AsyncSession) -> No
         workspace_id=ws.id,
         organization_id=org.id,
         campaign=c,
-        providers=[_Stub("pdl"), _Stub("demo")],
+        providers=[_Stub("pdl"), _Stub("apollo")],
         targeting=Targeting(),
     )
     tools = {t.name: t for t in sourcing_tools(ctx)}
@@ -102,4 +105,4 @@ async def test_search_tool_meters_real_providers(db_session: AsyncSession) -> No
     )
     keys = {(r.provider, r.kind) for r in rows}
     assert ("pdl", "search") in keys
-    assert ("demo", "search") not in keys  # the synthetic provider is not metered
+    assert ("apollo", "search") in keys

@@ -29,7 +29,6 @@ Defines the three role protocols and the shared value types:
 | **`apollo.py`** `ApolloProvider` | Data | `POST /api/v1/mixed_people/search` + `POST /api/v1/people/match`, **`x-api-key` header** | maps `Targeting` → `person_titles[]`/`person_seniorities[]`/etc.; `verify_email` piggybacks on enrich; **BYO‑only** per ToS |
 | **`hunter.py`** `HunterProvider` | Data | `GET /v2/email-finder` + `GET /v2/email-verifier`, `api_key` query | **no people‑search** (`capabilities.search=False`); enrich needs name+company → finds an email; strong `verify_email` |
 | **`unipile.py`** | **all three** | base `{dsn}/api/v1`, `X-API-KEY` | three classes (below) |
-| **`demo.py`** `DemoProvider` | Data (all caps) | none | deterministic synthetic people seeded off *every* `Targeting` field; the registry's fallback so discovery works with zero keys |
 
 **`unipile.py` is the spine — three separate classes:**
 
@@ -51,8 +50,8 @@ Defines the three role protocols and the shared value types:
 - **`_FACTORIES`**: `key → constructor` (only pdl/apollo/hunter/linkedin have one).
 - **Resolution order, per provider** (`build_providers_for_org`): **BYO org credential** (a
   `ProviderCredential` row, secret `unseal`ed) → **platform key** (settings, via `_platform_keys`) →
-  otherwise skipped. The **demo** provider is appended when `people_providers_demo` is on or nothing
-  else resolved.
+  otherwise skipped. With no key resolved for any provider the built set is empty and people
+  search returns no results.
 - **Selection**: `provider_selection(workspace.settings)` reads an ordered allow‑list from
   `Workspace.settings["providers"]`; `_apply_selection` filters + orders the built list (falls back
   to all if it would empty the set).
@@ -117,8 +116,8 @@ remaining **live‑send cutover** item (see `provider-integration-plan.md` §3a)
 - **Graceful**: every adapter returns an empty `SearchPage` / `None` on any error or 4xx — a bad key
   or a down provider degrades, never throws into the flow.
 - **Live pass‑through**: provider data is never stored except the `Contact`s a user explicitly imports.
-- **Per‑seat vs key‑or‑demo**: Unipile/LinkedIn resolves a per‑user `account_id` from `Connection`;
-  PDL/Apollo/Hunter resolve BYO‑cred → platform‑key → (else) the demo provider stands in.
+- **Per‑seat vs key**: Unipile/LinkedIn resolves a per‑user `account_id` from `Connection`;
+  PDL/Apollo/Hunter resolve BYO‑cred → platform‑key → (else) skipped.
 
 ## 6 · The flow of a hit (end to end)
 
