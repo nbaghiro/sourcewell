@@ -8,7 +8,10 @@ setting, so every user operates on their own connected account. The unblocker fo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.core.db import new_id
+from app.core.logging import logger
+from app.ext.unipile import unipile_connection
 from app.models import (
     Connection,
     ConnectionProvider,
@@ -23,6 +26,26 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
+
+
+async def register_inbound_webhooks(settings: Settings) -> None:
+    """Subscribe the Unipile inbound receiver for messaging + email + account events (idempotent).
+
+    Called when a seat connects so candidate replies (LinkedIn *and* email) flow back in. No-op when
+    Unipile or the public webhook URL isn't configured (dev/demo).
+    """
+    conn = unipile_connection()
+    if conn is None or not (settings.unipile_webhook_secret and settings.api_base_url):
+        return
+    url = (
+        f"{settings.api_base_url.rstrip('/')}"
+        f"/webhooks/unipile?token={settings.unipile_webhook_secret}"
+    )
+    for source in ("messaging", "email", "account"):
+        try:
+            await conn.register_webhooks(request_url=url, source=source)
+        except Exception:
+            logger.warning("unipile: webhook registration failed for source %s", source)
 
 
 async def upsert_seat(

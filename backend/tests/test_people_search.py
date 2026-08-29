@@ -5,7 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.crypto import seal, unseal
+from app.ext.apollo import ApolloProvider
+from app.ext.base import PersonHit
 from app.ext.demo import DemoProvider
+from app.ext.pdl import PDLProvider
 from app.ext.registry import (
     PROVIDER_CATALOG,
     build_providers,
@@ -79,6 +82,58 @@ async def test_import_normalizes_and_dedupes(db_session: AsyncSession) -> None:
     # re-importing the same hits is a no-op (deduped against existing contacts)
     again = await discovery.import_hits(db_session, workspace_id=ws.id, hits=hits)
     assert again == []
+
+
+def test_providers_capture_seniority_function_technologies() -> None:
+    # The provider search DSL uses seniority/function/technologies; these must survive onto the hit
+    # (they were being dropped), so downstream scoring can eventually use them.
+    pdl = PDLProvider("k")._normalize(
+        {
+            "full_name": "Ada Lovelace",
+            "job_title": "Staff Engineer",
+            "job_title_levels": ["senior"],
+            "job_title_role": "engineering",
+        }
+    )
+    assert pdl.seniority == "senior" and pdl.function == "engineering"
+
+    apollo = ApolloProvider("k")._normalize(
+        {
+            "name": "Grace Hopper",
+            "title": "VP Engineering",
+            "seniority": "vp",
+            "departments": ["engineering"],
+            "organization": {"technology_names": ["Kafka", "Go"]},
+        }
+    )
+    assert apollo.seniority == "vp" and apollo.function == "engineering"
+    assert apollo.technologies == ["Kafka", "Go"]
+
+
+@pytest.mark.db
+async def test_import_persists_captured_attributes(db_session: AsyncSession) -> None:
+    org = Organization(name="Attr", slug="attr-co", plan="demo")
+    db_session.add(org)
+    await db_session.flush()
+    ws = Workspace(organization_id=org.id, name="W", kind=WorkspaceKind.team)
+    db_session.add(ws)
+    await db_session.flush()
+
+    hit = PersonHit(
+        provider="pdl",
+        full_name="Ada Lovelace",
+        title="Staff Engineer",
+        email="ada@example.com",
+        seniority="senior",
+        function="engineering",
+        technologies=["Kafka", "Go"],
+    )
+    created = await discovery.import_hits(db_session, workspace_id=ws.id, hits=[hit])
+    assert len(created) == 1
+    attrs = created[0].attributes
+    assert attrs["seniority"] == "senior"
+    assert attrs["function"] == "engineering"
+    assert attrs["technologies"] == ["Kafka", "Go"]
 
 
 def test_secret_seal_roundtrips() -> None:

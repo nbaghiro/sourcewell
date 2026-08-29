@@ -1,8 +1,8 @@
-import { Inbox, Mail, Search, Send, Sparkles } from "lucide-react";
+import { Inbox, Mail, PenLine, Search, Send, Sparkles } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 
-import { ApprovalDetail, type Approval } from "@/components/approval-detail";
 import { ChannelIcon, LinkedInIcon, LINKEDIN_BLUE as LI_BLUE } from "@/components/brand-icons";
 import { clockTime as timeLabel, dayLabel, initials, shortAgo as relTime } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
@@ -12,11 +12,15 @@ import { StateBadge, STATE_MAP } from "@/components/state-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
+  useApproveMessage,
   useApprovals,
   useConversation,
   useDraftReply,
+  useEditMessage,
   useHandoff,
   useInbox,
   useMarkRead,
@@ -34,6 +38,7 @@ interface Message {
   subject: string | null;
   body: string;
   created_at: string | null;
+  origin: string; // "ai" | "human"
 }
 interface Conversation {
   enrollment: { state: string; score: number; current_step: number };
@@ -62,11 +67,20 @@ interface InboxItem {
   last_at: string | null;
   last_message: { body: string };
 }
+/** A drafted outbound message awaiting approval (ApprovalOut), used to build its list row. */
+interface Approval {
+  enrollment_id: string;
+  channel: string;
+  subject: string | null;
+  body: string;
+  created_at: string | null;
+  contact_name: string;
+  contact_avatar: string | null;
+}
 /** One row in the unified message list — either an inbound conversation or an outbound draft. */
 interface Row {
   kind: "conversation" | "approval";
   enrollmentId: string;
-  approval?: Approval;
   name: string;
   avatar?: string | null;
   channel: string;
@@ -198,7 +212,6 @@ export function InboxPage() {
         (a): Row => ({
           kind: "approval",
           enrollmentId: a.enrollment_id,
-          approval: a,
           name: a.contact_name,
           avatar: a.contact_avatar,
           channel: a.channel,
@@ -245,9 +258,9 @@ export function InboxPage() {
   );
 
   const selectedRow = rows.find((r) => r.enrollmentId === selected) ?? null;
-  const { data: conv } = useConversation(
-    selectedRow?.kind === "conversation" ? selected : null,
-  );
+  // One thread view for both kinds: approvals load the same conversation, where the queued
+  // draft renders in-thread as a recommended bubble to approve.
+  const { data: conv } = useConversation(selected);
   const aiDraft = () => selected && draftAI.mutate(selected, { onSuccess: (r) => setDraft(r.text) });
 
   // Keep a sensible selection: when the current row isn't in view, pick the first visible one.
@@ -266,17 +279,17 @@ export function InboxPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  const sendReply = (text: string) =>
-    selected && sendReplyM.mutate({ id: selected, text }, { onSuccess: () => setDraft("") });
+  const sendReply = (text: string, origin?: string) =>
+    selected &&
+    sendReplyM.mutate(
+      { id: selected, text, origin },
+      {
+        onSuccess: () => setDraft(""),
+        onError: () => toast.error("Couldn't send — try again."),
+      },
+    );
   const handoff = () => selected && handoffM.mutate(selected);
   const optOut = () => selected && optOutM.mutate(selected);
-
-  // After approving/sending a draft, advance to the next item in view.
-  const onApproved = () => {
-    const idx = visible.findIndex((r) => r.enrollmentId === selected);
-    const next = visible[idx + 1] ?? visible[idx - 1] ?? null;
-    setSelected(next?.enrollmentId ?? null);
-  };
 
   return (
     <PageLayout width="wide" fill>
@@ -355,14 +368,8 @@ export function InboxPage() {
             </div>
           </div>
 
-          {/* ---- detail: approval editor or conversation thread ---- */}
-          {selectedRow?.kind === "approval" && selectedRow.approval ? (
-            <ApprovalDetail
-              approval={selectedRow.approval}
-              onApproved={onApproved}
-              className="xl:col-span-2"
-            />
-          ) : !conv ? (
+          {/* ---- detail: one conversation thread; queued drafts approve in-thread ---- */}
+          {!conv ? (
             <div className="space-y-4 p-6">
               <Skeleton className="h-12" />
               <Skeleton className="ml-auto h-20 w-2/3" />
@@ -392,13 +399,16 @@ function Thread({
   conv: Conversation;
   draft: string;
   setDraft: (s: string) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string, origin?: string) => void;
   busy: boolean;
   onAiDraft: () => void;
   aiDrafting: boolean;
 }) {
   const sent = conv.messages.filter((m) => m.status !== "draft");
   const suggestion = conv.messages.find((m) => m.status === "draft");
+  // awaiting_approval → the draft is a queued first touchpoint the user approves in-thread;
+  // otherwise it's an AI-suggested reply to send.
+  const isApproval = conv.enrollment.state === "awaiting_approval";
   const channelLabel = conv.channel === "linkedin" ? "LinkedIn" : "Email";
   const detail =
     conv.channel === "linkedin"
@@ -409,6 +419,16 @@ function Thread({
 
   let lastDay = "";
   let lastChannel = "";
+
+  // Keep the thread pinned to the newest message — on open, on a new message, and after an approve.
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const scrollKey = [conv.contact.id, conv.messages.length, sent.length, suggestion?.id ?? ""].join(
+    "|",
+  );
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [scrollKey]);
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -432,8 +452,9 @@ function Thread({
         </div>
       </header>
 
-      {/* messages */}
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
+      {/* messages — bottom-aligned so short threads and the approval card sit above the composer */}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex min-h-full flex-col justify-end space-y-3">
         {sent.map((m) => {
           const day = m.created_at ? dayLabel(m.created_at) : "";
           const showDay = day && day !== lastDay;
@@ -462,42 +483,61 @@ function Thread({
           );
         })}
 
-        {suggestion && (
-          <div className="ml-auto max-w-[85%] rounded-2xl border border-dashed p-3.5" style={{ borderColor: "var(--accent-line)", backgroundColor: "color-mix(in srgb, var(--accent) 55%, white)" }}>
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-strong)]">
-              <Sparkles className="size-3.5" /> Suggested reply
+        {suggestion &&
+          (isApproval ? (
+            <RecommendedBubble
+              msg={suggestion}
+              channel={conv.channel}
+              contactName={conv.contact.name ?? "them"}
+            />
+          ) : (
+            <div className="ml-auto max-w-[85%] rounded-2xl border border-dashed p-3.5" style={{ borderColor: "var(--accent-line)", backgroundColor: "color-mix(in srgb, var(--accent) 55%, white)" }}>
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-strong)]">
+                <Sparkles className="size-3.5" /> Suggested reply
+              </div>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{suggestion.body}</p>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setDraft(suggestion.body)}>Edit</Button>
+                <Button size="sm" disabled={busy} onClick={() => onSend(suggestion.body, "ai")}>
+                  <Send /> Send
+                </Button>
+              </div>
             </div>
-            <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{suggestion.body}</p>
-            <div className="mt-3 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setDraft(suggestion.body)}>Edit</Button>
-              <Button size="sm" disabled={busy} onClick={() => onSend(suggestion.body)}>
-                <Send /> Send
-              </Button>
-            </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
-      {/* composer */}
+      {/* composer — always visible; disabled while a queued draft awaits approval, enabled once sent */}
       <div className="border-t border-border px-4 py-3">
         <div className="mb-2 flex flex-wrap gap-1.5">
           {QUICK.map((q) => (
             <button
               key={q.label}
               onClick={() => setDraft(q.body)}
-              className="rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              disabled={isApproval}
+              className="rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               {q.label}
             </button>
           ))}
         </div>
-        <div className="rounded-xl border border-border bg-card focus-within:border-ring">
+        <div
+          className={cn(
+            "rounded-xl border border-border bg-card focus-within:border-ring",
+            isApproval && "opacity-60",
+          )}
+        >
           <textarea
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder={`Reply via ${channelLabel}…`}
-            className="w-full resize-none bg-transparent px-3.5 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            disabled={isApproval}
+            placeholder={
+              isApproval
+                ? "Approve the recommended message to start the conversation…"
+                : `Reply via ${channelLabel}…`
+            }
+            className="w-full resize-none bg-transparent px-3.5 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
           />
           <div className="flex items-center justify-between px-3 pb-2.5">
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -505,15 +545,109 @@ function Thread({
               {detail && <span className="opacity-70">· {detail}</span>}
             </span>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" disabled={aiDrafting} onClick={onAiDraft}>
+              <Button variant="ghost" size="sm" disabled={aiDrafting || isApproval} onClick={onAiDraft}>
                 <Sparkles /> {aiDrafting ? "Drafting…" : "Draft with AI"}
               </Button>
-              <Button size="sm" disabled={!draft.trim() || busy} onClick={() => onSend(draft)}>
+              <Button
+                size="sm"
+                disabled={!draft.trim() || busy || isApproval}
+                onClick={() => onSend(draft)}
+              >
                 <Send /> Send
               </Button>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** A tiny per-message tag on outbound bubbles: AI-drafted vs typed by the recruiter. */
+function OriginFlag({ origin }: { origin: string }) {
+  const ai = origin === "ai";
+  return (
+    <span
+      className="inline-flex items-center gap-0.5 font-medium"
+      style={ai ? { color: "var(--accent-strong)" } : undefined}
+      title={ai ? "Drafted by the AI agent" : "Typed by you"}
+    >
+      {ai ? <Sparkles className="size-2.5" /> : <PenLine className="size-2.5" />}
+      {ai ? "AI" : "You"}
+    </span>
+  );
+}
+
+/** The AI-recommended first touchpoint, shown in-thread as a pending bubble the user approves —
+ *  editable inline, and on approval it sends and re-renders as a normal sent message. */
+function RecommendedBubble({
+  msg,
+  channel,
+  contactName,
+}: {
+  msg: Message;
+  channel: string;
+  contactName: string;
+}) {
+  const editMessage = useEditMessage();
+  const approveMessage = useApproveMessage();
+  const [editing, setEditing] = React.useState(false);
+  const [subject, setSubject] = React.useState(msg.subject ?? "");
+  const [body, setBody] = React.useState(msg.body);
+  const busy = editMessage.isPending || approveMessage.isPending;
+
+  // Reset the editor when switching to a different recommended draft.
+  React.useEffect(() => {
+    setSubject(msg.subject ?? "");
+    setBody(msg.body);
+    setEditing(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msg.id]);
+
+  const dirty = subject !== (msg.subject ?? "") || body !== msg.body;
+
+  async function approve() {
+    try {
+      if (dirty) await editMessage.mutateAsync({ messageId: msg.id, subject, body });
+      await approveMessage.mutateAsync(msg.id);
+      toast.success(`Sent to ${contactName}`);
+      // Stay on the thread — the invalidated conversation refetches and the draft
+      // re-renders as a normal sent message.
+    } catch {
+      toast.error("Couldn't send");
+    }
+  }
+
+  return (
+    <div
+      className="ml-auto max-w-[85%] rounded-2xl border border-dashed p-3.5"
+      style={{ borderColor: "var(--accent-line)", backgroundColor: "color-mix(in srgb, var(--accent) 55%, white)" }}
+    >
+      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-strong)]">
+        <Sparkles className="size-3.5" /> Recommended message · awaiting your approval
+      </div>
+      {editing ? (
+        <div className="space-y-2">
+          {channel === "email" && (
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
+          )}
+          <Textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} />
+        </div>
+      ) : (
+        <>
+          {channel === "email" && subject && (
+            <div className="mb-1 text-sm font-semibold text-foreground">{subject}</div>
+          )}
+          <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{body}</p>
+        </>
+      )}
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => setEditing((e) => !e)}>
+          {editing ? "Done" : "Edit"}
+        </Button>
+        <Button size="sm" disabled={busy} onClick={() => void approve()}>
+          <Send /> Approve &amp; send
+        </Button>
       </div>
     </div>
   );
@@ -557,6 +691,7 @@ function Bubble({
         >
           <ChannelIcon channel={m.channel} className="size-3" />
           <span>{timeLabel(m.created_at)}</span>
+          {out && <OriginFlag origin={m.origin} />}
           {out && <span>· {m.status === "sent" ? "Sent" : m.status}</span>}
         </div>
       </div>

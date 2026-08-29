@@ -342,8 +342,19 @@ class Contact(IdMixin, TimestampMixin, Base):
     tags: Mapped[list[str]] = mapped_column(JSONB, default=list)
     company_size: Mapped[str | None] = mapped_column(String(50), nullable=True)
     industry: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    # Vertical-specific fields keep the core columns generic.
+    # Vertical-specific fields keep the core columns generic. Sourced signals (seniority level,
+    # department/function, tech stack) live here and are surfaced for fit scoring.
     attributes: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+
+    @property
+    def seniority(self) -> str | None:
+        v = (self.attributes or {}).get("seniority")
+        return v if isinstance(v, str) else None
+
+    @property
+    def function(self) -> str | None:
+        v = (self.attributes or {}).get("function")
+        return v if isinstance(v, str) else None
 
 
 # --- Campaign ----------------------------------------------------------------
@@ -465,6 +476,23 @@ class Message(IdMixin, TimestampMixin, Base):
     # Provider thread/chat id (maps an inbound reply back to this thread) + the seat that sent it.
     external_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Who composed this outbound message — "ai" (agent-drafted) or "human" (typed by the user).
+    origin: Mapped[str] = mapped_column(String(16), default="ai", server_default="ai")
+    # Idempotency key sent to the provider so a retried send is de-duplicated (at-most-once).
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The provider's own message id for an inbound event — de-duplicates redelivered webhooks.
+    provider_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    __table_args__ = (
+        # Race-safe inbound dedupe: a redelivered webhook can't create a second row. Partial so the
+        # many outbound rows (provider_message_id IS NULL) are unconstrained.
+        Index(
+            "uq_message_provider_message_id",
+            "provider_message_id",
+            unique=True,
+            postgresql_where=text("provider_message_id IS NOT NULL"),
+        ),
+    )
 
 
 # --- Suppression -------------------------------------------------------------

@@ -42,6 +42,9 @@ export function CreditMeter() {
   if (!data) return null;
   const pct = Math.min(100, data.pct);
   const bar = usageTone(data.pct, data.over);
+  // The sidebar gauge reads as remaining — full when nothing's used, draining as credits go.
+  const remainingPct = Math.max(0, 100 - data.pct);
+  const remaining = Math.max(0, data.allowance - data.used);
   const emails = data.breakdown.emails ?? 0;
   const inmails = data.breakdown.inmails ?? 0;
   const sourced = data.breakdown.sourced ?? 0;
@@ -54,11 +57,11 @@ export function CreditMeter() {
             <span className="flex items-center gap-1.5 font-medium text-sidebar-active-foreground">
               <Coins className="size-3.5" /> Credits
             </span>
-            <span className="text-sidebar-foreground/80">{data.pct}%</span>
+            <span className="text-sidebar-foreground/80">{remainingPct}%</span>
           </div>
-          <Meter pct={pct} tone={bar} className="mt-1.5 h-1.5 bg-black/25" />
+          <Meter pct={remainingPct} tone={bar} className="mt-1.5 h-1.5 bg-black/25" />
           <div className="mt-1.5 text-[0.65rem] text-sidebar-foreground/70">
-            {data.used.toLocaleString()} / {data.allowance.toLocaleString()} used
+            {remaining.toLocaleString()} / {data.allowance.toLocaleString()} remaining
           </div>
         </button>
       </DialogTrigger>

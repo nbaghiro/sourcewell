@@ -77,6 +77,11 @@ class Settings(BaseSettings):
     # Shared secret embedded in the registered webhook URL (?token=) / X-Unipile-Token header; blank
     # disables the inbound Unipile receiver.
     unipile_webhook_secret: str = ""
+    # Simulate sends instead of transmitting — a send becomes a no-op marked "sent". On for offline
+    # dev / demo / CI; can be flipped on in staging to avoid messaging real people. (Read from the
+    # EMAIL_DRY_RUN / LINKEDIN_DRY_RUN env vars.)
+    email_dry_run: bool = False
+    linkedin_dry_run: bool = False
 
     # --- Signing + public links ---
     # HMAC key for unsubscribe links + inbound webhook verification (falls back to the cookie key).

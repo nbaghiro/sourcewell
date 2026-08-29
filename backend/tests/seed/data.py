@@ -101,6 +101,7 @@ class MessageSpec(TypedDict):
     sent_at: datetime | None
     scheduled_at: datetime | None
     created_at: datetime
+    origin: str  # "ai" (agent-drafted) or "human" (recruiter-typed)
 
 
 def _slug(s: str) -> str:
@@ -598,6 +599,7 @@ def build_messages(
         body: str,
         day: float,
         scheduled: float | None = None,
+        origin: str = "ai",
     ) -> None:
         ts = now - timedelta(days=day)
         msgs.append(
@@ -612,6 +614,7 @@ def build_messages(
                 if scheduled is not None
                 else None,
                 "created_at": ts,
+                "origin": origin,
             }
         )
 
@@ -664,11 +667,12 @@ def build_messages(
         add("inbound", ch2, "received", None, _pick(v["decline"], h), cursor)
         return msgs
     if state == "handed_off":
+        # A live back-and-forth: the recruiter handled these replies by hand (origin="human").
         add("inbound", ch2, "received", None, _pick(v["interested"], h), cursor)
         cursor -= 0.4
-        add("outbound", ch2, "sent", None, _pick(v["answer"], h), cursor)
+        add("outbound", ch2, "sent", None, _pick(v["answer"], h), cursor, origin="human")
         cursor -= 0.6
         add("inbound", ch2, "received", None, _pick(v["question"], h), cursor)
         cursor -= 0.3
-        add("outbound", ch2, "sent", None, _pick(v["schedule"], h), cursor)
+        add("outbound", ch2, "sent", None, _pick(v["schedule"], h), cursor, origin="human")
     return msgs

@@ -344,11 +344,11 @@ export function useConversation(id: string | null) {
 export function useSendReply() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { id: string; text: string }) =>
+    mutationFn: async (vars: { id: string; text: string; origin?: string }) =>
       unwrap(
         await client.POST("/inbox/{enrollment_id}/reply", {
           params: { path: { enrollment_id: vars.id } },
-          body: { text: vars.text },
+          body: { text: vars.text, origin: vars.origin ?? "human" },
         }),
       ),
     onSuccess: () => invalidateInbox(qc),
@@ -458,6 +458,19 @@ export function useOpenBillingPortal() {
     mutationFn: async () => unwrap(await client.POST("/billing/portal", {})),
     onSuccess: (data) => {
       if (data?.url) window.location.href = data.url;
+    },
+  });
+}
+
+/** Self-serve upgrade/downgrade on the non-Stripe path — changes the plan directly, then refreshes
+ *  the usage meter. */
+export function useChangePlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (plan: string) =>
+      unwrap(await client.POST("/billing/plan", { body: { plan } })),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["usage"] });
     },
   });
 }

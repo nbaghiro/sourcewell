@@ -16,30 +16,66 @@ Flow:
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.db import new_id
 from app.core.types import JsonList
 from app.models import (
     AutonomyLevel,
     Campaign,
     Channel,
+    Connection,
     Contact,
     Enrollment,
     EnrollmentState,
     Message,
     MessageDirection,
     MessageStatus,
+    SuppressionReason,
     Workspace,
 )
 from app.services.outreach import governor
-from app.services.outreach.messaging import draft_message, send_via_channel
+from app.services.outreach.messaging import (
+    PermanentSendError,
+    TransientSendError,
+    deliver_outbound,
+    draft_message,
+    linkedin_transport_ready,
+    resolve_channel_seat,
+)
 from app.services.sourcing import suppression
 
 _FINAL_GRACE_DAYS = 3
 _MAX_SEND_ATTEMPTS = 3
 _BACKOFF = (timedelta(minutes=5), timedelta(minutes=15), timedelta(minutes=60))
+
+
+def _tomorrow(now: datetime) -> datetime:
+    """Start of the next UTC day — when a per-seat daily cap resets."""
+    return datetime(now.year, now.month, now.day, tzinfo=now.tzinfo) + timedelta(days=1)
+
+
+async def _seat_cap_reached(session: AsyncSession, *, seat: Connection, now: datetime) -> bool:
+    """Has this seat hit its per-account daily send cap (`capabilities.daily_cap`)?"""
+    caps = seat.capabilities or {}
+    cap = caps.get("daily_cap")
+    if not isinstance(cap, int) or cap <= 0:
+        return False
+    start = datetime(now.year, now.month, now.day, tzinfo=now.tzinfo)
+    sent_today = (
+        await session.execute(
+            select(func.count())
+            .select_from(Message)
+            .where(
+                Message.account_id == seat.external_id,
+                Message.status == MessageStatus.sent,
+                Message.sent_at >= start,
+            )
+        )
+    ).scalar_one()
+    return int(sent_today) >= cap
 
 
 # --- State machine -----------------------------------------------------------
@@ -142,6 +178,8 @@ async def _draft_touchpoint(
     # which can lag it and split-brain the campaign.
     if campaign.autonomy_level == AutonomyLevel.full:
         message.status = MessageStatus.approved
+        if not message.idempotency_key:
+            message.idempotency_key = new_id()
         enrollment.state = EnrollmentState.scheduled
         enrollment.next_run_at = now
     else:
@@ -189,7 +227,33 @@ async def _send_touchpoint(
         enrollment.next_run_at = None
         return
 
-    # Rate/window governor: defer (without advancing) if a cap or window blocks the send.
+    # Resolve the org's sending seat for this channel (for health + per-seat rate limits).
+    seat = (
+        await resolve_channel_seat(session, organization_id=org_id, channel=message.channel)
+        if org_id
+        else None
+    )
+
+    # No connected LinkedIn account for a LinkedIn touchpoint: fall back to email (if the contact
+    # has one), else fail the touchpoint visibly — never a phantom "sent". Dry-run still simulates.
+    if (
+        message.channel == Channel.linkedin
+        and not get_settings().linkedin_dry_run
+        and not linkedin_transport_ready(seat)
+    ):
+        if contact.email:
+            message.channel = Channel.email
+            seat = (
+                await resolve_channel_seat(session, organization_id=org_id, channel=Channel.email)
+                if org_id
+                else None
+            )
+        else:
+            message.status = MessageStatus.failed
+            _advance(enrollment, sequence, now)
+            return
+
+    # Rate/window governor: defer (without advancing) if a workspace cap or window blocks the send.
     allowed, retry_at = await governor.can_send_now(
         session, workspace_id=enrollment.workspace_id, channel=message.channel, now=now
     )
@@ -197,27 +261,43 @@ async def _send_touchpoint(
         enrollment.next_run_at = retry_at or (now + timedelta(minutes=15))
         return
 
-    target = contact.linkedin_url if message.channel == Channel.linkedin else contact.email
-    if not target:
-        message.status = MessageStatus.failed
-        _advance(enrollment, sequence, now)
+    # Per-seat daily cap: LinkedIn/email accounts are throttled per account, not just per workspace.
+    if seat is not None and await _seat_cap_reached(session, seat=seat, now=now):
+        enrollment.next_run_at = _tomorrow(now)
         return
 
     sender = campaign.from_email or get_settings().default_from_email
     unsub = suppression.unsubscribe_url(org_id, contact.email) if org_id and contact.email else None
+    # Follow-up steps reply into the existing thread (so it threads and, on LinkedIn, doesn't
+    # re-InMail); the first touch (step 0) opens the thread.
+    is_reply = enrollment.current_step > 0
     try:
-        await send_via_channel(
-            channel=message.channel,
+        await deliver_outbound(
+            session,
+            message=message,
+            contact=contact,
+            seat=seat,
             sender=sender,
-            email=contact.email,
-            linkedin_url=contact.linkedin_url,
-            subject=message.subject or "",
-            body=message.body,
             unsubscribe_url=unsub,
+            reply=is_reply,
         )
         message.status = MessageStatus.sent
         message.sent_at = now
-    except Exception:
+    except PermanentSendError:
+        # Hard failure (bad address / dead seat): fail + advance, no retry. Only suppress the email
+        # when it was the *email* channel that bounced — a LinkedIn failure isn't an email bounce.
+        message.status = MessageStatus.failed
+        if org_id and contact.email and message.channel == Channel.email:
+            await suppression.suppress(
+                session,
+                organization_id=org_id,
+                email=contact.email,
+                reason=SuppressionReason.bounced,
+                contact_id=contact.id,
+            )
+        _advance(enrollment, sequence, now)
+        return
+    except TransientSendError:
         # Transient failure: retry with backoff, advancing only after exhausting attempts.
         message.attempts += 1
         if message.attempts < _MAX_SEND_ATTEMPTS:

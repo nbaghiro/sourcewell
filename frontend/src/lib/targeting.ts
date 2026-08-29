@@ -7,10 +7,12 @@
  * `evaluate()`, so the composer's live "~N match" estimate agrees with what server-side ranking
  * produces. Keep the two in lockstep — backend tests/test_targeting.py pins the canonical cases.
  *
- * Scoring: each *specified, scorable* field shares a 90-pt budget by weight; a reachable email adds
- * the final 10; capped at 100; "in the audience" at >= FIT_THRESHOLD. An exclude match disqualifies.
- * The search-only fields (seniorities/functions/technologies/keywords) narrow a provider search but
- * aren't scored — a stored contact doesn't carry them.
+ * Two axes: `evaluateFit` → Fit 0-100 (weighted fraction of *specified* criteria matched; skills
+ * fractional; excludes hard-disqualify; "in the audience" at >= FIT_THRESHOLD) and `reachability`
+ * → whether we can act on them. Fit is NOT affected by having an email. Titles/companies match on
+ * substring ("VP" ⊇ "SVP"); excludes on word boundaries ("intern" ≠ "International"); seniority/
+ * function via a synonym taxonomy. technologies/keywords stay search-only but give a neutral floor
+ * when they're the only criteria.
  */
 export const FIT_THRESHOLD = 40;
 
@@ -81,9 +83,20 @@ export const TARGETING_FIELDS: {
   { key: "exclude_titles", label: "Exclude titles", group: "exclude", scored: true, placeholder: "Intern, Student…" },
 ];
 
-// ---- scoring (mirror of app/targeting.py) ----
+// ---- scoring (mirror of app/targeting.py — keep byte-for-byte) ----
 
-const WEIGHTS = { titles: 30, skills: 30, companies: 20, industries: 15, locations: 15, company_sizes: 10 };
+const WEIGHTS = {
+  titles: 30,
+  skills: 30,
+  companies: 20,
+  seniorities: 20,
+  industries: 15,
+  locations: 15,
+  functions: 10,
+  company_sizes: 10,
+};
+
+const SEARCH_ONLY_FLOOR = 50;
 
 const REGION_ALIASES: Record<string, string[]> = {
   eu: ["de", "uk", "nl", "pt", "ie", "fr", "es", "it", "remote · eu"],
@@ -91,14 +104,45 @@ const REGION_ALIASES: Record<string, string[]> = {
   remote: ["remote"],
 };
 
+const SENIORITY_ALIASES: Record<string, string> = {
+  "vice president": "vp", vp: "vp", svp: "vp", evp: "vp",
+  "c-level": "exec", "c-suite": "exec", cxo: "exec", chief: "exec",
+  ceo: "exec", cto: "exec", cfo: "exec", coo: "exec",
+  founder: "exec", owner: "exec", president: "exec", partner: "exec",
+  director: "director", dir: "director", head: "director",
+  senior: "senior", sr: "senior",
+  lead: "lead", staff: "lead", principal: "lead",
+  manager: "manager", mgr: "manager",
+  mid: "mid", intermediate: "mid",
+  junior: "junior", jr: "junior", entry: "junior", intern: "junior", associate: "junior",
+};
+const FUNCTION_ALIASES: Record<string, string> = {
+  engineering: "engineering", eng: "engineering", software: "engineering",
+  developer: "engineering", development: "engineering", dev: "engineering",
+  sales: "sales",
+  marketing: "marketing", growth: "marketing",
+  product: "product", design: "design", data: "data",
+  operations: "operations", ops: "operations",
+  finance: "finance", accounting: "finance",
+  people: "people", hr: "people", "human resources": "people", recruiting: "people",
+  support: "support", "customer success": "support",
+  legal: "legal",
+};
+
+export type Reachability = "verified" | "reachable" | "needs_enrichment";
+
 export interface FitContact {
   title?: string | null;
   skills?: string[];
   location?: string | null;
   email?: string | null;
+  email_status?: string | null;
+  linkedin_url?: string | null;
   company?: string | null;
   industry?: string | null;
   company_size?: string | null;
+  seniority?: string | null;
+  function?: string | null;
 }
 export interface FitResult {
   score: number;
@@ -106,9 +150,50 @@ export interface FitResult {
   reasons: string[];
 }
 
+/** Permissive substring (so "VP" matches "SVP"). Used for positive title/company matches. */
 function containsAny(value: string | null | undefined, needles: string[]): boolean {
   const v = (value ?? "").toLowerCase();
   return !!v && needles.some((n) => n && v.includes(n.toLowerCase()));
+}
+
+const isAlnum = (ch: string): boolean => /[\p{L}\p{N}]/u.test(ch);
+
+/** Precise whole-word containment (so "intern" ≠ "International"). Used for excludes. */
+function wordContains(value: string | null | undefined, needle: string): boolean {
+  const v = (value ?? "").toLowerCase();
+  const n = needle.toLowerCase().trim();
+  if (!v || !n) return false;
+  let start = 0;
+  for (;;) {
+    const i = v.indexOf(n, start);
+    if (i < 0) return false;
+    const before = i > 0 ? v[i - 1] : "";
+    const after = i + n.length < v.length ? v[i + n.length] : "";
+    if (!isAlnum(before) && !isAlnum(after)) return true;
+    start = i + 1;
+  }
+}
+
+function anyWord(value: string | null | undefined, needles: string[]): boolean {
+  return needles.some((n) => n && wordContains(value, n));
+}
+
+function canon(value: string | null | undefined, aliases: Record<string, string>): string {
+  const k = (value ?? "").toLowerCase().trim();
+  return aliases[k] ?? k;
+}
+
+/** Normalized-synonym equality for the single-token fields (seniority / function). */
+function bucketMatch(
+  value: string | null | undefined,
+  crits: string[],
+  aliases: Record<string, string>,
+): boolean {
+  if (crits.length === 0) return false;
+  const cv = canon(value, aliases);
+  if (!cv) return false;
+  const set = new Set(crits.map((c) => canon(c, aliases)));
+  return set.has(cv);
 }
 
 function locationMatches(loc: string | null | undefined, crits: string[]): boolean {
@@ -122,36 +207,44 @@ function locationMatches(loc: string | null | undefined, crits: string[]): boole
 }
 
 export function evaluateFit(c: FitContact, t: Targeting): FitResult {
-  if (containsAny(c.company, t.exclude_companies) || containsAny(c.title, t.exclude_titles)) {
+  if (anyWord(c.company, t.exclude_companies) || anyWord(c.title, t.exclude_titles)) {
     return { score: 0, matched: false, reasons: ["excluded by targeting"] };
   }
 
   const want = (t.skills ?? []).map((s) => s.toLowerCase());
   const have = (c.skills ?? []).map((s) => s.toLowerCase());
-  const overlap = want.filter((s) => have.includes(s));
+  const overlap = want.filter((w) => have.some((h) => wordContains(h, w)));
 
   const titleMatch = containsAny(c.title, t.titles);
   const companyMatch = containsAny(c.company, t.companies);
   const industryMatch = containsAny(c.industry, t.industries);
   const sizeMatch = containsAny(c.company_size, t.company_sizes);
   const locMatch = locationMatches(c.location, t.locations);
+  const senMatch = bucketMatch(c.seniority, t.seniorities, SENIORITY_ALIASES);
+  const fnMatch = bucketMatch(c.function, t.functions, FUNCTION_ALIASES);
 
   const cats: { weight: number; hit: number }[] = [];
   if (t.titles.length) cats.push({ weight: WEIGHTS.titles, hit: titleMatch ? 1 : 0 });
   if (want.length) cats.push({ weight: WEIGHTS.skills, hit: overlap.length / want.length });
   if (t.companies.length) cats.push({ weight: WEIGHTS.companies, hit: companyMatch ? 1 : 0 });
+  if (t.seniorities.length) cats.push({ weight: WEIGHTS.seniorities, hit: senMatch ? 1 : 0 });
   if (t.industries.length) cats.push({ weight: WEIGHTS.industries, hit: industryMatch ? 1 : 0 });
   if (t.locations.length) cats.push({ weight: WEIGHTS.locations, hit: locMatch ? 1 : 0 });
+  if (t.functions.length) cats.push({ weight: WEIGHTS.functions, hit: fnMatch ? 1 : 0 });
   if (t.company_sizes.length) cats.push({ weight: WEIGHTS.company_sizes, hit: sizeMatch ? 1 : 0 });
 
   const totalW = cats.reduce((s, x) => s + x.weight, 0);
-  let score = totalW > 0 ? (90 * cats.reduce((s, x) => s + x.weight * x.hit, 0)) / totalW : 0;
-  if (c.email) score += 10;
-  score = Math.min(100, Math.round(score));
+  let fit: number;
+  if (totalW > 0) fit = (100 * cats.reduce((s, x) => s + x.weight * x.hit, 0)) / totalW;
+  else if (t.technologies.length || t.keywords.trim()) fit = SEARCH_ONLY_FLOOR;
+  else fit = 0;
+  const score = Math.min(100, Math.round(fit));
 
   const reasons: string[] = [];
   if (overlap.length) reasons.push(`matches ${overlap.join(", ")}`);
   if (titleMatch) reasons.push("title fits the role");
+  if (senMatch) reasons.push("seniority fits");
+  if (fnMatch) reasons.push("right function");
   if (companyMatch) reasons.push("target company");
   if (industryMatch) reasons.push("target industry");
   if (t.locations.length && locMatch) reasons.push("in target location");
@@ -159,4 +252,11 @@ export function evaluateFit(c: FitContact, t: Targeting): FitResult {
   if (reasons.length === 0) reasons.push("limited overlap with the criteria");
 
   return { score, matched: score >= FIT_THRESHOLD, reasons };
+}
+
+/** A separate axis from fit: can we act on this candidate? Mirror of `reachability()`. */
+export function reachability(c: FitContact): Reachability {
+  if (c.email_status === "valid") return "verified";
+  if (c.email || c.linkedin_url) return "reachable";
+  return "needs_enrichment";
 }

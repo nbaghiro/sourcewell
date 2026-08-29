@@ -12,6 +12,7 @@ from app.ext.base import (
     json_list,
     json_object,
     opt_str,
+    str_list,
 )
 from app.targeting import Targeting
 
@@ -52,6 +53,8 @@ class ApolloProvider:
             or ""
         )
         location = ", ".join(filter(None, [opt_str(p.get("city")), opt_str(p.get("country"))]))
+        depts = p.get("departments")
+        function = opt_str(depts[0]) if isinstance(depts, list) and depts else None
         return PersonHit(
             provider=self.key,
             external_id=opt_str(p.get("id")),
@@ -64,6 +67,9 @@ class ApolloProvider:
             linkedin_url=opt_str(p.get("linkedin_url")),
             company_size=str(size) if size else None,
             industry=opt_str(org.get("industry")),
+            seniority=opt_str(p.get("seniority")),
+            function=function,
+            technologies=str_list(org.get("technology_names"), 20),
         )
 
     async def search(

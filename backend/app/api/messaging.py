@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.outreach import handle_reply
@@ -31,15 +31,23 @@ from app.models import (
 )
 from app.services.insights import audit
 from app.services.outreach.messaging import (
+    PermanentSendError,
+    TransientSendError,
+    already_ingested,
     approve_message,
+    deliver_outbound,
     draft_reply_text,
     ingest_inbound,
     ingest_reply,
     list_thread,
+    resolve_channel_seat,
     summarize_thread,
 )
 
 router = APIRouter(tags=["messaging"])
+
+# Reject a signed inbound webhook whose timestamp is older than this (replay window).
+_WEBHOOK_MAX_SKEW_SECONDS = 300
 
 
 # --- Schemas -----------------------------------------------------------------
@@ -52,6 +60,7 @@ class ReplyRequest(BaseModel):
 
 class SendRequest(BaseModel):
     text: str
+    origin: str = "human"  # "human" (typed) or "ai" (sending an AI suggestion as-is)
 
 
 class MessageOut(BaseModel):
@@ -65,6 +74,7 @@ class MessageOut(BaseModel):
     sent_at: str | None
     scheduled_at: str | None
     created_at: str | None
+    origin: str
 
 
 def dump_message(m: Message) -> MessageOut:
@@ -79,6 +89,7 @@ def dump_message(m: Message) -> MessageOut:
         sent_at=m.sent_at.isoformat() if m.sent_at else None,
         scheduled_at=m.scheduled_at.isoformat() if m.scheduled_at else None,
         created_at=m.created_at.isoformat() if m.created_at else None,
+        origin=m.origin,
     )
 
 
@@ -354,6 +365,12 @@ async def send_reply(
     last = await list_thread(session, workspace_id=ws, enrollment_id=enrollment_id)
     channel = last[-1].channel if last else Channel.email
     now = datetime.now(UTC)
+    # Sending supersedes any AI-suggested draft in this thread — consume it so it doesn't linger.
+    await session.execute(
+        delete(Message).where(
+            Message.enrollment_id == enrollment_id, Message.status == MessageStatus.draft
+        )
+    )
     message = Message(
         workspace_id=ws,
         enrollment_id=enrollment_id,
@@ -363,8 +380,33 @@ async def send_reply(
         body=body.text,
         sent_at=now,
         created_at=now,
+        origin="ai" if body.origin == "ai" else "human",
     )
     session.add(message)
+    await session.flush()
+
+    # Actually transmit the reply over the channel (into the existing thread), capturing the
+    # provider thread id. On send failure the request rolls back so nothing is falsely marked sent.
+    contact = await session.get(Contact, enrollment.contact_id)
+    if contact is None:
+        raise HTTPException(status_code=404, detail="contact not found")
+    campaign = await session.get(Campaign, enrollment.campaign_id)
+    workspace = await session.get(Workspace, ws)
+    seat = (
+        await resolve_channel_seat(
+            session, organization_id=workspace.organization_id, channel=channel
+        )
+        if workspace
+        else None
+    )
+    sender = (campaign.from_email if campaign else None) or get_settings().default_from_email
+    try:
+        await deliver_outbound(
+            session, message=message, contact=contact, seat=seat, sender=sender, reply=True
+        )
+    except (PermanentSendError, TransientSendError) as exc:
+        raise HTTPException(status_code=502, detail="couldn't send the reply") from exc
+
     enrollment.reply_pending = False
     await session.flush()
     await audit.record(
@@ -468,12 +510,20 @@ async def inbound_webhook(
         value = payload.get(key)
         return value if isinstance(value, str) else None
 
+    # Replay guard: a signed payload with a stale timestamp is rejected (the `ts` is inside the
+    # HMAC, so it can't be forged); exact resends are also dropped by provider_message_id dedupe.
+    ts = payload.get("ts") or payload.get("timestamp")
+    if isinstance(ts, int | float) and not isinstance(ts, bool):
+        if abs(datetime.now(UTC).timestamp() - float(ts)) > _WEBHOOK_MAX_SKEW_SECONDS:
+            raise HTTPException(status_code=401, detail="stale webhook")
+
     result = await ingest_inbound(
         session,
         from_email=_str("from") or _str("from_email") or "",
         text=_str("text") or _str("body") or "",
         now=datetime.now(UTC),
         enrollment_id=_str("enrollment_id"),
+        provider_message_id=_str("message_id") or _str("id"),
     )
     if result is None:
         return InboundWebhookOut(status="ignored", intent=None)
@@ -534,17 +584,24 @@ async def unipile_webhook(
     request: Request, session: Annotated[AsyncSession, Depends(get_session)]
 ) -> InboundWebhookOut:
     """Public Unipile receiver (shared-secret): inbound messages → handle_reply, account events →
-    connection status. Verified by a token in the registered URL (?token=) or the X-Unipile-Token
-    header. The reply fires handle_reply synchronously; backgrounding it is a later refinement.
+    connection status. Prefers an HMAC signature (`X-Unipile-Signature`) over the raw body; falls
+    back to a shared token via the `X-Unipile-Token` header (or `?token=` for providers that can
+    only template the URL). Redelivered events are dropped by provider_message_id dedupe.
     """
     secret = get_settings().unipile_webhook_secret
     if not secret:
         raise HTTPException(status_code=503, detail="unipile webhook not configured")
-    token = request.query_params.get("token") or request.headers.get("X-Unipile-Token") or ""
-    if not hmac.compare_digest(token, secret):
-        raise HTTPException(status_code=401, detail="invalid token")
+    raw = await request.body()
+    signature = request.headers.get("X-Unipile-Signature")
+    if signature:
+        if not verify_hmac(raw, signature, secret=secret):
+            raise HTTPException(status_code=401, detail="invalid signature")
+    else:
+        token = request.headers.get("X-Unipile-Token") or request.query_params.get("token") or ""
+        if not hmac.compare_digest(token, secret):
+            raise HTTPException(status_code=401, detail="invalid token")
     try:
-        parsed: object = json.loads(await request.body() or b"{}")
+        parsed: object = json.loads(raw or b"{}")
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="invalid JSON") from None
     payload: JsonObject = parsed if isinstance(parsed, dict) else {}
@@ -577,8 +634,15 @@ async def unipile_webhook(
     sender_email = _payload_str(payload.get("sender"), "email") or _payload_str(
         payload, "from", "from_email"
     )
+    provider_message_id = _payload_str(payload.get("message"), "id", "message_id") or _payload_str(
+        payload, "message_id", "id"
+    )
+    # LinkedIn events carry a chat id and no email; email events carry a sender address.
+    channel = Channel.linkedin if chat_id and not sender_email else Channel.email
     if not text:
         return InboundWebhookOut(status="ignored", intent=None)
+    if await already_ingested(session, provider_message_id=provider_message_id):
+        return InboundWebhookOut(status="duplicate", intent=None)
     enrollment = await _resolve_enrollment(session, external_id=chat_id, sender_email=sender_email)
     if enrollment is None:
         return InboundWebhookOut(status="ignored", intent=None)
@@ -586,6 +650,12 @@ async def unipile_webhook(
     if ws is None:
         return InboundWebhookOut(status="ignored", intent=None)
     kind = await handle_reply(
-        session, enrollment=enrollment, text=text, now=now, organization_id=ws.organization_id
+        session,
+        enrollment=enrollment,
+        text=text,
+        now=now,
+        organization_id=ws.organization_id,
+        channel=channel,
+        provider_message_id=provider_message_id,
     )
     return InboundWebhookOut(status="ingested", intent=kind)

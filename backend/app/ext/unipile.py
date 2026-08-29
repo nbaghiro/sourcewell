@@ -259,13 +259,27 @@ class UnipileChannel:
         self._key = api_key
         self._dsn = dsn.rstrip("/")
 
-    def _headers(self) -> dict[str, str]:
-        return {"X-API-KEY": self._key, "accept": "application/json"}
+    def _headers(self, idempotency_key: str | None = None) -> dict[str, str]:
+        h = {"X-API-KEY": self._key, "accept": "application/json"}
+        if idempotency_key:
+            # Provider-side dedupe: a retried send with the same key must not double-deliver.
+            h["Idempotency-Key"] = idempotency_key
+        return h
 
     @staticmethod
     def _form(fields: dict[str, str]) -> dict[str, tuple[None, str]]:
         # multipart/form-data text parts: (filename=None, content) per field.
         return {k: (None, v) for k, v in fields.items()}
+
+    @staticmethod
+    def _permanent(resp: httpx.Response) -> bool:
+        """A response the caller should treat as a permanent client error (return None). Raises on a
+        transient error (429 / 5xx) so the caller retries instead of giving up (and suppressing)."""
+        if resp.status_code < 400:
+            return False
+        if resp.status_code == 429 or resp.status_code >= 500:
+            resp.raise_for_status()  # → httpx error → TransientSendError upstream
+        return True
 
     async def _provider_id(self, *, account_id: str, identifier: str) -> str | None:
         """Resolve a LinkedIn public identifier / URL → the provider internal id (attendees_ids)."""
@@ -276,10 +290,17 @@ class UnipileChannel:
                 headers=self._headers(),
                 params={"account_id": account_id},
             )
-        return opt_str(json_body(resp).get("provider_id")) if resp.status_code < 400 else None
+        return None if self._permanent(resp) else opt_str(json_body(resp).get("provider_id"))
 
     async def send(
-        self, *, account_id: str, to: str, subject: str | None, body: str, inmail: bool = False
+        self,
+        *,
+        account_id: str,
+        to: str,
+        subject: str | None,
+        body: str,
+        inmail: bool = False,
+        idempotency_key: str | None = None,
     ) -> str | None:
         """Send the first message; returns the provider thread/chat id (for reply mapping)."""
         if self.channel == "linkedin":
@@ -293,12 +314,15 @@ class UnipileChannel:
                 "linkedin[api]": "classic",
             }
             if inmail:
+                # Cold outreach to a non-connection goes as an InMail, not a regular chat.
                 fields["linkedin[inmail]"] = "true"
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
                 resp = await client.post(
-                    f"{self._dsn}/api/v1/chats", headers=self._headers(), files=self._form(fields)
+                    f"{self._dsn}/api/v1/chats",
+                    headers=self._headers(idempotency_key),
+                    files=self._form(fields),
                 )
-            if resp.status_code >= 400:
+            if self._permanent(resp):
                 return None
             data = json_body(resp)
             return opt_str(data.get("chat_id")) or opt_str(data.get("id"))
@@ -312,12 +336,14 @@ class UnipileChannel:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(
                 f"{self._dsn}/api/v1/emails",
-                headers=self._headers(),
+                headers=self._headers(idempotency_key),
                 files=self._form(email_fields),
             )
-        return opt_str(json_body(resp).get("id")) if resp.status_code < 400 else None
+        return None if self._permanent(resp) else opt_str(json_body(resp).get("id"))
 
-    async def reply(self, *, account_id: str, thread_id: str, body: str) -> None:
+    async def reply(
+        self, *, account_id: str, thread_id: str, body: str, idempotency_key: str | None = None
+    ) -> None:
         """Reply into an existing thread (LinkedIn chat / email)."""
         if self.channel == "linkedin":
             url = f"{self._dsn}/api/v1/chats/{thread_id}/messages"
@@ -326,7 +352,10 @@ class UnipileChannel:
             url = f"{self._dsn}/api/v1/emails"
             fields = {"account_id": account_id, "body": body, "reply_to": thread_id}
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            await client.post(url, headers=self._headers(), files=self._form(fields))
+            resp = await client.post(
+                url, headers=self._headers(idempotency_key), files=self._form(fields)
+            )
+            resp.raise_for_status()  # surface transient failures so the caller retries
 
 
 def unipile_channel(channel: str) -> UnipileChannel | None:

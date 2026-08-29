@@ -884,8 +884,9 @@ export interface paths {
         /**
          * Unipile Webhook
          * @description Public Unipile receiver (shared-secret): inbound messages → handle_reply, account events →
-         *     connection status. Verified by a token in the registered URL (?token=) or the X-Unipile-Token
-         *     header. The reply fires handle_reply synchronously; backgrounding it is a later refinement.
+         *     connection status. Prefers an HMAC signature (`X-Unipile-Signature`) over the raw body; falls
+         *     back to a shared token via the `X-Unipile-Token` header (or `?token=` for providers that can
+         *     only template the URL). Redelivered events are dropped by provider_message_id dedupe.
          */
         post: operations["unipile_webhook_webhooks_unipile_post"];
         delete?: never;
@@ -1159,6 +1160,28 @@ export interface paths {
          * @description Start a Stripe Checkout for a paid plan; returns the hosted URL to redirect to.
          */
         post: operations["checkout_billing_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/billing/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Plan
+         * @description Self-serve upgrade/downgrade for the non-Stripe path: set the org's plan directly so the
+         *     plan-change experience works end-to-end without a payment provider. When Stripe is configured,
+         *     paid changes go through Checkout / the Customer Portal instead (this returns 409).
+         */
+        post: operations["change_plan_billing_plan_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1870,6 +1893,8 @@ export interface components {
             scheduled_at: string | null;
             /** Created At */
             created_at: string | null;
+            /** Origin */
+            origin: string;
             /** Contact Name */
             contact_name: string;
             /** Contact Title */
@@ -2109,11 +2134,8 @@ export interface components {
             message: string;
             /** Campaign Id */
             campaign_id?: string | null;
-            /**
-             * History
-             * @default []
-             */
-            history: components["schemas"]["ChatTurn"][];
+            /** History */
+            history?: components["schemas"]["ChatTurn"][];
         };
         /** ChatOut */
         ChatOut: {
@@ -2212,6 +2234,10 @@ export interface components {
             company_size: string | null;
             /** Industry */
             industry: string | null;
+            /** Seniority */
+            seniority: string | null;
+            /** Function */
+            function: string | null;
             /** Enrollments */
             enrollments: components["schemas"]["ContactEnrollmentOut"][];
             /** Activity */
@@ -2298,6 +2324,10 @@ export interface components {
             company_size: string | null;
             /** Industry */
             industry: string | null;
+            /** Seniority */
+            seniority: string | null;
+            /** Function */
+            function: string | null;
         };
         /** ContactPatch */
         ContactPatch: {
@@ -2891,6 +2921,8 @@ export interface components {
             scheduled_at: string | null;
             /** Created At */
             created_at: string | null;
+            /** Origin */
+            origin: string;
         };
         /** NotificationItem */
         NotificationItem: {
@@ -3083,6 +3115,15 @@ export interface components {
             industry?: string | null;
             /** Phone */
             phone?: string | null;
+            /** Seniority */
+            seniority?: string | null;
+            /** Function */
+            function?: string | null;
+            /**
+             * Technologies
+             * @default []
+             */
+            technologies: string[];
             /**
              * Confidence
              * @default 0
@@ -3095,6 +3136,18 @@ export interface components {
             score: number;
             /** Rationale */
             rationale?: string | null;
+        };
+        /** PlanIn */
+        PlanIn: {
+            /** Plan */
+            plan: string;
+        };
+        /** PlanOut */
+        PlanOut: {
+            /** Plan */
+            plan: string;
+            /** Allowance */
+            allowance: number;
         };
         /** ProviderOut */
         ProviderOut: {
@@ -3230,6 +3283,11 @@ export interface components {
         SendRequest: {
             /** Text */
             text: string;
+            /**
+             * Origin
+             * @default human
+             */
+            origin: string;
         };
         /** SequenceStep */
         SequenceStep: {
@@ -5621,6 +5679,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UrlOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_plan_billing_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
                 };
             };
             /** @description Validation Error */

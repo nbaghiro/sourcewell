@@ -35,6 +35,7 @@ import {
   type DataProvider,
   useAccountUsage,
   useAddSuppression,
+  useChangePlan,
   useOpenBillingPortal,
   useStartCheckout,
   useConnect,
@@ -55,6 +56,14 @@ import {
   useWorkspaceSettings,
 } from "@/lib/api/queries";
 import { initials } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+/** The selectable plans (ordered low → high) with their monthly credit allowance. */
+const PLANS = [
+  { id: "free", name: "Free", credits: 200, blurb: "Kick the tires" },
+  { id: "pro", name: "Pro", credits: 5_000, blurb: "For active pipelines" },
+  { id: "premium", name: "Premium", credits: 25_000, blurb: "High-volume outreach" },
+] as const;
 
 const DATA_PROVIDER_META: Record<string, string> = {
   pdl: "Search + enrich · the platform engine",
@@ -115,7 +124,8 @@ function PlanUsageTab() {
   const { data } = useAccountUsage();
   const checkout = useStartCheckout();
   const portal = useOpenBillingPortal();
-  const busy = checkout.isPending || portal.isPending;
+  const changePlan = useChangePlan();
+  const busy = checkout.isPending || portal.isPending || changePlan.isPending;
   const onErr = () => toast.error("Billing action failed — try again.");
   if (!data)
     return (
@@ -127,6 +137,20 @@ function PlanUsageTab() {
     );
   const pct = Math.min(100, data.pct);
   const tone = usageTone(data.pct, data.over);
+  const currentRank = PLANS.findIndex((p) => p.id === data.plan);
+  const change = (id: string, name: string) => {
+    if (!data.billing_enabled) {
+      changePlan.mutate(id, { onSuccess: () => toast.success(`Switched to ${name}`), onError: onErr });
+      return;
+    }
+    // Stripe mode: a new paid subscription runs through Checkout; downgrades / paid-to-paid
+    // changes run through the Customer Portal (Stripe handles proration + cancellation).
+    if (id !== "free" && (data.plan === "free" || data.plan === "trial")) {
+      checkout.mutate(id, { onError: onErr });
+    } else {
+      portal.mutate(undefined, { onError: onErr });
+    }
+  };
   return (
     <Card>
       <CardHeader>
@@ -170,43 +194,54 @@ function PlanUsageTab() {
           <UsageStat label="Sourced" weight="×1" value={data.breakdown.sourced ?? 0} />
         </div>
 
-        {data.billing_enabled ? (
-          <div className="flex flex-wrap gap-2 border-t border-border/60 pt-4">
-            {data.plan !== "pro" && data.plan !== "premium" && (
-              <Button
-                size="sm"
-                onClick={() => checkout.mutate("pro", { onError: onErr })}
-                disabled={busy}
-              >
-                Upgrade to Pro
-              </Button>
-            )}
-            {data.plan !== "premium" && (
-              <Button
-                size="sm"
-                variant={data.plan === "pro" ? "default" : "outline"}
-                onClick={() => checkout.mutate("premium", { onError: onErr })}
-                disabled={busy}
-              >
-                Upgrade to Premium
-              </Button>
-            )}
-            {(data.plan === "pro" || data.plan === "premium") && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => portal.mutate(undefined, { onError: onErr })}
-                disabled={busy}
-              >
-                Manage billing
-              </Button>
-            )}
+        <div className="border-t border-border/60 pt-4">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Change plan
           </div>
-        ) : (
-          <p className="border-t border-border/60 pt-4 text-xs text-muted-foreground">
-            Billing isn't set up yet — connect Stripe to enable upgrades.
+          <div className="grid gap-3 sm:grid-cols-3">
+            {PLANS.map((p, i) => {
+              const current = p.id === data.plan;
+              const label = current ? "Current plan" : i > currentRank ? "Upgrade" : "Downgrade";
+              return (
+                <div
+                  key={p.id}
+                  className={cn(
+                    "flex flex-col rounded-lg border p-3.5",
+                    current ? "border-primary bg-primary/5" : "border-border",
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-display text-sm font-semibold text-foreground">
+                      {p.name}
+                    </span>
+                    {current && <Badge variant="accent" className="text-[0.65rem]">Current</Badge>}
+                  </div>
+                  <div className="mt-1">
+                    <span className="font-display text-xl font-semibold text-foreground">
+                      {p.credits.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-muted-foreground"> credits/mo</span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{p.blurb}</p>
+                  <Button
+                    size="sm"
+                    variant={current || i < currentRank ? "outline" : "default"}
+                    className="mt-3"
+                    disabled={current || busy}
+                    onClick={() => change(p.id, p.name)}
+                  >
+                    {label}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            {data.billing_enabled
+              ? "Secure checkout & billing handled by Stripe."
+              : "Demo mode — plan changes apply instantly, no payment required."}
           </p>
-        )}
+        </div>
       </CardContent>
     </Card>
   );

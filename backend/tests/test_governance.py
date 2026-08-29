@@ -23,6 +23,7 @@ from app.models import (
 )
 from app.services.outreach import enrollment as enr_service
 from app.services.outreach import governor
+from app.services.outreach.messaging import TransientSendError
 from app.services.sourcing import suppression
 
 
@@ -105,10 +106,10 @@ async def test_send_failure_retries_then_advances(
 ) -> None:
     _org, ws, contact, campaign = await _setup(db_session, "gov-retry")
 
-    async def boom(**_: object) -> None:
-        raise RuntimeError("smtp down")
+    async def boom(*_a: object, **_k: object) -> None:
+        raise TransientSendError("smtp down")
 
-    monkeypatch.setattr(enr_service, "send_via_channel", boom)
+    monkeypatch.setattr(enr_service, "deliver_outbound", boom)
     enr = _enrollment(ws, campaign, contact)
     db_session.add(enr)
     await db_session.flush()

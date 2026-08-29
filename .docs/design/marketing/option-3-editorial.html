@@ -576,7 +576,7 @@
     <div class="transcript reveal d1">
       <div class="ts-bar">
         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        <span class="title">Main agent · session</span>
+        <span class="title">Strategy agent · session</span>
         <span class="live"><i></i>WORKING</span>
       </div>
       <div class="ts-body">
@@ -644,9 +644,9 @@
         <div class="badge">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
         </div>
-        <h4>Main agent</h4>
-        <div class="role">Orchestrates · Answers · Supervises</div>
-        <p>Coordinates the others, keeps the loop moving, and answers you in chat — your single calm point of contact for the whole search.</p>
+        <h4>Strategy agent</h4>
+        <div class="role">Designs · Optimizes · Answers</div>
+        <p>Designs the campaign from your brief and continuously tunes it from the funnel, and it's the agent you talk to — your single calm point of contact for the whole search.</p>
       </div>
     </div>
   </div>
@@ -882,6 +882,18 @@
   window.addEventListener("load", function(){ movePill(document.querySelector(".dial-seg.active")); });
   window.addEventListener("resize", function(){ movePill(document.querySelector(".dial-seg.active")); });
   setTimeout(function(){ movePill(document.querySelector(".dial-seg.active")); }, 400);
+})();
+</script>
+<script>
+/* hero: keep at most two candidate cards, drifting in the top-right whitespace */
+(function(){
+  var f = document.querySelectorAll(".float");
+  for (var i = 0; i < f.length; i++){
+    if (i > 1){ if (f[i].parentNode) f[i].parentNode.removeChild(f[i]); continue; }
+    f[i].style.left = "auto";
+    f[i].style.right = "var(--gutter)";
+    f[i].style.top = (120 + i * 186) + "px";
+  }
 })();
 </script>
 </body>

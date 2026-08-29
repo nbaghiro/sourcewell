@@ -1,5 +1,7 @@
 """The demo builder seeds a rich three-vertical demo org used as a test fixture."""
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +12,10 @@ from tests.seed.builder import seed_demo
 
 @pytest.mark.db
 async def test_seed_demo_builds_a_realistic_spread(db_session: AsyncSession) -> None:
-    summary = await seed_demo(db_session, reset=False)
+    # Pin to the 1st of a month so the historical narrative activity stays out of the current
+    # usage period and only the seeded in-period batch counts toward credits.
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+    summary = await seed_demo(db_session, reset=False, now=now)
 
     assert summary["workspaces"] == 3
     states = summary["enrollments_by_state"]
@@ -45,3 +50,15 @@ async def test_seed_demo_builds_a_realistic_spread(db_session: AsyncSession) -> 
         )
     ).scalar_one_or_none()
     assert enriched is not None and enriched.tags
+
+    # Current-period activity drives the pooled credit meter; usage is derived correctly:
+    #   used = emails*1 + inmails*2 + sourced*1
+    credits = summary["credits"]
+    assert credits["emails"] == 600
+    assert credits["inmails"] == 100
+    assert credits["sourced"] == 200
+    assert credits["used"] == credits["emails"] + credits["inmails"] * 2 + credits["sourced"]
+    assert credits["used"] == 1000
+    # Demo starts on the free plan (200) → the seeded usage reads as over-limit until an upgrade.
+    assert credits["allowance"] == 200
+    assert credits["pct"] == 500

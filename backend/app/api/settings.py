@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin, require_workspace
+from app.core.config import get_settings
 from app.core.crypto import seal, unseal
 from app.core.types import JsonObject
 from app.ext.registry import PROVIDER_CATALOG, build_one
@@ -35,6 +36,7 @@ from app.models import (
 from app.services.billing import subscriptions
 from app.services.billing.credits import credit_status
 from app.services.insights import audit
+from app.services.workspace.connections import register_inbound_webhooks
 from app.services.workspace.settings import (
     ConnectionOut,
     DataProviderOut,
@@ -246,6 +248,8 @@ async def connect(
         )
         session.add(conn)
     await session.flush()
+    # Ensure Unipile forwards inbound replies (LinkedIn + email) for this org's seats.
+    await register_inbound_webhooks(get_settings())
     user = await session.get(User, ctx.user_id)
     return _dump_connection(conn, user.email if user else "")
 

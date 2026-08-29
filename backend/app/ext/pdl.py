@@ -112,6 +112,8 @@ class PDLProvider:
                 email = opt_str(emails[0].get("address"))
         likelihood = rec.get("likelihood")
         confidence = round(float(likelihood) * 10) if isinstance(likelihood, int | float) else 0
+        levels = rec.get("job_title_levels")
+        seniority = opt_str(levels[0]) if isinstance(levels, list) and levels else None
         return PersonHit(
             provider=self.key,
             external_id=opt_str(rec.get("id")),
@@ -126,6 +128,8 @@ class PDLProvider:
             company_size=opt_str(rec.get("job_company_size")),
             industry=opt_str(rec.get("job_company_industry")),
             phone=opt_str(rec.get("mobile_phone")),
+            seniority=seniority,
+            function=opt_str(rec.get("job_title_role")),
             confidence=confidence,
         )
 

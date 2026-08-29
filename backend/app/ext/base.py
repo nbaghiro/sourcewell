@@ -79,6 +79,11 @@ class PersonHit(BaseModel):
     company_size: str | None = None
     industry: str | None = None
     phone: str | None = None
+    # Sourced for the search DSL (seniority / department / company tech stack). Captured + persisted
+    # so fit scoring can use them later — providers return these but they were being dropped.
+    seniority: str | None = None
+    function: str | None = None
+    technologies: list[str] = []
     confidence: int = 0  # provider-reported match confidence, 0..100
     score: int = 0  # our evaluate() fit score, 0..100
     rationale: str | None = None

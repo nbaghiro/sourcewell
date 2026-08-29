@@ -47,6 +47,7 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
+from app.services.billing.credits import CreditStatus, credit_status, period_start
 from app.targeting import evaluate
 from tests.seed.data import (
     SequenceStep,
@@ -72,6 +73,7 @@ class DemoSummary(TypedDict):
     org_slug: str
     workspaces: int
     enrollments_by_state: dict[str, int]
+    credits: dict[str, int]
 
 
 # ---- campaign specs per vertical (name / status / autonomy / criteria / sequence) ----
@@ -195,7 +197,9 @@ async def _reset(session: AsyncSession) -> None:
 
 
 async def _org_and_admin(session: AsyncSession) -> tuple[Organization, User]:
-    org = Organization(name="Acme Talent", slug=DEMO_ORG_SLUG, plan="demo")
+    # Start on the free plan (200 credits) so the seeded usage sits over-limit out of the box and
+    # each simulated upgrade (see tests/seed/billing_sim.py) visibly lifts the allowance.
+    org = Organization(name="Acme Talent", slug=DEMO_ORG_SLUG, plan="free")
     session.add(org)
     await session.flush()
     s = get_settings()
@@ -363,6 +367,7 @@ async def _assign(
                     sent_at=m["sent_at"],
                     scheduled_at=m["scheduled_at"],
                     created_at=m["created_at"],
+                    origin=m["origin"],
                 )
             )
     await session.flush()
@@ -542,7 +547,9 @@ async def _generate_audit(
     await session.flush()
 
 
-async def _summary(session: AsyncSession, org: Organization, ws_ids: list[str]) -> DemoSummary:
+async def _summary(
+    session: AsyncSession, org: Organization, ws_ids: list[str], credits: CreditStatus
+) -> DemoSummary:
     rows = (
         await session.execute(
             select(Enrollment.state, func.count())
@@ -556,6 +563,14 @@ async def _summary(session: AsyncSession, org: Organization, ws_ids: list[str]) 
         "org_slug": org.slug,
         "workspaces": len(ws_ids),
         "enrollments_by_state": by_state,
+        "credits": {
+            "emails": credits.emails,
+            "inmails": credits.inmails,
+            "sourced": credits.sourced,
+            "used": credits.used,
+            "allowance": credits.allowance,
+            "pct": credits.pct,
+        },
     }
 
 
@@ -702,6 +717,92 @@ async def _seed_agent_runs(
     await session.flush()
 
 
+# --- current-period activity (drives the pooled credit meter) ----------------
+# Credit usage is *derived* from in-period source rows (Message.sent_at, Enrollment.created_at), so
+# the historically-dated narrative activity above reads as zero usage at the start of a period. Seed
+# a known batch of *this-period* activity so the meter reflects real usage and the derived calc is
+# verifiable end-to-end:  used = emails + inmails*2 + sourced = 600 + 100*2 + 200 = 1000 credits.
+_PERIOD_SOURCED = 200  # enrollments created this period
+_PERIOD_EMAILS = 600  # emails sent this period       (1 credit each)
+_PERIOD_INMAILS = 100  # LinkedIn InMails this period  (2 credits each)
+
+
+def _split(total: int, parts: int) -> list[int]:
+    """Split `total` into `parts` near-equal integers that sum back to `total`."""
+    base, extra = divmod(total, parts)
+    return [base + (1 if i < extra else 0) for i in range(parts)]
+
+
+def _in_period(now: datetime, i: int, n: int) -> datetime:
+    """A timestamp inside the current usage period, spread across [period_start, now]."""
+    start = period_start(now)
+    return min(now, start + (now - start) * (i / n if n else 0.0))
+
+
+async def _seed_current_period_activity(
+    session: AsyncSession,
+    *,
+    verticals: list[tuple[Workspace, str]],
+    now: datetime,
+    rng: random.Random,
+) -> None:
+    """Fresh in-period sourced enrollments + sent messages (real names, spread across the verticals)
+    so the account credit meter shows real usage and the derived calc is testable."""
+    enrollments: list[Enrollment] = []
+    for (ws, kind), share in zip(verticals, _split(_PERIOD_SOURCED, len(verticals)), strict=True):
+        campaign = (
+            await session.execute(
+                select(Campaign)
+                .where(Campaign.workspace_id == ws.id, Campaign.status == CampaignStatus.active)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if campaign is None:
+            continue
+        contacts = [Contact(**cd) for cd in make_contacts(ws.id, kind, share, rng=rng)]
+        session.add_all(contacts)
+        await session.flush()
+        for c in contacts:
+            score, rationale = evaluate(c, campaign.criteria or {})
+            enrollments.append(
+                Enrollment(
+                    workspace_id=ws.id,
+                    campaign_id=campaign.id,
+                    contact_id=c.id,
+                    state=EnrollmentState.active,
+                    score=score,
+                    score_rationale=rationale,
+                    current_step=1,
+                    created_at=_in_period(now, len(enrollments), _PERIOD_SOURCED),
+                )
+            )
+    session.add_all(enrollments)
+    await session.flush()
+    if not enrollments:
+        return
+
+    def _sent(channel: Channel, i: int, total: int) -> Message:
+        enr = enrollments[i % len(enrollments)]
+        ts = _in_period(now, i, total)
+        return Message(
+            workspace_id=enr.workspace_id,
+            enrollment_id=enr.id,
+            direction=MessageDirection.outbound,
+            channel=channel,
+            status=MessageStatus.sent,
+            subject="Quick question about a role" if channel == Channel.email else None,
+            body="Reaching out about a role that lines up with your background.",
+            sent_at=ts,
+            created_at=ts,
+        )
+
+    session.add_all(
+        [_sent(Channel.email, i, _PERIOD_EMAILS) for i in range(_PERIOD_EMAILS)]
+        + [_sent(Channel.linkedin, i, _PERIOD_INMAILS) for i in range(_PERIOD_INMAILS)]
+    )
+    await session.flush()
+
+
 async def seed_demo(
     session: AsyncSession, *, reset: bool = True, now: datetime | None = None, rng_seed: int = 7
 ) -> DemoSummary:
@@ -726,4 +827,11 @@ async def seed_demo(
 
     ws_ids = [ws_recruit.id, ws_sales.id, ws_partner.id]
     await _generate_audit(session, org.id, ws_ids, actor_ids, now)
-    return await _summary(session, org, ws_ids)
+    await _seed_current_period_activity(
+        session,
+        verticals=[(ws_recruit, "eng"), (ws_sales, "sales"), (ws_partner, "partner")],
+        now=now,
+        rng=rng,
+    )
+    status = await credit_status(session, organization_id=org.id, plan=org.plan, now=now)
+    return await _summary(session, org, ws_ids, status)

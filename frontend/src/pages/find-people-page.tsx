@@ -3,7 +3,6 @@ import {
   Check,
   ChevronDown,
   Loader2,
-  Mail,
   Search,
   Send,
   ShieldCheck,
@@ -20,6 +19,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { PageLayout } from "@/components/page-layout";
 import { PersonCell } from "@/components/person-cell";
+import { ReachabilityChip } from "@/components/reachability-chip";
 import { TargetingEditor } from "@/components/targeting-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -272,9 +272,9 @@ export function FindPeoplePage() {
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {dup && <Badge variant="secondary" className="text-[10px]">In workspace</Badge>}
           {blocked && <Badge variant="warning" className="gap-1 text-[10px]"><Ban className="size-3" /> Suppressed</Badge>}
-          <Mail className={cn("size-4", h.email ? "text-muted-foreground" : "text-muted-foreground/25")} />
+          <ReachabilityChip contact={h} />
           <Badge variant="outline" className="font-mono text-[10px] uppercase">{h.provider}</Badge>
-          <span className="w-7 text-right font-mono text-sm font-semibold tabular-nums text-primary">{h.score}</span>
+          <span className="w-7 text-right font-mono text-sm font-semibold tabular-nums text-primary" title="Fit score">{h.score}</span>
         </div>
       </button>
     );

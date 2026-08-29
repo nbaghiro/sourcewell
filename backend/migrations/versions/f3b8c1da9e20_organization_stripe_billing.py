@@ -20,7 +20,9 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("organization", sa.Column("stripe_customer_id", sa.String(length=64), nullable=True))
+    op.add_column(
+        "organization", sa.Column("stripe_customer_id", sa.String(length=64), nullable=True)
+    )
     op.add_column(
         "organization", sa.Column("stripe_subscription_id", sa.String(length=64), nullable=True)
     )

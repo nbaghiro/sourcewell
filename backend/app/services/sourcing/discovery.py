@@ -139,6 +139,15 @@ async def import_hits(
             continue
         seen.add(key)
         status = hit.email_status if hit.email_status in _VALID_EMAIL_STATUS else "unverified"
+        # Keep the sourced-but-not-yet-a-column signals (level / department / tech stack) so fit
+        # scoring can use them later without another provider round-trip.
+        attributes: dict[str, object] = {}
+        if hit.seniority:
+            attributes["seniority"] = hit.seniority
+        if hit.function:
+            attributes["function"] = hit.function
+        if hit.technologies:
+            attributes["technologies"] = list(hit.technologies)
         contact = Contact(
             workspace_id=workspace_id,
             full_name=hit.full_name,
@@ -153,6 +162,7 @@ async def import_hits(
             source=hit.provider,
             company_size=hit.company_size,
             industry=hit.industry,
+            attributes=attributes,
             tags=[],
             notes=None,
         )

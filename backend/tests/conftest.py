@@ -11,8 +11,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
-# Never hit a real SMTP server from the test suite.
+# Never hit a real SMTP server / LinkedIn provider from the test suite (both channels simulate,
+# so LinkedIn touchpoints no-op as "sent" like the demo — tests opt out per-case when they need
+# the real provider path).
 os.environ.setdefault("EMAIL_DRY_RUN", "1")
+os.environ.setdefault("LINKEDIN_DRY_RUN", "1")
 # Keep the suite deterministic + offline: blank out any real provider / auth keys from the
 # developer's .env (env vars take precedence over .env in pydantic-settings), so the LLM, the
 # people-data providers, and the auth providers are all "unconfigured" in tests regardless of host.

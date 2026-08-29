@@ -5,21 +5,26 @@ Claude-backed variant that falls back to the baseline when the model is unconfig
 """
 
 import asyncio
-import os
 import smtplib
 from datetime import datetime
 from email.message import EmailMessage
+from email.utils import make_msgid
 
-import httpx
 from fastapi import HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm
 from app.core.config import get_settings
+from app.core.db import new_id
 from app.core.types import JsonList, JsonObject
+from app.ext.unipile import unipile_channel
 from app.models import (
     Channel,
+    Connection,
+    ConnectionProvider,
+    ConnectionStatus,
     Contact,
     Enrollment,
     EnrollmentState,
@@ -37,6 +42,66 @@ from app.services.sourcing import suppression
 # key is configured, so multichannel sequences still complete in QA.
 
 
+class PermanentSendError(Exception):
+    """A hard send failure (bad recipient, dead/unreauthed seat) — suppress + fail, don't retry."""
+
+
+class TransientSendError(Exception):
+    """A temporary send failure (network / provider 5xx) — retry with backoff."""
+
+
+_EMAIL_PROVIDERS = (ConnectionProvider.gmail, ConnectionProvider.graph)
+
+
+async def resolve_channel_seat(
+    session: AsyncSession, *, organization_id: str, channel: Channel
+) -> Connection | None:
+    """The org's connected seat for a channel (linkedin | email), preferring a healthy (ok) one."""
+    providers = (
+        [ConnectionProvider.linkedin] if channel == Channel.linkedin else list(_EMAIL_PROVIDERS)
+    )
+    rows = list(
+        (
+            await session.execute(
+                select(Connection).where(
+                    Connection.organization_id == organization_id,
+                    Connection.provider.in_(providers),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return next((c for c in rows if c.status == ConnectionStatus.ok), rows[0] if rows else None)
+
+
+def linkedin_transport_ready(seat: Connection | None) -> bool:
+    """True when there's a real LinkedIn transport to send on: Unipile configured and a usable
+    account id (the resolved seat, or the global fallback account). False → no LinkedIn account."""
+    account_id = (seat.external_id if seat else None) or get_settings().unipile_account_id
+    return unipile_channel("linkedin") is not None and bool(account_id)
+
+
+async def _last_thread_ref(session: AsyncSession, *, enrollment_id: str) -> str | None:
+    """The newest outbound provider thread/message id in this thread (for reply threading)."""
+    return (
+        (
+            await session.execute(
+                select(Message.external_id)
+                .where(
+                    Message.enrollment_id == enrollment_id,
+                    Message.direction == MessageDirection.outbound,
+                    Message.external_id.is_not(None),
+                )
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+
+
 def _send_sync(
     host: str,
     port: int,
@@ -44,12 +109,18 @@ def _send_sync(
     to: str,
     subject: str,
     body: str,
+    message_id: str,
+    in_reply_to: str | None,
     unsubscribe_url: str | None,
 ) -> None:
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = to
     msg["Subject"] = subject
+    msg["Message-ID"] = message_id
+    if in_reply_to:  # RFC-5322 threading so the reply lands in the same conversation.
+        msg["In-Reply-To"] = in_reply_to
+        msg["References"] = in_reply_to
     if unsubscribe_url:
         msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
@@ -58,55 +129,116 @@ def _send_sync(
         smtp.send_message(msg)
 
 
-async def send_email(
-    *, sender: str, to: str, subject: str, body: str, unsubscribe_url: str | None = None
+async def deliver_outbound(
+    session: AsyncSession,
+    *,
+    message: Message,
+    contact: Contact,
+    seat: Connection | None,
+    sender: str,
+    unsubscribe_url: str | None = None,
+    reply: bool = False,
 ) -> None:
-    if os.getenv("EMAIL_DRY_RUN") == "1":
-        return
+    """Transmit `message` over its channel from the resolved seat, capturing the provider thread id
+    on `message.external_id` (and the seat on `message.account_id`). Uses the real Unipile channel
+    when configured; falls back to SMTP for email in dev. Raises PermanentSendError (hard, no retry)
+    or TransientSendError (retryable). A no-op only when a channel has no configured transport."""
+    channel = message.channel
+    target = contact.linkedin_url if channel == Channel.linkedin else contact.email
+    if not target:
+        raise PermanentSendError(f"contact has no {channel.value} address")
+
     s = get_settings()
-    await asyncio.to_thread(
-        _send_sync, s.smtp_host, s.smtp_port, sender, to, subject, body, unsubscribe_url
+    account_id = (seat.external_id if seat else None) or s.unipile_account_id or None
+    message.account_id = account_id
+    if not message.idempotency_key:
+        message.idempotency_key = new_id()
+    provider = unipile_channel(channel.value)
+    thread_ref = (
+        await _last_thread_ref(session, enrollment_id=message.enrollment_id) if reply else None
     )
 
-
-async def send_linkedin(*, to_url: str, text: str) -> None:
-    """Send a LinkedIn message via Unipile. No-op (dry-run) when Unipile isn't configured."""
-    s = get_settings()
-    if (
-        not (s.unipile_api_key and s.unipile_dsn and s.unipile_account_id)
-        or os.getenv("LINKEDIN_DRY_RUN") == "1"
-    ):
-        return
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        resp = await client.post(
-            f"{s.unipile_dsn.rstrip('/')}/api/v1/chats",
-            headers={"X-API-KEY": s.unipile_api_key, "accept": "application/json"},
-            json={"account_id": s.unipile_account_id, "text": text, "attendees_ids": [to_url]},
-        )
-        resp.raise_for_status()
-
-
-async def send_via_channel(
-    *,
-    channel: Channel,
-    sender: str,
-    email: str | None,
-    linkedin_url: str | None,
-    subject: str,
-    body: str,
-    unsubscribe_url: str | None = None,
-) -> None:
-    """Route a send to the right channel. Raises on failure (caller handles retry)."""
     if channel == Channel.linkedin:
-        await send_linkedin(to_url=linkedin_url or "", text=body)
-    else:
-        await send_email(
-            sender=sender,
-            to=email or "",
-            subject=subject,
-            body=body,
-            unsubscribe_url=unsubscribe_url,
-        )
+        if s.linkedin_dry_run:
+            return  # dev/demo: LinkedIn is simulated offline — nothing to send
+        if provider is None or not account_id:
+            # No connected LinkedIn account: a real failure, not a silent "sent". The touchpoint
+            # path routes around this via email fallback; reply paths surface it to the caller.
+            raise PermanentSendError("no LinkedIn account connected")
+        if seat is not None and seat.status != ConnectionStatus.ok:
+            raise PermanentSendError("LinkedIn seat needs reauthentication")
+        try:
+            if reply and thread_ref:
+                await provider.reply(
+                    account_id=account_id,
+                    thread_id=thread_ref,
+                    body=message.body,
+                    idempotency_key=message.idempotency_key,
+                )
+                message.external_id = thread_ref
+            else:
+                chat_id = await provider.send(
+                    account_id=account_id,
+                    to=target,
+                    subject=message.subject,
+                    body=message.body,
+                    inmail=True,  # cold recruiting reach → InMail, not a connection-gated chat
+                    idempotency_key=message.idempotency_key,
+                )
+                if chat_id is None:
+                    raise PermanentSendError("LinkedIn recipient unreachable")
+                message.external_id = chat_id
+        except PermanentSendError:
+            raise
+        except Exception as exc:
+            raise TransientSendError(str(exc)) from exc
+        return
+
+    # Email: real ESP via Unipile when configured, else SMTP (dev/Mailpit) with threading headers.
+    if provider is not None and account_id and not s.email_dry_run:
+        if seat is not None and seat.status != ConnectionStatus.ok:
+            raise PermanentSendError("email seat needs reauthentication")
+        try:
+            if reply and thread_ref:
+                await provider.reply(
+                    account_id=account_id,
+                    thread_id=thread_ref,
+                    body=message.body,
+                    idempotency_key=message.idempotency_key,
+                )
+                message.external_id = thread_ref
+            else:
+                mid = await provider.send(
+                    account_id=account_id,
+                    to=target,
+                    subject=message.subject,
+                    body=message.body,
+                    idempotency_key=message.idempotency_key,
+                )
+                if mid:
+                    message.external_id = mid
+        except Exception as exc:
+            raise TransientSendError(str(exc)) from exc
+        return
+
+    message_id = make_msgid()
+    if not s.email_dry_run:
+        try:
+            await asyncio.to_thread(
+                _send_sync,
+                s.smtp_host,
+                s.smtp_port,
+                sender,
+                target,
+                message.subject or "",
+                message.body,
+                message_id,
+                thread_ref,
+                unsubscribe_url,
+            )
+        except Exception as exc:
+            raise TransientSendError(str(exc)) from exc
+    message.external_id = message_id
 
 
 # --- Writer + Responder agents -----------------------------------------------
@@ -361,6 +493,9 @@ async def approve_message(
     if message.status != MessageStatus.draft:
         raise HTTPException(status_code=409, detail="message is not a draft")
     message.status = MessageStatus.approved
+    # Stamp the idempotency key now (persisted before the send cycle) so a retried send de-dupes.
+    if not message.idempotency_key:
+        message.idempotency_key = new_id()
     enrollment = await session.get(Enrollment, message.enrollment_id)
     if enrollment is not None and enrollment.state == EnrollmentState.awaiting_approval:
         enrollment.state = EnrollmentState.scheduled
@@ -369,20 +504,53 @@ async def approve_message(
     return message
 
 
+async def already_ingested(session: AsyncSession, *, provider_message_id: str | None) -> bool:
+    """True if a webhook with this provider message id was already recorded (redelivery dedupe)."""
+    if not provider_message_id:
+        return False
+    seen = (
+        (
+            await session.execute(
+                select(Message.id)
+                .where(Message.provider_message_id == provider_message_id)
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    return seen is not None
+
+
 async def _apply_inbound(
-    session: AsyncSession, *, enrollment: Enrollment, text: str, now: datetime
+    session: AsyncSession,
+    *,
+    enrollment: Enrollment,
+    text: str,
+    now: datetime,
+    channel: Channel = Channel.email,
+    provider_message_id: str | None = None,
 ) -> tuple[Message, str]:
     """Record an inbound reply on an enrollment, classify intent, and transition state."""
     message = Message(
         workspace_id=enrollment.workspace_id,
         enrollment_id=enrollment.id,
         direction=MessageDirection.inbound,
-        channel=Channel.email,
+        channel=channel,
         status=MessageStatus.received,
         body=text,
         created_at=now,
+        provider_message_id=provider_message_id,
     )
     session.add(message)
+    try:
+        # Insert in a savepoint so a concurrent redelivery (same provider_message_id) hits the
+        # unique index here and is caught, rather than poisoning the whole transaction.
+        async with session.begin_nested():
+            await session.flush()
+    except IntegrityError:
+        session.expunge(message)
+        return message, "duplicate"
 
     intent = await classify_reply_intent(text)
     if intent == "interested":
@@ -410,13 +578,27 @@ async def _apply_inbound(
 
 
 async def ingest_reply(
-    session: AsyncSession, *, workspace_id: str, enrollment_id: str, text: str, now: datetime
+    session: AsyncSession,
+    *,
+    workspace_id: str,
+    enrollment_id: str,
+    text: str,
+    now: datetime,
+    channel: Channel = Channel.email,
+    provider_message_id: str | None = None,
 ) -> tuple[Message, str]:
     """Workspace-scoped reply ingestion (the in-app / authed webhook)."""
     enrollment = await session.get(Enrollment, enrollment_id)
     if enrollment is None or enrollment.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="enrollment not found")
-    return await _apply_inbound(session, enrollment=enrollment, text=text, now=now)
+    return await _apply_inbound(
+        session,
+        enrollment=enrollment,
+        text=text,
+        now=now,
+        channel=channel,
+        provider_message_id=provider_message_id,
+    )
 
 
 async def ingest_inbound(
@@ -426,8 +608,12 @@ async def ingest_inbound(
     text: str,
     now: datetime,
     enrollment_id: str | None = None,
+    channel: Channel = Channel.email,
+    provider_message_id: str | None = None,
 ) -> tuple[Message, str] | None:
     """System inbound (signed provider webhook): thread by enrollment id or sender email."""
+    if await already_ingested(session, provider_message_id=provider_message_id):
+        return None
     enrollment: Enrollment | None
     if enrollment_id:
         enrollment = await session.get(Enrollment, enrollment_id)
@@ -446,7 +632,14 @@ async def ingest_inbound(
         )
     if enrollment is None:
         return None
-    return await _apply_inbound(session, enrollment=enrollment, text=text, now=now)
+    return await _apply_inbound(
+        session,
+        enrollment=enrollment,
+        text=text,
+        now=now,
+        channel=channel,
+        provider_message_id=provider_message_id,
+    )
 
 
 async def list_thread(

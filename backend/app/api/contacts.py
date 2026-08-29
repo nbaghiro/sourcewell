@@ -68,6 +68,8 @@ class ContactOut(BaseModel):
     tags: list[str]
     company_size: str | None
     industry: str | None
+    seniority: str | None  # from attributes — sourced level, used for fit scoring
+    function: str | None  # from attributes — sourced department/function
 
 
 class ImportOut(BaseModel):

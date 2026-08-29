@@ -8,7 +8,7 @@ classify+route path when no LLM is available.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +30,13 @@ from app.models import (
     SuppressionReason,
     Workspace,
 )
-from app.services.outreach.messaging import ingest_reply, send_via_channel
+from app.services.outreach.messaging import (
+    PermanentSendError,
+    TransientSendError,
+    deliver_outbound,
+    ingest_reply,
+    resolve_channel_seat,
+)
 from app.services.sourcing import suppression
 
 _DEFAULT_SENDER = "recruiter@sourcewell.dev"
@@ -70,26 +76,33 @@ def conversation_tools(ctx: ConversationContext) -> list[Tool]:
             return {"error": "empty reply"}
         channel = Channel.email if ctx.contact.email else Channel.linkedin
         auto = ctx.campaign.autonomy_level == AutonomyLevel.full
-        ctx.session.add(
-            Message(
-                workspace_id=ctx.enrollment.workspace_id,
-                enrollment_id=ctx.enrollment.id,
-                direction=MessageDirection.outbound,
-                channel=channel,
-                status=MessageStatus.sent if auto else MessageStatus.draft,
-                subject="Re:",
-                body=text,
-            )
+        message = Message(
+            workspace_id=ctx.enrollment.workspace_id,
+            enrollment_id=ctx.enrollment.id,
+            direction=MessageDirection.outbound,
+            channel=channel,
+            status=MessageStatus.sent if auto else MessageStatus.draft,
+            subject="Re:",
+            body=text,
+            origin="ai",
         )
+        ctx.session.add(message)
         if auto:
-            await send_via_channel(
-                channel=channel,
-                sender=ctx.campaign.from_email or _DEFAULT_SENDER,
-                email=ctx.contact.email,
-                linkedin_url=ctx.contact.linkedin_url,
-                subject="Re:",
-                body=text,
+            seat = await resolve_channel_seat(
+                ctx.session, organization_id=ctx.organization_id, channel=channel
             )
+            try:
+                await deliver_outbound(
+                    ctx.session,
+                    message=message,
+                    contact=ctx.contact,
+                    seat=seat,
+                    sender=ctx.campaign.from_email or _DEFAULT_SENDER,
+                    reply=True,
+                )
+                message.sent_at = datetime.now(UTC)
+            except (PermanentSendError, TransientSendError):
+                message.status = MessageStatus.failed
             ctx.enrollment.state = EnrollmentState.awaiting_reply
             ctx.enrollment.reply_pending = False
         else:
@@ -158,6 +171,8 @@ async def run_conversation(
     inbound_text: str,
     organization_id: str,
     now: datetime,
+    channel: Channel = Channel.email,
+    provider_message_id: str | None = None,
 ) -> AgentResult:
     """Record an inbound reply and run one bounded Outreach conversation."""
     session.add(
@@ -165,10 +180,11 @@ async def run_conversation(
             workspace_id=enrollment.workspace_id,
             enrollment_id=enrollment.id,
             direction=MessageDirection.inbound,
-            channel=Channel.email,
+            channel=channel,
             status=MessageStatus.received,
             body=inbound_text,
             created_at=now,
+            provider_message_id=provider_message_id,
         )
     )
     await session.flush()
@@ -212,6 +228,8 @@ async def handle_reply(
     now: datetime,
     organization_id: str,
     llm: AgentLLM | None = None,
+    channel: Channel = Channel.email,
+    provider_message_id: str | None = None,
 ) -> str:
     """Route an inbound reply: the Outreach agent when an LLM is available, else deterministic."""
     client = llm if llm is not None else default_llm()
@@ -222,6 +240,8 @@ async def handle_reply(
             enrollment_id=enrollment.id,
             text=text,
             now=now,
+            channel=channel,
+            provider_message_id=provider_message_id,
         )
         return "deterministic"
     await run_conversation(
@@ -231,5 +251,7 @@ async def handle_reply(
         inbound_text=text,
         organization_id=organization_id,
         now=now,
+        channel=channel,
+        provider_message_id=provider_message_id,
     )
     return "agent"
