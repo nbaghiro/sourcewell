@@ -109,7 +109,10 @@ def sourcing_tools(ctx: SourcingContext) -> list[Tool]:
 
     async def check_suppressed(data: JsonObject) -> JsonObject:
         supp = await is_suppressed(
-            ctx.session, organization_id=ctx.organization_id, email=_str(data, "email")
+            ctx.session,
+            organization_id=ctx.organization_id,
+            email=_str(data, "email"),
+            workspace_id=ctx.workspace_id,
         )
         return {"suppressed": supp}
 
@@ -122,7 +125,10 @@ def sourcing_tools(ctx: SourcingContext) -> list[Tool]:
         kept: list[PersonHit] = []
         for h in chosen:
             if h.email and await is_suppressed(
-                ctx.session, organization_id=ctx.organization_id, email=h.email
+                ctx.session,
+                organization_id=ctx.organization_id,
+                email=h.email,
+                workspace_id=ctx.workspace_id,
             ):
                 continue
             kept.append(h)
@@ -242,7 +248,12 @@ async def deterministic_source(
     hits = await search_people(providers, targeting, limit=25, use_cache=False)
     kept: list[PersonHit] = []
     for h in hits:
-        if h.email and await is_suppressed(session, organization_id=organization_id, email=h.email):
+        if h.email and await is_suppressed(
+            session,
+            organization_id=organization_id,
+            email=h.email,
+            workspace_id=campaign.workspace_id,
+        ):
             continue
         kept.append(h)
     await import_hits(session, workspace_id=campaign.workspace_id, hits=kept)

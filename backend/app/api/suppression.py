@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.context import ContextDep, SessionDep
-from app.api.guards import require_org_admin
+from app.api.guards import require_org_admin, require_workspace
 from app.core.db import get_session
 from app.models import Suppression, SuppressionReason
 from app.services.insights import audit
@@ -28,8 +28,9 @@ router = APIRouter(tags=["suppression"])
 class SuppressionOut(BaseModel):
     id: str
     email: str
-    reason: str
+    reason: SuppressionReason
     note: str | None
+    workspace_id: str | None  # null = org-wide
     created_at: str | None
 
 
@@ -37,6 +38,8 @@ class SuppressionIn(BaseModel):
     email: str
     reason: SuppressionReason = SuppressionReason.manual
     note: str | None = None
+    # Scope the entry to the request's workspace instead of the whole organization.
+    workspace_only: bool = False
 
 
 class RemovedOut(BaseModel):
@@ -48,8 +51,9 @@ def _dump(s: Suppression) -> SuppressionOut:
     return SuppressionOut(
         id=s.id,
         email=s.email,
-        reason=s.reason.value,
+        reason=s.reason,
         note=s.note,
+        workspace_id=s.workspace_id,
         created_at=s.created_at.isoformat() if s.created_at else None,
     )
 
@@ -68,7 +72,12 @@ async def add_suppression(
 ) -> SuppressionOut:
     require_org_admin(ctx)
     row = await suppress(
-        session, organization_id=ctx.org_id, email=body.email, reason=body.reason, note=body.note
+        session,
+        organization_id=ctx.org_id,
+        email=body.email,
+        reason=body.reason,
+        note=body.note,
+        workspace_id=require_workspace(ctx) if body.workspace_only else None,
     )
     if row is None:
         raise HTTPException(status_code=400, detail="a valid email is required")

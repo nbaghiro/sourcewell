@@ -1,6 +1,6 @@
 """Suppression list (org do-not-contact): logic and signed unsubscribe tokens."""
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -12,17 +12,31 @@ def normalize(email: str | None) -> str:
     return (email or "").strip().lower()
 
 
-async def is_suppressed(session: AsyncSession, *, organization_id: str, email: str | None) -> bool:
+async def is_suppressed(
+    session: AsyncSession, *, organization_id: str, email: str | None, workspace_id: str | None
+) -> bool:
+    """True when an org-wide entry, or one scoped to `workspace_id`, covers this address."""
     e = normalize(email)
     if not e:
         return False
     row = (
-        await session.execute(
-            select(Suppression).where(
-                Suppression.organization_id == organization_id, Suppression.email == e
+        (
+            await session.execute(
+                select(Suppression.id)
+                .where(
+                    Suppression.organization_id == organization_id,
+                    Suppression.email == e,
+                    or_(
+                        Suppression.workspace_id.is_(None),
+                        Suppression.workspace_id == workspace_id,
+                    ),
+                )
+                .limit(1)
             )
         )
-    ).scalar_one_or_none()
+        .scalars()
+        .first()
+    )
     return row is not None
 
 
@@ -34,22 +48,41 @@ async def suppress(
     reason: SuppressionReason = SuppressionReason.manual,
     contact_id: str | None = None,
     note: str | None = None,
+    workspace_id: str | None = None,
 ) -> Suppression | None:
-    """Add an email to the org's do-not-contact list (idempotent)."""
+    """Add an email to the do-not-contact list (idempotent).
+
+    Org-wide unless a workspace is named.
+    """
     e = normalize(email)
     if not e:
         return None
     existing = (
-        await session.execute(
-            select(Suppression).where(
-                Suppression.organization_id == organization_id, Suppression.email == e
+        (
+            await session.execute(
+                select(Suppression)
+                .where(
+                    Suppression.organization_id == organization_id,
+                    Suppression.email == e,
+                    Suppression.workspace_id.is_(None)
+                    if workspace_id is None
+                    else Suppression.workspace_id == workspace_id,
+                )
+                .limit(1)
             )
         )
-    ).scalar_one_or_none()
+        .scalars()
+        .first()
+    )
     if existing is not None:
         return existing
     row = Suppression(
-        organization_id=organization_id, email=e, reason=reason, contact_id=contact_id, note=note
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        email=e,
+        reason=reason,
+        contact_id=contact_id,
+        note=note,
     )
     session.add(row)
     await session.flush()
@@ -66,19 +99,23 @@ async def list_for_org(session: AsyncSession, organization_id: str) -> list[Supp
 
 
 async def remove(session: AsyncSession, *, organization_id: str, email: str) -> bool:
-    row = (
-        await session.execute(
-            select(Suppression).where(
-                Suppression.organization_id == organization_id,
-                Suppression.email == normalize(email),
+    """Un-suppress an address everywhere in the org (org-wide row and any workspace rows)."""
+    rows = list(
+        (
+            await session.execute(
+                select(Suppression).where(
+                    Suppression.organization_id == organization_id,
+                    Suppression.email == normalize(email),
+                )
             )
         )
-    ).scalar_one_or_none()
-    if row is None:
-        return False
-    await session.delete(row)
+        .scalars()
+        .all()
+    )
+    for row in rows:
+        await session.delete(row)
     await session.flush()
-    return True
+    return bool(rows)
 
 
 def unsubscribe_token(organization_id: str, email: str) -> str:

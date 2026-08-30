@@ -525,10 +525,15 @@ class Message(IdMixin, TimestampMixin, Base):
 
 
 class Suppression(IdMixin, TimestampMixin, Base):
+    """A do-not-contact entry. `workspace_id` NULL means org-wide (the default)."""
+
     __tablename__ = "suppression"
 
     organization_id: Mapped[str] = mapped_column(
         ForeignKey("organization.id", ondelete="CASCADE"), index=True
+    )
+    workspace_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=True, index=True
     )
     email: Mapped[str] = mapped_column(String(320), index=True)
     reason: Mapped[SuppressionReason] = mapped_column(
@@ -537,8 +542,23 @@ class Suppression(IdMixin, TimestampMixin, Base):
     contact_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Two partial indexes rather than one constraint: a plain UNIQUE over a nullable column would
+    # let duplicate org-wide rows through, since NULLs never collide in Postgres.
     __table_args__ = (
-        UniqueConstraint("organization_id", "email", name="uq_suppression_org_email"),
+        Index(
+            "uq_suppression_org_email",
+            "organization_id",
+            "email",
+            unique=True,
+            postgresql_where=text("workspace_id IS NULL"),
+        ),
+        Index(
+            "uq_suppression_workspace_email",
+            "workspace_id",
+            "email",
+            unique=True,
+            postgresql_where=text("workspace_id IS NOT NULL"),
+        ),
     )
 
 

@@ -3378,6 +3378,11 @@ export interface components {
             note?: string | null;
             /** @default manual */
             reason: components["schemas"]["SuppressionReason"];
+            /**
+             * Workspace Only
+             * @default false
+             */
+            workspace_only: boolean;
         };
         /** SuppressionOut */
         SuppressionOut: {
@@ -3389,8 +3394,9 @@ export interface components {
             id: string;
             /** Note */
             note: string | null;
-            /** Reason */
-            reason: string;
+            reason: components["schemas"]["SuppressionReason"];
+            /** Workspace Id */
+            workspace_id: string | null;
         };
         /**
          * SuppressionReason

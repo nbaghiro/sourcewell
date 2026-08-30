@@ -220,7 +220,10 @@ async def _send_touchpoint(
     workspace = await session.get(Workspace, enrollment.workspace_id)
     org_id = workspace.organization_id if workspace else None
     if org_id and await suppression.is_suppressed(
-        session, organization_id=org_id, email=contact.email
+        session,
+        organization_id=org_id,
+        email=contact.email,
+        workspace_id=enrollment.workspace_id,
     ):
         message.status = MessageStatus.failed
         enrollment.state = EnrollmentState.opted_out

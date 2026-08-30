@@ -105,7 +105,12 @@ async def test_conversation_opts_out_and_suppresses(db_session: AsyncSession) ->
         now=datetime.now(UTC),
     )
     assert enr.state == EnrollmentState.opted_out
-    assert await is_suppressed(db_session, organization_id=org.id, email=contact.email)
+    assert await is_suppressed(
+        db_session,
+        organization_id=org.id,
+        email=contact.email,
+        workspace_id=enr.workspace_id,
+    )
 
 
 @pytest.mark.db

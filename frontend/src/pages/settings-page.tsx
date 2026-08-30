@@ -476,12 +476,13 @@ function SuppressionTab() {
   const add = useAddSuppression();
   const remove = useRemoveSuppression();
   const [email, setEmail] = React.useState("");
+  const [workspaceOnly, setWorkspaceOnly] = React.useState(false);
 
   function submit() {
     const value = email.trim();
     if (!value) return;
     add.mutate(
-      { email: value, reason: "manual" },
+      { email: value, reason: "manual", workspace_only: workspaceOnly },
       {
         onSuccess: () => {
           toast.success(`Suppressed ${value}`);
@@ -511,6 +512,12 @@ function SuppressionTab() {
             <Plus /> Add
           </Button>
         </div>
+        <div className="flex items-center gap-2">
+          <Switch id="dnc-scope" checked={workspaceOnly} onCheckedChange={setWorkspaceOnly} />
+          <Label htmlFor="dnc-scope" className="text-xs text-muted-foreground">
+            This workspace only (otherwise the whole organization)
+          </Label>
+        </div>
         {!list ? (
           <Skeleton className="h-24" />
         ) : list.length === 0 ? (
@@ -528,6 +535,7 @@ function SuppressionTab() {
                   <div className="truncate text-sm font-medium text-foreground">{s.email}</div>
                   <div className="text-xs text-muted-foreground">
                     {s.reason}
+                    {s.workspace_id ? " · this workspace" : ""}
                     {s.note ? ` · ${s.note}` : ""}
                   </div>
                 </div>
