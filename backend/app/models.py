@@ -28,6 +28,11 @@ from app.core.types import JsonList, JsonObject
 # --- Enums (StrEnums used as column types) -----------------------------------
 
 
+class PartnerStatus(enum.StrEnum):
+    active = "active"
+    suspended = "suspended"
+
+
 class WorkspaceKind(enum.StrEnum):
     client = "client"
     department = "department"
@@ -167,11 +172,31 @@ class SuppressionReason(enum.StrEnum):
 # --- Tenancy: organization -> workspace, user, membership, connection --------
 
 
+class Partner(IdMixin, TimestampMixin, Base):
+    """A reseller/white-label operator. A dimension on an organization, never its parent: partners
+    contribute settings and theming to the policy chain but own no tenant data.
+    """
+
+    __tablename__ = "partner"
+
+    name: Mapped[str] = mapped_column(String(200))
+    slug: Mapped[str] = mapped_column(String(100), unique=True)
+    settings: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+    theme: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
+    status: Mapped[PartnerStatus] = mapped_column(
+        sa_enum(PartnerStatus), default=PartnerStatus.active
+    )
+
+
 class Organization(IdMixin, TimestampMixin, Base):
     __tablename__ = "organization"
 
     name: Mapped[str] = mapped_column(String(200))
     slug: Mapped[str] = mapped_column(String(100), unique=True)
+    # Resale dimension: whose book of business this org sits in, if anyone's.
+    partner_id: Mapped[str | None] = mapped_column(
+        ForeignKey("partner.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     plan: Mapped[str] = mapped_column(String(50), default="free")
     data_region: Mapped[str] = mapped_column(String(20), default="us")
     # Stripe billing (the webhook is the source of truth; blank until a subscription is created).
