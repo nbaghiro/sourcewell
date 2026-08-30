@@ -233,7 +233,7 @@ async def _org_and_admin(session: AsyncSession) -> tuple[Organization, User]:
 async def _seed_team(
     session: AsyncSession, *, org: Organization, admin: User
 ) -> tuple[list[str], dict[str, User]]:
-    """Teammates (Members tab) + channel connections (Connections tab). Returns audit actor ids."""
+    """Teammates + their channel connections. Returns the audit actor ids and the team by name."""
     team = [
         ("Dana Okafor", "dana@acme.demo", MembershipRole.member),
         ("Riley Walsh", "riley@acme.demo", MembershipRole.member),
