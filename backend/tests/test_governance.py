@@ -165,3 +165,48 @@ async def test_governor_enforces_daily_cap(db_session: AsyncSession) -> None:
         db_session, campaign=campaign, channel=Channel.email, now=now
     )
     assert not allowed2 and retry_at is not None
+
+
+@pytest.mark.db
+async def test_org_wide_suppression_covers_every_workspace(db_session: AsyncSession) -> None:
+    org, ws, contact, _campaign = await _setup(db_session, "supp-org")
+    other = Workspace(organization_id=org.id, name="Other", kind=WorkspaceKind.team)
+    db_session.add(other)
+    await db_session.flush()
+    await suppression.suppress(db_session, organization_id=org.id, email=contact.email)
+
+    for workspace_id in (ws.id, other.id):
+        assert await suppression.is_suppressed(
+            db_session, organization_id=org.id, email=contact.email, workspace_id=workspace_id
+        )
+
+
+@pytest.mark.db
+async def test_workspace_suppression_stays_in_its_workspace(db_session: AsyncSession) -> None:
+    org, ws, contact, _campaign = await _setup(db_session, "supp-ws")
+    other = Workspace(organization_id=org.id, name="Other", kind=WorkspaceKind.team)
+    db_session.add(other)
+    await db_session.flush()
+    await suppression.suppress(
+        db_session, organization_id=org.id, email=contact.email, workspace_id=ws.id
+    )
+
+    assert await suppression.is_suppressed(
+        db_session, organization_id=org.id, email=contact.email, workspace_id=ws.id
+    )
+    assert not await suppression.is_suppressed(
+        db_session, organization_id=org.id, email=contact.email, workspace_id=other.id
+    )
+    # An org-wide entry for the same address coexists with the workspace one.
+    org_wide = await suppression.suppress(db_session, organization_id=org.id, email=contact.email)
+    assert org_wide is not None and org_wide.workspace_id is None
+    assert await suppression.is_suppressed(
+        db_session, organization_id=org.id, email=contact.email, workspace_id=other.id
+    )
+
+    # Removing un-suppresses the address everywhere in the org.
+    assert contact.email is not None
+    assert await suppression.remove(db_session, organization_id=org.id, email=contact.email)
+    assert not await suppression.is_suppressed(
+        db_session, organization_id=org.id, email=contact.email, workspace_id=ws.id
+    )

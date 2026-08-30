@@ -15,10 +15,12 @@ build backlog. Anchors are `file:line`-ish; the engine is **self-clocking** (no 
   `active` → `_draft_touchpoint` (render sequence step → `Message(status=draft)`; full-autonomy
   auto-approves → `scheduled`, stamps idempotency key) · `scheduled` → `_send_touchpoint` · `awaiting_reply`
   → next touchpoint due ? `active` : `completed`.
-- **Send seam** `_send_touchpoint` (enrollment.py): suppression gate → `resolve_channel_seat(org,channel)`
-  → **LinkedIn-no-seat fallback** (route to email if contact has one, else fail visibly — never a
-  phantom "sent") → `governor.can_send_now` (window + workspace daily cap + warmup) → per-seat daily
-  cap → `deliver_outbound`.
+- **Send seam** `_send_touchpoint` (enrollment.py): suppression gate (org-wide rows plus rows scoped to
+  this workspace) → `resolve_channel_seat(campaign, channel)` (the campaign's designated `seat_id`, else
+  the creator's healthy seat for that channel, else none: a campaign never borrows a colleague's mailbox)
+  → **LinkedIn-no-seat fallback** (route to email if contact has one, else fail visibly, never a
+  phantom "sent") → `governor.can_send_now` (window + daily cap + warmup, all read through the policy
+  chain) → per-seat daily cap → `deliver_outbound`.
 - **`deliver_outbound`** (services/outreach/messaging.py): resolves seat account, stamps idempotency
   key, sends via `ext/unipile.UnipileChannel` — LinkedIn as **InMail** or thread reply; email via
   Unipile `/emails` or SMTP fallback with `Message-ID`/`In-Reply-To` threading headers. Captures the
@@ -37,23 +39,21 @@ build backlog. Anchors are `file:line`-ish; the engine is **self-clocking** (no 
   real Stripe (checkout/portal/webhook) or self-serve `POST /billing/plan` (demo path).
 
 ### Current state (post-remediation — all shipped)
-Seat-aware send through the real `UnipileChannel`; `external_id` captured; cold LinkedIn = real InMail;
+Per-campaign seat ownership; send through the real `UnipileChannel`; `external_id` captured; cold LinkedIn = real InMail;
 idempotency key on send + reply; hard/soft error split; hard-bounce → suppress; per-seat daily cap;
 LinkedIn→email fallback (default on); inbound dedupe via partial-unique index + savepoint; channel
 preserved on inbound; manual reply really sends; webhook signature + replay/timestamp guard;
 `*_DRY_RUN` promoted to typed `Settings`. Message carries `origin`, `idempotency_key`,
-`provider_message_id`. Migrations through `e6f7a8b9c0d1`.
+`provider_message_id`. Schema is one squashed baseline migration (`60a4aaede531`).
 
 ### Backlog (Tier-2, not yet built)
 1. **Synchronous webhook handler** runs LLM + send before responding → Unipile timeout → retries.
    Fix: background the handler (`BackgroundTasks`/queue), return 202 immediately.
 2. **Email inbound threading via `external_id` not wired** — `/webhooks/inbound` keys on
    from_email/enrollment_id, not `In-Reply-To` → multi-campaign contacts mis-route on email replies.
-3. **`resolve_channel_seat` ignores workspace/campaign ownership** — multi-workspace org can send from
-   the wrong seat (needs a per-campaign designated-sender model).
-4. **`send_reply` sets `sent_at` before delivery** — an audit failure after a real send loses the record.
-5. **Cross-campaign contact fatigue** — no guard against a contact being messaged by several campaigns.
-6. Minor: per-seat cap undercounts legacy null `account_id`; `warmup_stage`/`daily_sent` columns unused;
+3. **`send_reply` sets `sent_at` before delivery** — an audit failure after a real send loses the record.
+4. **Cross-campaign contact fatigue** — no guard against a contact being messaged by several campaigns.
+5. Minor: per-seat cap undercounts legacy null `account_id`; `warmup_stage`/`daily_sent` columns unused;
    SMTP Message-ID reused as a Unipile thread id on transport mixing.
 
 ---
@@ -66,7 +66,8 @@ preserved on inbound; manual reply really sends; webhook signature + replay/time
 2. **Stored** verbatim on **`Campaign.criteria`** (JSONB). Same object is posted to `/people/search` —
    audience == search.
 3. **Sourcing pass** (`worker.run_source_due` when `Campaign.next_source_at` due → `run_sourcing` LLM or
-   `deterministic_source`): `as_targeting(criteria)` → each provider `search(targeting)` maps every field
+   `deterministic_source`): the provider allow-list and the vertical prompt pack come from the policy
+   chain (`app/core/policy.py`); `as_targeting(criteria)` → each provider `search(targeting)` maps every field
    onto its DSL (PDL/Apollo; PDL is most complete) → `PersonHit[]` → `import_hits` persists **new** hits
    as `Contact` rows (dedupe by email→linkedin→name+company). Sourced signals seniority/function/
    technologies land in `Contact.attributes`.
@@ -112,10 +113,30 @@ and `src/lib/targeting.test.ts`):
 
 ---
 
+---
+
+## Tenancy
+
+Two data levels, `Organization` → `Workspace`, with identity, seats, resale and policy lifted out of
+the hierarchy into orthogonal dimensions. See `.docs/tenancy.md` for the model and the
+resource-placement table. What the two flows above depend on:
+- **Isolation** is the workspace. Contacts, campaigns, enrollments and messages are workspace-scoped;
+  the DNC list, provider keys, audit and billing are organization-scoped.
+- **Access** is `Membership` (user × org) plus `SpaceGrant` (user × workspace). Org admins and
+  compliance reach every workspace in their org without a grant row.
+- **Requests** carry `X-Workspace-Id` and `X-Organization-Id`; `api/context.py::get_context` resolves
+  the org from the workspace header, then a sole membership, then the org header.
+- **Settings** resolve through the five-level policy chain, so a send cap or brand voice set at the
+  partner or org level is inherited unless a workspace or campaign overrides it.
+
+---
+
 ## Invariants / conventions to preserve
 - **targeting.py ↔ targeting.ts byte-for-byte** — change both + `shared/targeting-cases.json`
   together; the backend and frontend test suites both run the shared table.
 - **Deterministic bulk scoring** (so the composer's live "~N match" == server ranking).
 - **Everything degrades without keys** — no LLM → deterministic design/sourcing/scoring; no provider /
   dry-run → sends simulate.
+- **Settings are read through `app/core/policy.py`**, never off one level's JSONB, so a partner or org
+  default is not silently skipped.
 - Demo runs offline in dry-run; `demo@sourcewell.ai` / `testpass`.
