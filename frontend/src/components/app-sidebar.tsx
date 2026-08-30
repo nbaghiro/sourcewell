@@ -1,4 +1,5 @@
 import { Check, ChevronsUpDown, type LucideIcon } from "lucide-react";
+import * as React from "react";
 import { NavLink } from "react-router-dom";
 
 import { BrandMark } from "@/components/brand-mark";
@@ -10,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Workspace } from "@/lib/auth";
+import type { OrgSummary, Workspace } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 interface NavItemDef {
@@ -29,6 +30,8 @@ interface AppSidebarProps {
   className?: string;
   workspaceLabel?: string;
   workspaces?: Workspace[];
+  /** Every organization the user belongs to; the switcher groups by org once there's more than one. */
+  organizations?: OrgSummary[];
   currentWorkspaceId?: string | null;
   onSelectWorkspace?: (id: string) => void;
 }
@@ -82,10 +85,26 @@ function AppSidebar({
   className,
   workspaceLabel = "Workspace",
   workspaces,
+  organizations,
   currentWorkspaceId,
   onSelectWorkspace,
 }: AppSidebarProps) {
   const switchable = onSelectWorkspace && workspaces && workspaces.length > 0;
+  // One org: a single heading naming the workspace kind, as before. Several: group by org so a
+  // workspace name that repeats across orgs is still unambiguous.
+  const groups = React.useMemo(() => {
+    const all = workspaces ?? [];
+    if (!organizations || organizations.length <= 1) {
+      return [{ id: "all", name: `${org} · ${workspaceLabel}`, items: all }];
+    }
+    return organizations
+      .map((o) => ({
+        id: o.id,
+        name: o.name,
+        items: all.filter((w) => w.organization_id === o.id),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [organizations, workspaces, org, workspaceLabel]);
 
   return (
     <aside className={cn("flex h-full w-60 shrink-0 flex-col gap-5 bg-sidebar p-4", className)}>
@@ -107,14 +126,16 @@ function AppSidebar({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuLabel>
-              {org} · {workspaceLabel}
-            </DropdownMenuLabel>
-            {workspaces!.map((w) => (
-              <DropdownMenuItem key={w.id} onClick={() => onSelectWorkspace!(w.id)}>
-                <span className="flex-1 truncate">{w.name}</span>
-                {w.id === currentWorkspaceId && <Check className="size-4 text-primary" />}
-              </DropdownMenuItem>
+            {groups.map(({ id, name, items }) => (
+              <React.Fragment key={id}>
+                <DropdownMenuLabel>{name}</DropdownMenuLabel>
+                {items.map((w) => (
+                  <DropdownMenuItem key={w.id} onClick={() => onSelectWorkspace!(w.id)}>
+                    <span className="flex-1 truncate">{w.name}</span>
+                    {w.id === currentWorkspaceId && <Check className="size-4 text-primary" />}
+                  </DropdownMenuItem>
+                ))}
+              </React.Fragment>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>

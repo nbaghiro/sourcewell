@@ -2,9 +2,11 @@ import * as React from "react";
 
 import { api, API_URL, ApiError } from "@/lib/api";
 import type { components } from "@/lib/api/schema";
+import { clearApiTenant } from "@/lib/api/tenant";
 
 export type Workspace = components["schemas"]["WorkspaceSummary"];
 export type Me = components["schemas"]["MeResponse"];
+export type OrgSummary = components["schemas"]["OrgSummary"];
 
 type Status = "loading" | "authed" | "anon";
 
@@ -24,24 +26,32 @@ interface AuthContextValue {
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
 
+/** A remembered workspace or organization the server no longer accepts (deleted, access revoked)
+ * would otherwise wedge the whole app on 400/403, so drop the selection and ask again clean. */
+async function fetchMe(): Promise<Me> {
+  try {
+    return await api<Me>("/auth/me");
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 400 || err.status === 403)) {
+      clearApiTenant();
+      return await api<Me>("/auth/me");
+    }
+    throw err;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = React.useState<Status>("loading");
   const [me, setMe] = React.useState<Me | null>(null);
 
   const refresh = React.useCallback(async () => {
     try {
-      const data = await api<Me>("/auth/me");
-      setMe(data);
+      setMe(await fetchMe());
       setStatus("authed");
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setMe(null);
-        setStatus("anon");
-      } else {
-        // Network error / backend down — treat as signed out so the UI is usable.
-        setMe(null);
-        setStatus("anon");
-      }
+    } catch {
+      // 401, or a network error / backend down — treat as signed out so the UI is usable.
+      setMe(null);
+      setStatus("anon");
     }
   }, []);
 

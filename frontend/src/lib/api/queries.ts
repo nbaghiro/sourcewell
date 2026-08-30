@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { API_URL } from "@/lib/api";
 import { useWorkspaceId } from "@/lib/workspace";
-import { client, getApiWorkspaceId, unwrap } from "./client";
+import { client, unwrap } from "./client";
+import { getApiWorkspaceId } from "./tenant";
 import type { components } from "./schema";
 
 type S = components["schemas"];

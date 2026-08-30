@@ -80,6 +80,7 @@ export function AppLayout() {
           }}
           workspaceLabel={labels.workspace}
           workspaces={workspaces}
+          organizations={me?.organizations}
           currentWorkspaceId={workspaceId}
           onSelectWorkspace={setWorkspaceId}
         />
