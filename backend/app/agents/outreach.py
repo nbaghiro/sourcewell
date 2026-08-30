@@ -13,7 +13,8 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.prompts import DEFAULT_VERTICAL, compose_system
+from app.agents.prompts import compose_system
+from app.core import policy
 from app.core.runtime import AgentLLM, AgentResult, Tool, default_llm, run_agent
 from app.core.types import JsonList, JsonObject
 from app.models import (
@@ -28,7 +29,6 @@ from app.models import (
     MessageDirection,
     MessageStatus,
     SuppressionReason,
-    Workspace,
 )
 from app.services.outreach.messaging import (
     PermanentSendError,
@@ -189,10 +189,9 @@ async def run_conversation(
 
     campaign = await session.get(Campaign, enrollment.campaign_id)
     contact = await session.get(Contact, enrollment.contact_id)
-    workspace = await session.get(Workspace, enrollment.workspace_id)
     if campaign is None or contact is None:
         raise ValueError("enrollment is missing its campaign or contact")
-    vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
+    vertical = (await policy.for_campaign(session, campaign=campaign)).get_str("vertical")
     ctx = ConversationContext(
         session=session,
         enrollment=enrollment,

@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import policy
 from app.core.types import JsonList, JsonObject
 from app.models import (
     Authorship,
@@ -13,6 +14,17 @@ from app.models import (
     Campaign,
     CampaignStatus,
 )
+
+
+async def default_autonomy(session: AsyncSession, *, workspace_id: str) -> AutonomyLevel:
+    """The `autonomy_default` a new campaign starts at, resolved through the policy chain."""
+    raw = (await policy.for_workspace(session, workspace_id=workspace_id)).get_str(
+        "autonomy_default"
+    )
+    try:
+        return AutonomyLevel(raw)
+    except ValueError:
+        return AutonomyLevel.assisted
 
 
 async def create_campaign(
@@ -24,13 +36,15 @@ async def create_campaign(
     sequence: JsonList,
     from_email: str | None,
     objective: str | None = None,
-    autonomy_level: AutonomyLevel = AutonomyLevel.assisted,
+    autonomy_level: AutonomyLevel | None = None,
     authored_by: Authorship = Authorship.human,
     seed_contact_ids: list[str] | None = None,
     created_by_user_id: str | None = None,
     seat_id: str | None = None,
 ) -> Campaign:
     agent_authored = authored_by == Authorship.agent
+    if autonomy_level is None:
+        autonomy_level = await default_autonomy(session, workspace_id=workspace_id)
     campaign = Campaign(
         workspace_id=workspace_id,
         name=name,

@@ -17,15 +17,15 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.chat import run_chat, run_chat_stream
-from app.agents.prompts import DEFAULT_VERTICAL
 from app.agents.strategy import design_campaign, deterministic_design
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
+from app.core import policy
 from app.core.db import SessionLocal
 from app.core.runtime import default_llm
 from app.core.types import JsonList, JsonObject
 from app.ext.unipile import fetch_job_postings
-from app.models import AgentRole, Campaign, Workspace
+from app.models import AgentRole, Campaign
 from app.services.insights.agent import (
     ActivityEventData,
     RefData,
@@ -318,8 +318,7 @@ class IntakeOut(BaseModel):
 async def intake(body: IntakeIn, ctx: ContextDep, session: SessionDep) -> IntakeOut:
     """Parse a JD / brief into an objective + targeting (the create flow's step 0)."""
     ws = require_workspace(ctx)
-    workspace = await session.get(Workspace, ws)
-    vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
+    vertical = (await policy.for_workspace(session, workspace_id=ws)).get_str("vertical")
     brief = await parse_brief(body.text, vertical=vertical)
     return IntakeOut(
         objective=brief.objective, criteria=brief.targeting.model_dump(), facts=brief.facts

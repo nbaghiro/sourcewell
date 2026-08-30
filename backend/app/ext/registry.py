@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.crypto import unseal
-from app.core.types import JsonObject
 from app.ext.apollo import ApolloProvider
 from app.ext.base import SourceProvider
 from app.ext.hunter import HunterProvider
@@ -59,15 +58,6 @@ def _platform_keys(settings: Settings) -> dict[str, str]:
     if settings.unipile_api_key:
         keys["linkedin"] = settings.unipile_api_key
     return keys
-
-
-def provider_selection(settings: JsonObject) -> list[str] | None:
-    """The ordered provider-key allow-list from a workspace's settings, or None for 'use all'."""
-    raw = settings.get("providers")
-    if isinstance(raw, list):
-        keys = [str(x) for x in raw if isinstance(x, str)]
-        return keys or None
-    return None
 
 
 def _apply_selection(

@@ -11,6 +11,7 @@ from sqlalchemy import delete, select
 
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin, require_workspace
+from app.core import policy
 from app.core.config import get_settings
 from app.core.crypto import seal, unseal
 from app.core.types import JsonObject
@@ -47,13 +48,6 @@ from app.services.workspace.settings import (
 )
 
 router = APIRouter(prefix="/settings", tags=["settings"])
-
-WORKSPACE_DEFAULTS: JsonObject = {
-    "autonomy_default": "approve_each",
-    "sending_window": "Mon-Fri, 08:00-18:00, recipient local",
-    "daily_cap_email": 120,
-    "daily_cap_linkedin": 80,
-}
 
 
 class UsageOut(BaseModel):
@@ -104,8 +98,10 @@ class MemberOut(BaseModel):
 class WorkspaceSettingsOut(BaseModel):
     id: str
     name: str
-    brand_voice: str | None
+    # The whole policy chain flattened: platform → partner → org → workspace.
     settings: JsonObject
+    # Just this workspace's own overrides, so the UI can tell "inherited" from "set here".
+    overrides: JsonObject
 
 
 class InviteOut(BaseModel):
@@ -186,45 +182,40 @@ async def connections(ctx: ContextDep, session: SessionDep) -> list[ConnectionOu
 
 class WorkspacePatch(BaseModel):
     name: str | None = None
-    brand_voice: str | None = None
     settings: JsonObject | None = None
+
+
+async def _workspace_settings(session: SessionDep, workspace: Workspace) -> WorkspaceSettingsOut:
+    resolved = await policy.for_workspace(session, workspace_id=workspace.id)
+    return WorkspaceSettingsOut(
+        id=workspace.id,
+        name=workspace.name,
+        settings=resolved.effective(),
+        overrides=workspace.settings or {},
+    )
 
 
 @router.get("/workspace", response_model=WorkspaceSettingsOut)
 async def get_workspace_settings(ctx: ContextDep, session: SessionDep) -> WorkspaceSettingsOut:
-    ws = require_workspace(ctx)
-    workspace = await session.get(Workspace, ws)
+    workspace = await session.get(Workspace, require_workspace(ctx))
     if workspace is None:
         raise HTTPException(status_code=404, detail="workspace not found")
-    return WorkspaceSettingsOut(
-        id=workspace.id,
-        name=workspace.name,
-        brand_voice=workspace.brand_voice,
-        settings={**WORKSPACE_DEFAULTS, **(workspace.settings or {})},
-    )
+    return await _workspace_settings(session, workspace)
 
 
 @router.patch("/workspace", response_model=WorkspaceSettingsOut)
 async def update_workspace_settings(
     body: WorkspacePatch, ctx: ContextDep, session: SessionDep
 ) -> WorkspaceSettingsOut:
-    ws = require_workspace(ctx)
-    workspace = await session.get(Workspace, ws)
+    workspace = await session.get(Workspace, require_workspace(ctx))
     if workspace is None:
         raise HTTPException(status_code=404, detail="workspace not found")
     if body.name is not None:
         workspace.name = body.name
-    if body.brand_voice is not None:
-        workspace.brand_voice = body.brand_voice
     if body.settings is not None:
         workspace.settings = {**(workspace.settings or {}), **body.settings}
     await session.flush()
-    return WorkspaceSettingsOut(
-        id=workspace.id,
-        name=workspace.name,
-        brand_voice=workspace.brand_voice,
-        settings={**WORKSPACE_DEFAULTS, **(workspace.settings or {})},
-    )
+    return await _workspace_settings(session, workspace)
 
 
 # ---- connection management (stub OAuth: connecting just marks the seat live) ----

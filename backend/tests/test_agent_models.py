@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import policy
 from app.models import (
     AgentRole,
     AgentRun,
@@ -38,8 +39,8 @@ async def _org_ws(session: AsyncSession, slug: str) -> tuple[Organization, Works
 @pytest.mark.db
 async def test_workspace_vertical_defaults_to_recruiting(db_session: AsyncSession) -> None:
     _org, ws = await _org_ws(db_session, "ag-vert")
-    await db_session.refresh(ws)
-    assert ws.vertical == "recruiting"
+    resolved = await policy.for_workspace(db_session, workspace_id=ws.id)
+    assert resolved.get_str("vertical") == "recruiting"
 
 
 @pytest.mark.db

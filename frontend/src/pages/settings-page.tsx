@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Meter, usageTone } from "@/components/ui/meter";
 import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -708,22 +709,58 @@ function AutonomyTab() {
       <CardContent className="space-y-4">
         <div className="grid gap-1.5">
           <Label>Default autonomy</Label>
+          <span className="text-xs text-muted-foreground">
+            What a new campaign starts at. Existing campaigns keep their own setting.
+          </span>
           <Segmented
-            value={(s.autonomy_default as string) ?? "approve_each"}
+            value={(s.autonomy_default as string) ?? "assisted"}
             onChange={(v) => set({ autonomy_default: v })}
             options={[
-              { value: "approve_each", label: "Approve each" },
-              { value: "auto", label: "Auto-send" },
+              { value: "manual", label: "Approve each" },
+              { value: "assisted", label: "Assisted" },
+              { value: "full", label: "Full autonomy" },
             ]}
           />
         </div>
         <div className="grid gap-1.5">
-          <Label>Business hours window</Label>
-          <Input
-            key={(s.sending_window as string) ?? ""}
-            defaultValue={(s.sending_window as string) ?? ""}
-            onBlur={(e) => e.target.value !== s.sending_window && set({ sending_window: e.target.value })}
-          />
+          <div className="flex items-center justify-between">
+            <Label>Business hours only</Label>
+            <Switch
+              checked={Boolean(s.sending_window_enabled)}
+              onCheckedChange={(v) => set({ sending_window_enabled: v })}
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">From (hour)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={23}
+                key={String(s.send_window_start ?? "")}
+                defaultValue={String(s.send_window_start ?? 8)}
+                onBlur={(e) => set({ send_window_start: Number(e.target.value) })}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">To (hour)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={23}
+                key={String(s.send_window_end ?? "")}
+                defaultValue={String(s.send_window_end ?? 18)}
+                onBlur={(e) => set({ send_window_end: Number(e.target.value) })}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Weekdays only</Label>
+              <Switch
+                checked={Boolean(s.send_weekdays_only)}
+                onCheckedChange={(v) => set({ send_weekdays_only: v })}
+              />
+            </div>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1.5">

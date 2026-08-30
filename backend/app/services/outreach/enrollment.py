@@ -19,6 +19,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import policy
 from app.core.config import get_settings
 from app.core.db import new_id
 from app.core.types import JsonList
@@ -161,7 +162,8 @@ async def _draft_touchpoint(
         return
     step = sequence[enrollment.current_step]
     channel = Channel.linkedin if step.get("channel") == "linkedin" else Channel.email
-    subject, body = await draft_message(contact, step)
+    voice = (await policy.for_campaign(session, campaign=campaign)).get_str("brand_voice")
+    subject, body = await draft_message(contact, step, brand_voice=voice or None)
     message = Message(
         workspace_id=enrollment.workspace_id,
         enrollment_id=enrollment.id,
@@ -243,9 +245,9 @@ async def _send_touchpoint(
             _advance(enrollment, sequence, now)
             return
 
-    # Rate/window governor: defer (without advancing) if a workspace cap or window blocks the send.
+    # Rate/window governor: defer (without advancing) if a policy cap or window blocks the send.
     allowed, retry_at = await governor.can_send_now(
-        session, workspace_id=enrollment.workspace_id, channel=message.channel, now=now
+        session, campaign=campaign, channel=message.channel, now=now
     )
     if not allowed:
         enrollment.next_run_at = retry_at or (now + timedelta(minutes=15))

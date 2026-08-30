@@ -9,11 +9,12 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.prompts import DEFAULT_VERTICAL, compose_system
+from app.agents.prompts import compose_system
 from app.agents.provenance import is_agent_owned
+from app.core import policy
 from app.core.runtime import AgentLLM, AgentResult, Tool, run_agent
 from app.core.types import JsonList, JsonObject
-from app.models import AgentRole, AuditEvent, Campaign, Workspace
+from app.models import AgentRole, AuditEvent, Campaign
 from app.services.insights.agent import campaign_funnel
 from app.services.sourcing.briefs import parse_brief
 from app.services.sourcing.contacts import list_contacts
@@ -151,8 +152,7 @@ def strategy_tools(ctx: StrategyContext) -> list[Tool]:
 async def _ctx_for(
     session: AsyncSession, campaign: Campaign, organization_id: str
 ) -> tuple[StrategyContext, str]:
-    workspace = await session.get(Workspace, campaign.workspace_id)
-    vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
+    vertical = (await policy.for_campaign(session, campaign=campaign)).get_str("vertical")
     return StrategyContext(
         session=session, campaign=campaign, organization_id=organization_id
     ), vertical

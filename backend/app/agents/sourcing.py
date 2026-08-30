@@ -10,12 +10,13 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.prompts import DEFAULT_VERTICAL, compose_system
+from app.agents.prompts import compose_system
+from app.core import policy
 from app.core.runtime import AgentLLM, AgentResult, Tool, run_agent
 from app.core.types import JsonList, JsonObject
 from app.ext.base import PersonHit, SourceProvider
-from app.ext.registry import build_providers_for_org, provider_selection
-from app.models import AgentRole, Campaign, Contact, Workspace
+from app.ext.registry import build_providers_for_org
+from app.models import AgentRole, Campaign, Contact
 from app.services.sourcing import usage
 from app.services.sourcing.contacts import list_contacts
 from app.services.sourcing.discovery import enrich_ref, import_hits, search_people
@@ -196,10 +197,10 @@ async def run_sourcing(
     session: AsyncSession, *, llm: AgentLLM, campaign: Campaign, organization_id: str
 ) -> AgentResult:
     """Run one sourcing pass for an active campaign."""
-    workspace = await session.get(Workspace, campaign.workspace_id)
-    vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
-    selection = provider_selection(workspace.settings) if workspace else None
-    providers = await build_providers_for_org(session, organization_id, selection=selection)
+    resolved = await policy.for_campaign(session, campaign=campaign)
+    providers = await build_providers_for_org(
+        session, organization_id, selection=resolved.get_str_list("providers") or None
+    )
     targeting = as_targeting(campaign.criteria)
     ctx = SourcingContext(
         session=session,
@@ -209,7 +210,7 @@ async def run_sourcing(
         providers=providers,
         targeting=targeting,
     )
-    system = compose_system(AgentRole.sourcing, vertical)
+    system = compose_system(AgentRole.sourcing, resolved.get_str("vertical"))
     user = (
         f"Goal: {campaign.objective or campaign.name}\n"
         f"Criteria: {targeting.model_dump_json()}{await _seed_resemblance(session, campaign)}\n"
@@ -233,9 +234,10 @@ async def deterministic_source(
     session: AsyncSession, *, campaign: Campaign, organization_id: str
 ) -> int:
     """LLM-free sourcing fallback: search providers, import, and rank into proposed enrollments."""
-    workspace = await session.get(Workspace, campaign.workspace_id)
-    selection = provider_selection(workspace.settings) if workspace else None
-    providers = await build_providers_for_org(session, organization_id, selection=selection)
+    resolved = await policy.for_campaign(session, campaign=campaign)
+    providers = await build_providers_for_org(
+        session, organization_id, selection=resolved.get_str_list("providers") or None
+    )
     targeting = as_targeting(campaign.criteria)
     hits = await search_people(providers, targeting, limit=25, use_cache=False)
     kept: list[PersonHit] = []

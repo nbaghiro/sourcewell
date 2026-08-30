@@ -6,8 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.sourcing import SourcingContext, sourcing_tools
 from app.core.config import Settings
+from app.core.policy import Policy
 from app.ext.base import EmailVerdict, PersonHit, ProviderCapabilities, SearchPage
-from app.ext.registry import _apply_selection, build_providers_for_org, provider_selection
+from app.ext.registry import _apply_selection, build_providers_for_org
 from app.models import Campaign, ProviderUsage
 from app.targeting import Targeting
 from tests.factories import make_org, make_workspace
@@ -46,11 +47,16 @@ class _Stub:
 # --- selection helpers (units) -----------------------------------------------
 
 
-def test_provider_selection_reads_settings() -> None:
-    assert provider_selection({"providers": ["pdl", "hunter"]}) == ["pdl", "hunter"]
-    assert provider_selection({"providers": []}) is None  # empty = use all
-    assert provider_selection({}) is None
-    assert provider_selection({"providers": "pdl"}) is None  # not a list → use all
+def test_provider_selection_reads_the_policy_chain() -> None:
+    def selection(*layers: dict[str, object]) -> list[str]:
+        return Policy(layers=layers).get_str_list("providers")
+
+    assert selection({"providers": ["pdl", "hunter"]}) == ["pdl", "hunter"]
+    assert selection({"providers": []}) == []  # empty = use all
+    assert selection({}) == []
+    assert selection({"providers": "pdl"}) == []  # not a list → use all
+    # the nearest layer defining the key wins
+    assert selection({"providers": ["apollo"]}, {"providers": ["pdl"]}) == ["apollo"]
 
 
 def test_apply_selection_filters_orders_and_falls_back() -> None:

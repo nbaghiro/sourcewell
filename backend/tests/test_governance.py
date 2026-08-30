@@ -140,7 +140,7 @@ async def test_governor_enforces_daily_cap(db_session: AsyncSession) -> None:
     now = datetime.now(UTC)
 
     allowed, _ = await governor.can_send_now(
-        db_session, workspace_id=ws.id, channel=Channel.email, now=now
+        db_session, campaign=campaign, channel=Channel.email, now=now
     )
     assert allowed
 
@@ -162,6 +162,6 @@ async def test_governor_enforces_daily_cap(db_session: AsyncSession) -> None:
     await db_session.flush()
 
     allowed2, retry_at = await governor.can_send_now(
-        db_session, workspace_id=ws.id, channel=Channel.email, now=now
+        db_session, campaign=campaign, channel=Channel.email, now=now
     )
     assert not allowed2 and retry_at is not None

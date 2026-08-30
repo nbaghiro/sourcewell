@@ -46,7 +46,7 @@ class CampaignIn(BaseModel):
     name: str
     criteria: Targeting = Targeting()
     sequence: list[SequenceStep] = []
-    autonomy_level: AutonomyLevel = AutonomyLevel.assisted
+    autonomy_level: AutonomyLevel | None = None
     authored_by: Authorship = Authorship.human
     objective: str | None = None
     seed_contact_ids: list[str] = []

@@ -12,11 +12,12 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.prompts import DEFAULT_VERTICAL, compose_system
+from app.agents.prompts import compose_system
+from app.core import policy
 from app.core.db import new_id
 from app.core.runtime import AgentLLM, AssistantTurn, Msg, Tool, UserText, run_agent, stream_agent
 from app.core.types import JsonList, JsonObject
-from app.models import AgentRole, Contact, Enrollment, Workspace
+from app.models import AgentRole, Contact, Enrollment
 from app.services.insights.agent import campaign_funnel
 from app.services.sourcing.contacts import list_contacts
 from app.targeting import FIT_THRESHOLD, Targeting, evaluate
@@ -171,8 +172,7 @@ async def run_chat(
     history: list[tuple[str, str]] | None = None,
 ) -> ChatResult:
     """Run one Main-agent chat turn; returns the narration + the typed entities it surfaced."""
-    workspace = await session.get(Workspace, workspace_id)
-    vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
+    vertical = (await policy.for_workspace(session, workspace_id=workspace_id)).get_str("vertical")
     ctx = ChatContext(
         session=session,
         workspace_id=workspace_id,
@@ -207,8 +207,7 @@ async def run_chat_stream(
     """Streaming Main-agent chat turn: yields `{"type":"token"}` events as the narration streams,
     then a final `{"type":"done", "entities": [...]}` with the typed UI blocks the tools surfaced.
     """
-    workspace = await session.get(Workspace, workspace_id)
-    vertical = workspace.vertical if workspace else DEFAULT_VERTICAL
+    vertical = (await policy.for_workspace(session, workspace_id=workspace_id)).get_str("vertical")
     ctx = ChatContext(
         session=session,
         workspace_id=workspace_id,

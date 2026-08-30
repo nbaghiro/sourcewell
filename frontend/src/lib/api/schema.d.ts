@@ -2011,8 +2011,7 @@ export interface components {
         CampaignIn: {
             /** @default human */
             authored_by: components["schemas"]["Authorship"];
-            /** @default assisted */
-            autonomy_level: components["schemas"]["AutonomyLevel"];
+            autonomy_level?: components["schemas"]["AutonomyLevel"] | null;
             /**
              * @default {
              *       "companies": [],
@@ -3530,8 +3529,6 @@ export interface components {
         WorkspaceKind: "client" | "department" | "team";
         /** WorkspacePatch */
         WorkspacePatch: {
-            /** Brand Voice */
-            brand_voice?: string | null;
             /** Name */
             name?: string | null;
             settings?: components["schemas"]["JsonObject"] | null;
@@ -3549,12 +3546,11 @@ export interface components {
         };
         /** WorkspaceSettingsOut */
         WorkspaceSettingsOut: {
-            /** Brand Voice */
-            brand_voice: string | null;
             /** Id */
             id: string;
             /** Name */
             name: string;
+            overrides: components["schemas"]["JsonObject"];
             settings: components["schemas"]["JsonObject"];
         };
         /**

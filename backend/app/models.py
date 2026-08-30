@@ -199,6 +199,7 @@ class Organization(IdMixin, TimestampMixin, Base):
     )
     plan: Mapped[str] = mapped_column(String(50), default="free")
     data_region: Mapped[str] = mapped_column(String(20), default="us")
+    settings: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
     # Stripe billing (the webhook is the source of truth; blank until a subscription is created).
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -223,12 +224,7 @@ class Workspace(IdMixin, TimestampMixin, Base):
     status: Mapped[WorkspaceStatus] = mapped_column(
         sa_enum(WorkspaceStatus), default=WorkspaceStatus.active
     )
-    brand_voice: Mapped[str | None] = mapped_column(String, nullable=True)
     settings: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
-    # Industry pack pointer; prompt packs are hardcoded in `app/agents/prompts.py`.
-    vertical: Mapped[str] = mapped_column(
-        String(50), default="recruiting", server_default="recruiting"
-    )
 
 
 class User(IdMixin, TimestampMixin, Base):
