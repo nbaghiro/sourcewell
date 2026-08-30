@@ -2035,6 +2035,8 @@ export interface components {
             name: string;
             /** Objective */
             objective?: string | null;
+            /** Seat Id */
+            seat_id?: string | null;
             /**
              * Seed Contact Ids
              * @default []
@@ -2050,6 +2052,8 @@ export interface components {
         CampaignOut: {
             authored_by: components["schemas"]["Authorship"];
             autonomy_level: components["schemas"]["AutonomyLevel"];
+            /** Created By User Id */
+            created_by_user_id: string | null;
             criteria: components["schemas"]["JsonObject"];
             field_owners: components["schemas"]["JsonObject"];
             /** From Email */
@@ -2062,6 +2066,8 @@ export interface components {
             next_source_at: string | null;
             /** Objective */
             objective: string | null;
+            /** Seat Id */
+            seat_id: string | null;
             sequence: components["schemas"]["JsonList"];
             status: components["schemas"]["CampaignStatus"];
         };
@@ -2075,6 +2081,8 @@ export interface components {
             name?: string | null;
             /** Objective */
             objective?: string | null;
+            /** Seat Id */
+            seat_id?: string | null;
             /** Sequence */
             sequence?: components["schemas"]["SequenceStep"][] | null;
             status?: components["schemas"]["CampaignStatus"] | null;
@@ -2084,6 +2092,8 @@ export interface components {
             authored_by: components["schemas"]["Authorship"];
             autonomy_level: components["schemas"]["AutonomyLevel"];
             counts: components["schemas"]["CampaignCounts"];
+            /** Created By User Id */
+            created_by_user_id: string | null;
             criteria: components["schemas"]["JsonObject"];
             field_owners: components["schemas"]["JsonObject"];
             /** From Email */
@@ -2096,6 +2106,8 @@ export interface components {
             next_source_at: string | null;
             /** Objective */
             objective: string | null;
+            /** Seat Id */
+            seat_id: string | null;
             sequence: components["schemas"]["JsonList"];
             status: components["schemas"]["CampaignStatus"];
         };

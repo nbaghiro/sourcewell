@@ -380,6 +380,8 @@ async def _seed_workspace(
     contact_count: int,
     now: datetime,
     rng: random.Random,
+    *,
+    owner: User,
 ) -> None:
     contacts = [Contact(**cd) for cd in make_contacts(ws.id, kind, contact_count, rng=rng)]
     session.add_all(contacts)
@@ -395,6 +397,7 @@ async def _seed_workspace(
                 status=CampaignStatus(spec["status"]),
                 autonomy_level=AutonomyLevel(spec["autonomy_level"]),
                 from_email=from_email,
+                created_by_user_id=owner.id,
                 criteria=spec["criteria"],
                 sequence=[
                     {
@@ -824,9 +827,11 @@ async def seed_demo(
     )
     await session.flush()
 
-    await _seed_workspace(session, ws_recruit, "eng", RECRUIT_CAMPAIGNS, 18, now, rng)
-    await _seed_workspace(session, ws_sales, "sales", SALES_CAMPAIGNS, 16, now, rng)
-    await _seed_workspace(session, ws_partner, "partner", PARTNER_CAMPAIGNS, 14, now, rng)
+    await _seed_workspace(session, ws_recruit, "eng", RECRUIT_CAMPAIGNS, 18, now, rng, owner=admin)
+    await _seed_workspace(session, ws_sales, "sales", SALES_CAMPAIGNS, 16, now, rng, owner=admin)
+    await _seed_workspace(
+        session, ws_partner, "partner", PARTNER_CAMPAIGNS, 14, now, rng, owner=admin
+    )
 
     ws_ids = [ws_recruit.id, ws_sales.id, ws_partner.id]
     await _generate_audit(session, org.id, ws_ids, actor_ids, now)

@@ -20,7 +20,6 @@ from app.models import (
     MembershipRole,
     Organization,
     SeatType,
-    SpaceGrant,
     User,
     UserStatus,
     Workspace,
@@ -89,42 +88,16 @@ async def upsert_seat(
     return seat
 
 
-async def seat_account_id(
+async def user_seat(
     session: AsyncSession, *, user_id: str, provider: ConnectionProvider
-) -> str | None:
-    """The Unipile account id for a user's healthy seat, or None if not connected."""
+) -> Connection | None:
+    """A user's healthy seat for a provider, or None if they haven't connected one."""
     return (
         (
             await session.execute(
-                select(Connection.external_id)
+                select(Connection)
                 .where(
                     Connection.user_id == user_id,
-                    Connection.provider == provider,
-                    Connection.status == ConnectionStatus.ok,
-                )
-                .limit(1)
-            )
-        )
-        .scalars()
-        .first()
-    )
-
-
-async def workspace_seat_account_id(
-    session: AsyncSession, *, workspace_id: str, provider: ConnectionProvider
-) -> str | None:
-    """A healthy seat `account_id` for *some* member of the workspace (the default sender).
-
-    The per-campaign sender model (a designated owner) lands with the channel-send phase; until then
-    any connected member's seat serves the workspace.
-    """
-    return (
-        (
-            await session.execute(
-                select(Connection.external_id)
-                .join(SpaceGrant, SpaceGrant.user_id == Connection.user_id)
-                .where(
-                    SpaceGrant.workspace_id == workspace_id,
                     Connection.provider == provider,
                     Connection.status == ConnectionStatus.ok,
                 )

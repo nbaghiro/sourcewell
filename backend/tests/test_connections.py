@@ -14,17 +14,10 @@ from app.models import (
 from app.services.workspace.connections import (
     home_org_id,
     provision_user,
-    seat_account_id,
     upsert_seat,
-    workspace_seat_account_id,
+    user_seat,
 )
-from tests.factories import (
-    make_membership,
-    make_org,
-    make_space_grant,
-    make_user,
-    make_workspace,
-)
+from tests.factories import make_membership, make_org, make_user
 
 _LINKEDIN = ConnectionProvider.linkedin
 
@@ -45,15 +38,16 @@ async def test_upsert_seat_creates_then_updates(db_session: AsyncSession) -> Non
 
 
 @pytest.mark.db
-async def test_seat_account_id_resolves_healthy_only(db_session: AsyncSession) -> None:
+async def test_user_seat_resolves_healthy_only(db_session: AsyncSession) -> None:
     org = await make_org(db_session, slug="cx-resolve")
     user = await make_user(db_session)
-    assert await seat_account_id(db_session, user_id=user.id, provider=_LINKEDIN) is None
+    assert await user_seat(db_session, user_id=user.id, provider=_LINKEDIN) is None
 
     await upsert_seat(
         db_session, organization_id=org.id, user_id=user.id, provider=_LINKEDIN, account_id="acct-x"
     )
-    assert await seat_account_id(db_session, user_id=user.id, provider=_LINKEDIN) == "acct-x"
+    seat = await user_seat(db_session, user_id=user.id, provider=_LINKEDIN)
+    assert seat is not None and seat.external_id == "acct-x"
 
     # a needs-reauth seat no longer resolves
     await upsert_seat(
@@ -64,25 +58,7 @@ async def test_seat_account_id_resolves_healthy_only(db_session: AsyncSession) -
         account_id="acct-x",
         status=ConnectionStatus.needs_reauth,
     )
-    assert await seat_account_id(db_session, user_id=user.id, provider=_LINKEDIN) is None
-
-
-@pytest.mark.db
-async def test_workspace_seat_resolves_via_membership(db_session: AsyncSession) -> None:
-    org = await make_org(db_session, slug="cx-ws")
-    ws = await make_workspace(db_session, org=org)
-    user = await make_user(db_session)
-    await make_membership(db_session, user=user, org=org, role=MembershipRole.member)
-    await make_space_grant(db_session, user=user, workspace=ws)
-    await upsert_seat(
-        db_session,
-        organization_id=org.id,
-        user_id=user.id,
-        provider=_LINKEDIN,
-        account_id="acct-ws",
-    )
-    found = await workspace_seat_account_id(db_session, workspace_id=ws.id, provider=_LINKEDIN)
-    assert found == "acct-ws"
+    assert await user_seat(db_session, user_id=user.id, provider=_LINKEDIN) is None
 
 
 @pytest.mark.db

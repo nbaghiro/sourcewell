@@ -475,28 +475,49 @@ async def test_linkedin_dryrun_still_simulates(db_session: AsyncSession) -> None
 
 
 @pytest.mark.db
-async def test_resolve_channel_seat_prefers_healthy(db_session: AsyncSession) -> None:
-    org = await make_org(db_session, slug="seatpref")
-    u1 = await make_user(db_session, email="u1@x.com")
-    u2 = await make_user(db_session, email="u2@x.com")
-    db_session.add_all(
-        [
-            _seat(
-                org.id,
-                u1.id,
-                ConnectionProvider.linkedin,
-                status=ConnectionStatus.needs_reauth,
-                external_id="dead",
-            ),
-            _seat(
-                org.id,
-                u2.id,
-                ConnectionProvider.linkedin,
-                status=ConnectionStatus.ok,
-                external_id="live",
-            ),
-        ]
-    )
+async def test_resolve_channel_seat_prefers_the_campaign_seat(db_session: AsyncSession) -> None:
+    org = await make_org(db_session, slug="seatpick")
+    ws = await make_workspace(db_session, org=org)
+    creator = await make_user(db_session, email="creator@x.com")
+    other = await make_user(db_session, email="other@x.com")
+    designated = _seat(org.id, other.id, ConnectionProvider.linkedin, external_id="designated")
+    creators = _seat(org.id, creator.id, ConnectionProvider.linkedin, external_id="creators")
+    db_session.add_all([designated, creators])
     await db_session.flush()
-    seat = await resolve_channel_seat(db_session, organization_id=org.id, channel=Channel.linkedin)
-    assert seat is not None and seat.external_id == "live"
+    camp = Campaign(
+        workspace_id=ws.id,
+        name="C",
+        sequence=[],
+        created_by_user_id=creator.id,
+        seat_id=designated.id,
+    )
+    db_session.add(camp)
+    await db_session.flush()
+
+    seat = await resolve_channel_seat(db_session, campaign=camp, channel=Channel.linkedin)
+    assert seat is not None and seat.external_id == "designated"
+
+    # An unhealthy designated seat is never used; resolution drops to the creator's seat.
+    designated.status = ConnectionStatus.needs_reauth
+    await db_session.flush()
+    seat = await resolve_channel_seat(db_session, campaign=camp, channel=Channel.linkedin)
+    assert seat is not None and seat.external_id == "creators"
+
+    # A designated seat on the wrong channel is ignored too.
+    assert await resolve_channel_seat(db_session, campaign=camp, channel=Channel.email) is None
+
+
+@pytest.mark.db
+async def test_resolve_channel_seat_never_borrows_a_colleagues_seat(
+    db_session: AsyncSession,
+) -> None:
+    org = await make_org(db_session, slug="seatborrow")
+    ws = await make_workspace(db_session, org=org)
+    creator = await make_user(db_session, email="nc@x.com")
+    colleague = await make_user(db_session, email="colleague@x.com")
+    db_session.add(_seat(org.id, colleague.id, ConnectionProvider.linkedin, external_id="theirs"))
+    camp = Campaign(workspace_id=ws.id, name="C", sequence=[], created_by_user_id=creator.id)
+    db_session.add(camp)
+    await db_session.flush()
+
+    assert await resolve_channel_seat(db_session, campaign=camp, channel=Channel.linkedin) is None

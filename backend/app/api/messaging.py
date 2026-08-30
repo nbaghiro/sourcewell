@@ -392,15 +392,10 @@ async def send_reply(
     if contact is None:
         raise HTTPException(status_code=404, detail="contact not found")
     campaign = await session.get(Campaign, enrollment.campaign_id)
-    workspace = await session.get(Workspace, ws)
-    seat = (
-        await resolve_channel_seat(
-            session, organization_id=workspace.organization_id, channel=channel
-        )
-        if workspace
-        else None
-    )
-    sender = (campaign.from_email if campaign else None) or get_settings().default_from_email
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="campaign not found")
+    seat = await resolve_channel_seat(session, campaign=campaign, channel=channel)
+    sender = campaign.from_email or get_settings().default_from_email
     try:
         await deliver_outbound(
             session, message=message, contact=contact, seat=seat, sender=sender, reply=True

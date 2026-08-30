@@ -88,9 +88,7 @@ def conversation_tools(ctx: ConversationContext) -> list[Tool]:
         )
         ctx.session.add(message)
         if auto:
-            seat = await resolve_channel_seat(
-                ctx.session, organization_id=ctx.organization_id, channel=channel
-            )
+            seat = await resolve_channel_seat(ctx.session, campaign=ctx.campaign, channel=channel)
             try:
                 await deliver_outbound(
                     ctx.session,

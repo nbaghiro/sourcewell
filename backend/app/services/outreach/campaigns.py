@@ -27,6 +27,8 @@ async def create_campaign(
     autonomy_level: AutonomyLevel = AutonomyLevel.assisted,
     authored_by: Authorship = Authorship.human,
     seed_contact_ids: list[str] | None = None,
+    created_by_user_id: str | None = None,
+    seat_id: str | None = None,
 ) -> Campaign:
     agent_authored = authored_by == Authorship.agent
     campaign = Campaign(
@@ -37,6 +39,8 @@ async def create_campaign(
         authored_by=authored_by,
         objective=objective,
         from_email=from_email,
+        created_by_user_id=created_by_user_id,
+        seat_id=seat_id,
         criteria=criteria,
         sequence=sequence,
         # Active campaigns source on the next worker tick; the agent owns the sections it authored.

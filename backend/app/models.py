@@ -372,6 +372,13 @@ class Campaign(IdMixin, TimestampMixin, Base):
         sa_enum(CampaignStatus), default=CampaignStatus.draft
     )
     from_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    # The designated sending seat. Unset falls back to the creator's seat for the channel.
+    seat_id: Mapped[str | None] = mapped_column(
+        ForeignKey("connection.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     # criteria: {"titles": [...], "skills": [...]}
     criteria: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
     # sequence: [{"channel": "email", "delay_days": 0, "subject": "...", "body": "..."}]

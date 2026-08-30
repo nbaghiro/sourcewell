@@ -13,7 +13,7 @@ from app.models import ConnectionProvider
 from app.services.workspace.connections import (
     home_org_id,
     provision_from_linkedin,
-    seat_account_id,
+    user_seat,
 )
 
 _DSN = "https://api1.unipile.com:1234"
@@ -34,7 +34,8 @@ async def test_provision_first_login_creates_user_and_seat(db_session: AsyncSess
     )
     assert user.sso_subject == "urn:li:1"
     assert await home_org_id(db_session, user_id=user.id)  # org + workspace + membership
-    assert await seat_account_id(db_session, user_id=user.id, provider=_LINKEDIN) == "acct-1"
+    seat = await user_seat(db_session, user_id=user.id, provider=_LINKEDIN)
+    assert seat is not None and seat.external_id == "acct-1"
 
 
 @pytest.mark.db
@@ -46,7 +47,8 @@ async def test_provision_returning_user_refreshes_seat(db_session: AsyncSession)
         db_session, member_urn="urn:li:2", name="A", email=None, account_id="acct-b"
     )
     assert u1.id == u2.id  # same identity, no duplicate org/user
-    assert await seat_account_id(db_session, user_id=u2.id, provider=_LINKEDIN) == "acct-b"
+    seat = await user_seat(db_session, user_id=u2.id, provider=_LINKEDIN)
+    assert seat is not None and seat.external_id == "acct-b"
 
 
 # --- the Unipile connection client (respx-mocked, no live API) ----------------

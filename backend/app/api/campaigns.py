@@ -51,6 +51,7 @@ class CampaignIn(BaseModel):
     objective: str | None = None
     seed_contact_ids: list[str] = []
     from_email: str | None = None
+    seat_id: str | None = None
 
 
 class CampaignOut(BaseModel):
@@ -66,6 +67,8 @@ class CampaignOut(BaseModel):
     authored_by: Authorship
     field_owners: JsonObject
     next_source_at: str | None
+    seat_id: str | None
+    created_by_user_id: str | None
 
 
 class CampaignCounts(BaseModel):
@@ -128,6 +131,8 @@ def dump(c: Campaign) -> CampaignOut:
         authored_by=c.authored_by,
         field_owners=c.field_owners,
         next_source_at=c.next_source_at.isoformat() if c.next_source_at else None,
+        seat_id=c.seat_id,
+        created_by_user_id=c.created_by_user_id,
     )
 
 
@@ -164,6 +169,8 @@ async def create_campaign_endpoint(
         objective=body.objective,
         seed_contact_ids=body.seed_contact_ids,
         from_email=body.from_email,
+        created_by_user_id=ctx.user_id,
+        seat_id=body.seat_id,
     )
     await audit.record(
         session,
@@ -235,6 +242,7 @@ class CampaignPatch(BaseModel):
     objective: str | None = None
     from_email: str | None = None
     status: CampaignStatus | None = None
+    seat_id: str | None = None
 
 
 @router.patch("/{campaign_id}", response_model=CampaignOut)
@@ -257,6 +265,8 @@ async def update_campaign(
         campaign.from_email = body.from_email
     if body.status is not None:
         campaign.status = body.status
+    if body.seat_id is not None:
+        campaign.seat_id = body.seat_id
     await session.flush()
     return dump(campaign)
 
@@ -309,6 +319,8 @@ async def duplicate_campaign(campaign_id: str, ctx: ContextDep, session: Session
         from_email=src.from_email,
         criteria=dict(src.criteria or {}),
         sequence=list(src.sequence or []),
+        seat_id=src.seat_id,
+        created_by_user_id=ctx.user_id,
         constraints=dict(src.constraints or {}),
         field_owners=dict(src.field_owners or {}),
     )

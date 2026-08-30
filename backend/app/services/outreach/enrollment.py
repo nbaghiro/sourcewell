@@ -226,12 +226,7 @@ async def _send_touchpoint(
         enrollment.next_run_at = None
         return
 
-    # Resolve the org's sending seat for this channel (for health + per-seat rate limits).
-    seat = (
-        await resolve_channel_seat(session, organization_id=org_id, channel=message.channel)
-        if org_id
-        else None
-    )
+    seat = await resolve_channel_seat(session, campaign=campaign, channel=message.channel)
 
     # No connected LinkedIn account for a LinkedIn touchpoint: fall back to email (if the contact
     # has one), else fail the touchpoint visibly — never a phantom "sent". Dry-run still simulates.
@@ -242,11 +237,7 @@ async def _send_touchpoint(
     ):
         if contact.email:
             message.channel = Channel.email
-            seat = (
-                await resolve_channel_seat(session, organization_id=org_id, channel=Channel.email)
-                if org_id
-                else None
-            )
+            seat = await resolve_channel_seat(session, campaign=campaign, channel=Channel.email)
         else:
             message.status = MessageStatus.failed
             _advance(enrollment, sequence, now)

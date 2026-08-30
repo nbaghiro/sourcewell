@@ -21,6 +21,7 @@ from app.core.db import new_id
 from app.core.types import JsonList, JsonObject
 from app.ext.unipile import unipile_channel
 from app.models import (
+    Campaign,
     Channel,
     Connection,
     ConnectionProvider,
@@ -53,26 +54,41 @@ class TransientSendError(Exception):
 _EMAIL_PROVIDERS = (ConnectionProvider.gmail, ConnectionProvider.graph)
 
 
+def _providers_for(channel: Channel) -> list[ConnectionProvider]:
+    return [ConnectionProvider.linkedin] if channel == Channel.linkedin else list(_EMAIL_PROVIDERS)
+
+
 async def resolve_channel_seat(
-    session: AsyncSession, *, organization_id: str, channel: Channel
+    session: AsyncSession, *, campaign: Campaign, channel: Channel
 ) -> Connection | None:
-    """The org's connected seat for a channel (linkedin | email), preferring a healthy (ok) one."""
-    providers = (
-        [ConnectionProvider.linkedin] if channel == Channel.linkedin else list(_EMAIL_PROVIDERS)
-    )
-    rows = list(
+    """The seat this campaign sends from on `channel`: its designated seat, else the creator's.
+
+    Returns None when neither resolves — the caller must fail visibly rather than borrow an
+    unrelated colleague's mailbox. An unhealthy seat is never returned.
+    """
+    providers = _providers_for(channel)
+    if campaign.seat_id is not None:
+        seat = await session.get(Connection, campaign.seat_id)
+        if seat is not None and seat.status == ConnectionStatus.ok and seat.provider in providers:
+            return seat
+    if campaign.created_by_user_id is None:
+        return None
+    return (
         (
             await session.execute(
-                select(Connection).where(
-                    Connection.organization_id == organization_id,
+                select(Connection)
+                .where(
+                    Connection.user_id == campaign.created_by_user_id,
                     Connection.provider.in_(providers),
+                    Connection.status == ConnectionStatus.ok,
                 )
+                .order_by(Connection.created_at)
+                .limit(1)
             )
         )
         .scalars()
-        .all()
+        .first()
     )
-    return next((c for c in rows if c.status == ConnectionStatus.ok), rows[0] if rows else None)
 
 
 def linkedin_transport_ready(seat: Connection | None) -> bool:
