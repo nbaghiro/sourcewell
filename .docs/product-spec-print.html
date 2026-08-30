@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sourcewell Product Specification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Hanken+Grotesk:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  /* ============================================================
+     Sourcewell product spec — print edition.
+     Light only. White page ground, Wellspring brand accents.
+     ============================================================ */
+  :root {
+    --ink:        #122019;
+    --ink-muted:  #55655c;
+    --ink-faint:  #7d8b83;
+    --rule:       #e0dccf;
+    --rule-strong:#c6c0ae;
+    --brand:      #0b5d4e;
+    --brand-strong:#0e7c66;
+    --brand-weak: #edf6f2;
+    --brand-line: #b3dccd;
+    --sand:       #f5f3ec;
+    --masthead:   #07312b;
+    --masthead-ink:#eaf5ef;
+    --masthead-muted:#8fb6ac;
+    --ok:   #2c7a52;
+    --warn: #a86a24;
+    --off:  #7d8b83;
+
+    --font-display: "Bricolage Grotesque", "Hanken Grotesk", sans-serif;
+    --font-body: "Hanken Grotesk", -apple-system, sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, Menlo, monospace;
+  }
+
+  /* Side margins are zero so the masthead can bleed to the paper edge; the
+     horizontal inset lives on .content instead. Page 1 also drops its top
+     margin so the masthead starts flush at the top of the sheet. */
+  @page {
+    size: Letter;
+    margin: 16mm 0 18mm 0;
+  }
+  @page :first {
+    margin-top: 0mm;
+  }
+  .content { padding: 0 17mm; }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  body {
+    margin: 0;
+    background: #ffffff;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 10.4pt;
+    line-height: 1.48;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    orphans: 3;
+    widows: 3;
+  }
+
+  p { margin: 0 0 7pt; orphans: 3; widows: 3; }
+  p:last-child { margin-bottom: 0; }
+  strong { font-weight: 600; }
+  em { font-style: italic; color: var(--ink-muted); }
+
+  /* ---------- masthead (page 1 only) ---------- */
+  .masthead {
+    background: var(--masthead);
+    color: var(--masthead-ink);
+    padding: 13mm 17mm 9.5mm;
+    margin: 0 0 7.5mm;
+    break-after: avoid;
+    break-inside: avoid;
+  }
+  .wordmark {
+    font-family: var(--font-mono);
+    font-size: 7.6pt;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--masthead-muted);
+    display: flex;
+    align-items: center;
+    gap: 7pt;
+    margin-bottom: 7pt;
+  }
+  .wordmark::before {
+    content: "";
+    width: 14pt; height: 1.6pt;
+    background: var(--masthead-muted);
+    display: block;
+  }
+  .masthead h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 27pt;
+    line-height: 1.05;
+    letter-spacing: -.02em;
+    margin: 0 0 7pt;
+  }
+  .standfirst {
+    font-size: 10.6pt;
+    color: var(--masthead-muted);
+    max-width: 96mm;
+    margin: 0 0 11pt;
+    line-height: 1.45;
+  }
+  .masthead-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 13mm;
+    padding-top: 8pt;
+    border-top: .8pt solid rgba(143,182,172,.3);
+    margin: 0;
+  }
+  .masthead-meta div { display: block; }
+  .masthead-meta dt {
+    font-family: var(--font-mono);
+    font-size: 6.9pt;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--masthead-muted);
+    margin: 0 0 1pt;
+  }
+  .masthead-meta dd { margin: 0; font-size: 9.2pt; font-weight: 500; }
+
+  /* ---------- contents ---------- */
+  .toc {
+    border: .8pt solid var(--rule);
+    border-left: 2.5pt solid var(--brand);
+    background: var(--sand);
+    border-radius: 3pt;
+    padding: 8pt 12pt 9pt;
+    margin-bottom: 8mm;
+    break-inside: avoid;
+  }
+  .toc h2 {
+    font-family: var(--font-mono);
+    font-size: 7pt;
+    letter-spacing: .17em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 6pt;
+    font-weight: 500;
+  }
+  .toc ol {
+    list-style: none; margin: 0; padding: 0;
+    columns: 2; column-gap: 12mm;
+  }
+  .toc li {
+    display: flex; gap: 7pt; align-items: baseline;
+    margin-bottom: 3.5pt;
+    break-inside: avoid;
+  }
+  .toc .num {
+    font-family: var(--font-mono);
+    font-size: 8pt;
+    color: var(--brand);
+    min-width: 9pt;
+    font-variant-numeric: tabular-nums;
+  }
+  .toc a { color: var(--ink); text-decoration: none; font-weight: 500; font-size: 9.5pt; }
+
+  /* ---------- sections ---------- */
+  section { margin-bottom: 6.5mm; }
+  section:last-of-type { margin-bottom: 5mm; }
+  /* The status appendix opens its own page: it is a different kind of content
+     from the spec above it, and starting it fresh keeps the long table whole. */
+  #s9 { break-before: page; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8pt;
+    padding-bottom: 5pt;
+    margin-bottom: 8pt;
+    border-bottom: 1.6pt solid var(--rule-strong);
+    break-after: avoid;
+    break-inside: avoid;
+  }
+  .sec-num {
+    font-family: var(--font-mono);
+    font-size: 10pt;
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+  .sec-head h2 {
+    font-family: var(--font-display);
+    font-size: 15.5pt;
+    font-weight: 700;
+    letter-spacing: -.015em;
+    line-height: 1.15;
+    margin: 0;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-size: 11pt;
+    font-weight: 700;
+    letter-spacing: -.005em;
+    margin: 10.5pt 0 4.5pt;
+    color: var(--ink);
+    break-after: avoid;
+    break-inside: avoid;
+  }
+  /* A heading opening a section sits tight under the rule; every other heading
+     keeps its full leading, including ones wrapped in .pair. */
+  .sec-head + h3 { margin-top: 1pt; }
+  .pair { margin-top: 10.5pt; }
+  .pair > h3 { margin-top: 0; }
+  .sec-head + .pair { margin-top: 1pt; }
+  .sub-num {
+    font-family: var(--font-mono);
+    font-size: 8.6pt;
+    color: var(--brand);
+    margin-right: 5pt;
+    font-weight: 400;
+  }
+
+  ul.plain { margin: 0 0 7pt; padding-left: 13pt; }
+  ul.plain li { margin-bottom: 3pt; padding-left: 1pt; break-inside: avoid; }
+  ul.plain li::marker { color: var(--brand-line); }
+  ul.plain:last-child { margin-bottom: 0; }
+
+  /* ---------- tables ---------- */
+  .table-wrap {
+    border: .8pt solid var(--rule);
+    border-radius: 3pt;
+    overflow: hidden;
+    margin: 0 0 9pt;
+  }
+  .table-wrap.keep { break-inside: avoid; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.2pt; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  th, td {
+    text-align: left;
+    padding: 4.2pt 7pt;
+    vertical-align: top;
+    border-bottom: .7pt solid var(--rule);
+    line-height: 1.42;
+  }
+  thead th {
+    font-family: var(--font-mono);
+    font-size: 6.9pt;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+    background: var(--sand);
+    border-bottom: .8pt solid var(--rule-strong);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td:first-child { font-weight: 600; }
+  table.narrow-first td:first-child { width: 30mm; }
+  table.status td:nth-child(2) { width: 22mm; }
+
+  /* ---------- callout ---------- */
+  .callout {
+    background: var(--brand-weak);
+    border: .8pt solid var(--brand-line);
+    border-radius: 3pt;
+    padding: 8pt 11pt;
+    margin: 0 0 9pt;
+    break-inside: avoid;
+  }
+  .callout .label {
+    font-family: var(--font-mono);
+    font-size: 6.9pt;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--brand);
+    display: block;
+    margin-bottom: 4pt;
+    font-weight: 500;
+  }
+
+  /* ---------- status chips ---------- */
+  .chip {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 6.7pt;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 1.4pt 4pt;
+    border-radius: 2.5pt;
+    white-space: nowrap;
+    font-weight: 500;
+    border: .7pt solid;
+  }
+  .chip.built { color: var(--ok);   border-color: #9ec4ae; background: #eef7f1; }
+  .chip.part  { color: var(--warn); border-color: #dcc19a; background: #faf3e9; }
+  .chip.none  { color: var(--off);  border-color: #c8cfca; background: #f2f4f2; }
+
+  /* ---------- edition cards ---------- */
+  .editions { display: block; margin: 0 0 9pt; }
+  .edition {
+    border: .8pt solid var(--rule);
+    border-radius: 3pt;
+    padding: 7pt 10pt;
+    margin-bottom: 5pt;
+    break-inside: avoid;
+  }
+  .edition.now { border-color: var(--brand-line); background: var(--brand-weak); }
+  .edition-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 8pt; margin-bottom: 3pt;
+  }
+  .edition h4 { font-family: var(--font-display); font-size: 10.2pt; font-weight: 700; margin: 0; }
+  .edition-when {
+    font-family: var(--font-mono);
+    font-size: 6.9pt;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+  .edition.now .edition-when { color: var(--brand); }
+  .edition p { margin: 0; font-size: 9.2pt; color: var(--ink-muted); line-height: 1.45; }
+
+  /* keep a heading glued to the block that follows it */
+  .pair { break-inside: avoid; }
+
+  footer {
+    border-top: 1.6pt solid var(--rule-strong);
+    padding-top: 7pt;
+    margin-top: 4mm;
+    font-size: 8.8pt;
+    color: var(--ink-faint);
+    break-inside: avoid;
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wordmark">Sourcewell</div>
+  <h1>Product Specification</h1>
+  <p class="standfirst">
+    What the product does, how each part works, and what we are deliberately leaving out.
+    Written to be read start to finish in about twenty minutes.
+  </p>
+  <dl class="masthead-meta">
+    <div><dt>Audience</dt><dd>Founding team</dd></div>
+    <div><dt>Status</dt><dd>Working draft</dd></div>
+    <div><dt>First edition</dt><dd>Recruiting</dd></div>
+    <div><dt>Updated</dt><dd>29 August 2026</dd></div>
+  </dl>
+</header>
+
+<div class="content">
+
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><span class="num">1</span><a href="#s1">What Sourcewell is</a></li>
+    <li><span class="num">2</span><a href="#s2">The words we use</a></li>
+    <li><span class="num">3</span><a href="#s3">The journey, end to end</a></li>
+    <li><span class="num">4</span><a href="#s4">The product, area by area</a></li>
+    <li><span class="num">5</span><a href="#s5">The autonomy dial</a></li>
+    <li><span class="num">6</span><a href="#s6">One engine, many sectors</a></li>
+    <li><span class="num">7</span><a href="#s7">What we deliberately do not do</a></li>
+    <li><span class="num">8</span><a href="#s8">Open decisions</a></li>
+    <li><span class="num">9</span><a href="#s9">Where we are today</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<section id="s1">
+  <div class="sec-head"><span class="sec-num">1</span><h2>What Sourcewell is</h2></div>
+  <p>
+    Sourcewell finds people worth contacting, writes to each of them personally, follows up over
+    several days, and brings every reply back to one place. A recruiter describes the role they are
+    filling. The system searches licensed people databases, ranks everyone it finds against that
+    description, drafts a tailored first message for each person, sends it from the recruiter's own
+    mailbox once a human approves it, follows up on a schedule, and hands the conversation back the
+    moment someone shows real interest.
+  </p>
+  <p>
+    The work it replaces is repetitive and slow: searching, reading profiles, writing a note that
+    sounds like a person wrote it, remembering to follow up, and tracking who answered. Done properly
+    that is several minutes per candidate, a few hundred times per role. Sourcewell runs that loop
+    continuously in the background so the team reviews work instead of producing it.
+  </p>
+  <h3>Who it is for</h3>
+  <p>
+    Talent teams at large, regulated employers (banks, insurers, and similar), and staffing agencies
+    working several clients at once. The person who buys it leads talent acquisition. The people who
+    can block the purchase are security, compliance, and legal, which is why approval gates, audit
+    records, and sending limits are part of the core product rather than an enterprise upsell we add
+    later.
+  </p>
+  <h3>What makes it different</h3>
+  <p>
+    Most tools in this space do one slice: a database to search, a sequencer to send, an inbox to
+    read. The team stitches them together and carries the judgment between them. Sourcewell ties a
+    single target (one open role) to a pipeline that stays filled, ranked, contacted, and answered, as
+    one supervised system with one record of what happened and why.
+  </p>
+  <p>
+    The second difference is posture. The system is built to be supervised, not trusted blindly.
+    Nothing reaches a real person without a human having approved it, until the team explicitly
+    decides otherwise, campaign by campaign.
+  </p>
+</section>
+
+<!-- 2 -->
+<section id="s2">
+  <div class="sec-head"><span class="sec-num">2</span><h2>The words we use</h2></div>
+  <p>
+    These are the objects the product is built from. They appear in the interface with these names, so
+    it is worth agreeing on them early.
+  </p>
+  <div class="table-wrap">
+    <table class="narrow-first">
+      <thead><tr><th>Term</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td>Person</td><td>Someone who signs in. One login works everywhere they work, so a recruiter at two agencies has one account rather than two.</td></tr>
+        <tr><td>Organization</td><td>The customer. Billing, the do-not-contact list, data-provider contracts, and the audit record live here. Most customers never think about it; it is simply their company.</td></tr>
+        <tr><td>Workspace</td><td>The isolation boundary. Contacts, campaigns, and conversations live inside one and never cross to another. Shown as Client, Department, or Team depending on how the customer works.</td></tr>
+        <tr><td>Contact</td><td>A person we might reach out to. Called a candidate in the recruiting edition.</td></tr>
+        <tr><td>Campaign</td><td>One outreach effort: who we want, what we send, and the rules we send under. In recruiting, one open role.</td></tr>
+        <tr><td>Enrollment</td><td>One contact being worked inside one campaign, carrying its own state, score, and history.</td></tr>
+        <tr><td>Sequence</td><td>The ordered messages a campaign sends, each with a channel and a delay.</td></tr>
+        <tr><td>Seat</td><td>A person's own connected sending account: their work mailbox or their LinkedIn account. It belongs to the person, and each campaign names the seat it sends from.</td></tr>
+        <tr><td>Fit score</td><td>How well a contact matches a campaign, from 0 to 100, always with a short written reason.</td></tr>
+        <tr><td>Suppression</td><td>The do-not-contact list. Company-wide by default, and permanent once someone is on it.</td></tr>
+        <tr><td>Partner</td><td>A company that puts their own brand on the product and sells it to their own customers. A partner sets defaults; they do not see their customers' pipelines.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="s3">
+  <div class="sec-head"><span class="sec-num">3</span><h2>The journey, end to end</h2></div>
+  <p>
+    This is one pass through the whole product, in the order a customer experiences it. Each step is
+    described in full in section 4.
+  </p>
+  <p>
+    An administrator signs in and invites the team. Each recruiter connects their work mailbox, and
+    optionally their own LinkedIn account, because messages send from the person, not from us. The team
+    sets its ground rules once: who must never be contacted, how many messages a day is acceptable,
+    what hours are acceptable, and how the writing should sound.
+  </p>
+  <p>
+    A recruiter starts a campaign by pasting a job description, pulling a posting from LinkedIn, or
+    just describing the role in a sentence. The system turns that into a structured description of who
+    we are looking for, which the recruiter reviews and corrects. This step matters more than it looks,
+    because everything downstream is measured against it.
+  </p>
+  <p>
+    The recruiter then confirms the audience, picks which sources to search, builds the message
+    sequence, chooses which account sends, and sets the autonomy level. From that point the campaign
+    runs on its own clock.
+  </p>
+  <p>
+    The system searches continuously, brings back people who match, scores each one against the role
+    with a written reason, and drops anyone already in the pipeline or on the do-not-contact list. The
+    recruiter reviews a ranked shortlist and approves who to pursue. For each approved person, the
+    system drafts a first message and holds it for approval. Approved messages send from the
+    recruiter's own account inside the sending limits, and follow-ups go out on schedule until the
+    person replies or opts out.
+  </p>
+  <p>
+    Replies from any channel land in one inbox, grouped as a single conversation per person. The system
+    reads each reply, decides whether it is interest, a question, a decline, or an opt-out, pauses the
+    follow-ups, and drafts a response. When someone is genuinely interested, the conversation is handed
+    to the recruiter with a summary of what was said, and the automation stops for that person.
+  </p>
+</section>
+
+<!-- 4 -->
+<section id="s4">
+  <div class="sec-head"><span class="sec-num">4</span><h2>The product, area by area</h2></div>
+
+  <h3><span class="sub-num">4.1</span>Accounts, onboarding, and connections</h3>
+  <p>
+    A customer signs up as an organization and gets one workspace to start with. People are invited by
+    email, and one login works across every company a person belongs to, so a contractor working for
+    two agencies signs in once and switches between them.
+  </p>
+  <p>
+    Access has two parts. An organization role covers the company: an admin manages billing, members,
+    and company-wide rules; a member works the pipeline; a compliance role reads the audit record
+    without touching campaigns. On top of that, people are granted access to particular workspaces.
+    Organization admins reach every workspace by default, and everyone else sees only what they have
+    been granted.
+  </p>
+  <p>
+    Each person connects their own sending accounts. The work mailbox is the important one, because
+    email is the channel that scales and stays defensible, and a message from a real recruiter's
+    address arrives better than one from a shared marketing domain. LinkedIn is optional and connected
+    per person, using their own account. First-run onboarding walks a new workspace through three
+    things: connect an account, add or find some people, create a first campaign.
+  </p>
+
+  <h3><span class="sub-num">4.2</span>Finding people</h3>
+  <p>
+    There are three ways people enter a workspace. The team can import a list they already have. A
+    recruiter can search interactively, typing what they want in plain language, adjusting the filters,
+    and picking who to keep. Or a running campaign can search on its own schedule and keep adding
+    people who match.
+  </p>
+  <p>
+    Searches run against licensed people databases and, where a recruiter has connected their own
+    LinkedIn account, against LinkedIn itself. Several sources can be searched at once, results are
+    merged so the same person never appears twice, and each result carries a note of where it came
+    from. We do not keep a copy of these databases. We search them live and store only the people a
+    customer chooses to keep, which is both cheaper and a much easier privacy position to defend.
+  </p>
+  <p>
+    Before anything is kept, we check contact details, drop anyone on the do-not-contact list, and drop
+    anyone already in the pipeline. A campaign keeps topping itself up as long as it is active, so the
+    recruiter sees new candidates arriving rather than a list that goes stale.
+  </p>
+
+  <h3><span class="sub-num">4.3</span>Ranking and fit</h3>
+  <p>
+    Every person is scored from 0 to 100 against the campaign's description, and every score comes with
+    a sentence explaining it in plain language, citing the person's actual background. The score weighs
+    the things a recruiter would weigh: title, skills, seniority, function, employer, industry, company
+    size, and location. Exclusions are absolute: if a campaign says never contact anyone at a named
+    competitor, a match there is disqualified regardless of how good the rest looks.
+  </p>
+  <p>
+    Whether we can actually reach someone is tracked separately from how well they fit, because they
+    are different problems. A perfect match with no verified email is still a perfect match; it just
+    needs more work to reach. Mixing the two into one number hides that.
+  </p>
+  <p>
+    The same scoring runs when a recruiter is still editing the audience, so the live count of matching
+    people they see while typing is the same count the campaign will act on. That consistency is a
+    deliberate constraint and worth protecting.
+  </p>
+
+  <h3><span class="sub-num">4.4</span>The campaign</h3>
+  <p>
+    The campaign is the control surface. Everything the system does for a role is a consequence of what
+    is set here, so the settings screen is effectively the product's policy screen.
+  </p>
+  <div class="table-wrap">
+    <table class="narrow-first">
+      <thead><tr><th>Setting</th><th>What it controls</th></tr></thead>
+      <tbody>
+        <tr><td>Goal</td><td>The role in plain words. Drives how the assistant writes and reasons.</td></tr>
+        <tr><td>Audience</td><td>Who we are looking for. Drives both searching and ranking.</td></tr>
+        <tr><td>Sources</td><td>Which databases and channels this campaign is allowed to search.</td></tr>
+        <tr><td>Pipeline target</td><td>How many live candidates to keep. Tells the system when to search more and when to stop.</td></tr>
+        <tr><td>Score threshold</td><td>How good a match has to be before anyone proposes it.</td></tr>
+        <tr><td>Sequence</td><td>The messages, their order, their channel, and the wait between them.</td></tr>
+        <tr><td>Sending account</td><td>Whose mailbox or LinkedIn account these messages come from.</td></tr>
+        <tr><td>Autonomy</td><td>Which approvals a human still has to give. See section 5.</td></tr>
+        <tr><td>Limits</td><td>Daily send caps, acceptable hours, and any campaign-specific exclusions.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    A campaign moves through four states. It starts as a <strong>draft</strong> that costs nothing and
+    sends nothing. Launching makes it <strong>active</strong>, and the launch step is the real review
+    gate, the moment a person confirms the whole configuration rather than each setting individually.
+    <strong>Pausing</strong> stops all new work immediately while holding everything in flight, so it
+    doubles as the emergency stop. <strong>Completing</strong> retires it while keeping the history.
+  </p>
+
+  <h3><span class="sub-num">4.5</span>Messages and sequences</h3>
+  <p>
+    A sequence is an ordered set of touchpoints. Each one names a channel, a wait before it goes out,
+    and either a template or an instruction to the assistant. A typical recruiting sequence is an email
+    on day zero, a LinkedIn message on day three, and a short final email on day six.
+  </p>
+  <p>
+    Messages are written per person, not merged from a template. The assistant is given the person's
+    real background, the role, and the team's writing guidance, and is asked for something short and
+    specific. Teams can also upload approved templates and pin a sequence step to one, which matters
+    for organizations whose legal team wants to see the wording in advance.
+  </p>
+  <p>
+    Every generated message is checked before it can queue: length and format, whether it claims
+    anything about the person that is not in their profile, whether it uses banned language, whether it
+    matches the team's voice, whether it carries the required sender identification and unsubscribe
+    wording, and whether we have said something too similar to this person before. A message that fails
+    a check does not reach the approval queue.
+  </p>
+
+  <h3><span class="sub-num">4.6</span>Approvals</h3>
+  <p>
+    Approvals are where a person decides what the system is allowed to do, and there are two of them.
+    The first covers who we pursue: the agent proposes a ranked list of people, each with a fit score
+    and a short explanation, and the recruiter accepts or dismisses them individually or in bulk. The
+    second covers what gets sent: every message the agent writes waits as a draft until someone
+    approves, edits, or rejects it. Both gates can be relaxed per campaign as a team grows comfortable,
+    but a new campaign starts with both on, and nothing reaches a real person without someone having
+    seen it.
+  </p>
+  <p>
+    Dismissing a candidate and blocking a person are separate actions, deliberately. Saying someone is
+    wrong for this role means only that; it does not follow them to other roles or other clients.
+    Adding someone to the do-not-contact list is a distinct, heavier decision that applies everywhere
+    in the organization and does not expire.
+  </p>
+
+  <h3><span class="sub-num">4.7</span>Sending and pacing</h3>
+  <p>
+    Approved messages do not send immediately. They pass through a set of limits designed to keep both
+    the customer's email domain and their team's LinkedIn accounts healthy.
+  </p>
+  <ul class="plain">
+    <li>A daily cap per channel, per sending account, set by the workspace.</li>
+    <li>Acceptable sending hours and days, so nothing goes out at 3am on a Sunday.</li>
+    <li>A warmup ramp for new accounts, which starts low and increases over the first weeks.</li>
+    <li>Small natural variation in timing, so sending does not look mechanical.</li>
+    <li>A shared budget when one person works several workspaces, split across them rather than multiplied.</li>
+  </ul>
+  <p>
+    Every campaign names the seat it sends from. If that seat is missing or unhealthy we stop and say
+    so rather than quietly sending from a colleague's account, because a candidate receiving a note
+    from a recruiter they have never heard of is worse than a delayed send.
+  </p>
+  <p>
+    If a LinkedIn account shows any sign of trouble, we stop using it, tell its owner, and ask them to
+    reconnect rather than pushing through. If a campaign wants LinkedIn but the seat is missing or
+    unhealthy, we fall back to email when we have an address and surface a visible failure when we do
+    not. We never record a message as sent when it was not.
+  </p>
+
+  <h3><span class="sub-num">4.8</span>The inbox and replies</h3>
+  <p>
+    Replies arrive in one inbox, grouped into a single conversation per person even when the thread
+    moves between email and LinkedIn. The inbox also holds drafts waiting for approval, so a recruiter
+    has one queue to work rather than two.
+  </p>
+  <p>
+    Each reply is read and classified: interested, a question, not right now, or an opt-out. Follow-ups
+    stop the moment anyone replies, so nobody receives a scheduled nudge after they have already
+    answered. Opt-outs are honored immediately and permanently, without waiting for a human. For
+    everything else the assistant drafts a response the recruiter can send, edit, or discard.
+  </p>
+  <p>
+    Alongside each conversation sits the context a recruiter needs to answer well: who this person is,
+    what we said before, what they scored and why, and which campaign they belong to.
+  </p>
+
+  <h3><span class="sub-num">4.9</span>Handoff</h3>
+  <p>
+    When someone is genuinely interested, the system stops and gives the conversation to a person, with
+    a short summary of what was discussed. Handoff also triggers on its own whenever the assistant is
+    out of its depth: a question about compensation or terms, a topic outside the role, an escalation
+    or complaint, or plain uncertainty. Those handoffs happen regardless of the autonomy setting,
+    because the cost of a confident wrong answer to a real candidate is high and the cost of asking a
+    human is low.
+  </p>
+
+  <h3><span class="sub-num">4.10</span>The assistant</h3>
+  <p>
+    There is one assistant, seen from three places. It designs a campaign from a brief and keeps
+    proposing improvements as results come in. It sources and scores people continuously. It handles
+    live conversations. To a user it should feel like one colleague working in the background, not like
+    three separate features.
+  </p>
+  <p>
+    Two rules govern it. The first is that the assistant is never load-bearing: every part of the
+    product works without it, in a simpler and more mechanical form, so an outage or a missing key
+    degrades quality rather than stopping work. The second is ownership. Any part of a campaign a
+    person edits by hand becomes theirs, and the assistant will suggest changes there but never make
+    them. Parts the assistant owns it can change on its own, recording what it changed and why. Handing
+    a section back is a single explicit action.
+  </p>
+  <p>
+    Everything the assistant does is recorded as a readable trail: what it looked at, what it decided,
+    what it changed. A recruiter can open any campaign and see the last week of its work in plain
+    language, and undo anything it did on its own.
+  </p>
+  <p>
+    The assistant is also available as chat, in context. Asking about a campaign should be able to
+    return not just a sentence but the actual thing being discussed: a funnel, a shortlist, a proposed
+    audience with an Apply button next to it.
+  </p>
+
+  <h3><span class="sub-num">4.11</span>Companies, workspaces, and people</h3>
+  <p>
+    There are exactly two levels above a person, because the product has to keep two promises at the
+    same time.
+  </p>
+  <p>
+    The first is isolation. An agency running two competing banks needs a hard guarantee that a
+    candidate sourced for one never surfaces for the other, and an enterprise needs departments walled
+    off from each other. That is what a workspace is. It is a boundary rather than a filter, because a
+    filter can be forgotten and a boundary cannot.
+  </p>
+  <p>
+    The second is that some things have to be company-wide. If someone asks never to be contacted
+    again, that has to hold for every client the agency works, not only the one that reached them. The
+    same goes for the invoice, the data-provider contract, the audit record, and single sign-on. Those
+    belong to the organization.
+  </p>
+  <p>
+    One level cannot express both, which is why there are two. Everything else that varies is
+    deliberately kept out of the hierarchy: a person is their own login, a seat belongs to a person,
+    and a reseller is a label on a company rather than a layer above it.
+  </p>
+  <div class="table-wrap keep">
+    <table>
+      <thead><tr><th>Walled inside a workspace</th><th>Shared across the company</th></tr></thead>
+      <tbody>
+        <tr><td>Contacts and their history</td><td>The do-not-contact list</td></tr>
+        <tr><td>Campaigns and sequences</td><td>The plan, credits, and invoice</td></tr>
+        <tr><td>Conversations and replies</td><td>Data-provider contracts</td></tr>
+        <tr><td>Fit scores and the reasoning behind them</td><td>The audit record</td></tr>
+        <tr><td>Workspace settings and brand voice</td><td>Sign-in and team membership</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    A sending seat sits outside both. It belongs to the person who connected it, and its daily budget
+    is shared across every workspace they work rather than multiplied by them.
+  </p>
+  <p>
+    Most customers never see any of this. A single team gets one workspace made for them and never
+    meets the word. Agencies and enterprises add workspaces when they need them.
+  </p>
+
+  <h3><span class="sub-num">4.12</span>Compliance and safety</h3>
+  <p>
+    This is the section that decides enterprise deals, and it is best treated as product surface rather
+    than paperwork.
+  </p>
+  <ul class="plain">
+    <li>A complete record of every decision, draft, send, and reply, showing who or what did it, when, and why, exportable on request.</li>
+    <li>A do-not-contact list that is company-wide by default, so one opt-out binds every client, with the option of an entry that applies to a single workspace.</li>
+    <li>Fair hiring: candidates are assessed only on job-related factors, protected characteristics are never used as criteria, and the reasoning behind every selection is retained.</li>
+    <li>Privacy: people can be removed on request, we keep only what a customer imported, and each customer can choose the region their data lives in.</li>
+    <li>Outbound rules: every email identifies the sender and carries a working unsubscribe link.</li>
+    <li>Account safety: LinkedIn stays inside human-like limits and pauses on any warning; email-only mode exists for customers whose security policy forbids LinkedIn automation entirely.</li>
+    <li>A kill switch that stops one campaign or the entire account immediately.</li>
+  </ul>
+
+  <h3><span class="sub-num">4.13</span>Reporting</h3>
+  <p>
+    Reporting answers three questions. Is the pipeline healthy, shown as a funnel from sourced to
+    contacted to replied to handed off, per campaign and per person sending. Which messages actually
+    work, comparing sequences and steps by reply rate. And are the accounts healthy, showing daily
+    volume against caps and flagging any seat in trouble. A notification feed surfaces the things
+    needing attention: new replies, waiting approvals, and completed handoffs.
+  </p>
+
+  <h3><span class="sub-num">4.14</span>Plans and usage</h3>
+  <p>
+    Billing is per organization, on a monthly plan with an included allowance of credits shared across
+    all its workspaces. Three things consume credits: an email sent, a LinkedIn message sent, and a
+    candidate sourced. LinkedIn costs more than email because the underlying capacity is scarcer.
+  </p>
+  <p>
+    Usage is always visible, both as a running total and broken down by action, and we warn before the
+    limit rather than after. Going over the allowance does not stop work today; it is surfaced and
+    reconciled. Paid plans are self-serve through a standard checkout, and we never handle card
+    details.
+  </p>
+</section>
+
+<!-- 5 -->
+<section id="s5">
+  <div class="sec-head"><span class="sec-num">5</span><h2>The autonomy dial</h2></div>
+  <p>
+    Autonomy is one setting per campaign with three positions. It is the single most important control
+    in the product, because it decides how much a customer is trusting us with, and it lets a nervous
+    buyer start safely and move up as evidence accumulates rather than deciding on day one.
+  </p>
+  <div class="table-wrap keep">
+    <table>
+      <thead><tr><th>Mode</th><th>What the assistant does</th><th>What a person still does</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Manual</td>
+          <td>Suggests only. Finds and ranks people, drafts messages, proposes changes.</td>
+          <td>Approves who to pursue and every message, and applies every change by hand.</td>
+        </tr>
+        <tr>
+          <td>Assisted</td>
+          <td>Sources and drafts continuously, and adjusts the parts of the campaign it owns.</td>
+          <td>Approves every message before it sends.</td>
+        </tr>
+        <tr>
+          <td>Autopilot</td>
+          <td>Sources, drafts, and sends inside the campaign's limits.</td>
+          <td>Steps in on replies, and on anything the assistant escalates.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <span class="label">Fixed in every mode</span>
+    <p>
+      Opt-outs are honored immediately. The do-not-contact list is enforced before every send. Sending
+      limits and quiet hours always apply. Handoff triggers (compensation, off-topic, escalation,
+      uncertainty) always fire. Every action is recorded. Autopilot buys speed, never a reduction in
+      safety.
+    </p>
+  </div>
+  <p>
+    New campaigns start in Assisted. Manual exists for regulated teams and for the first week of a
+    pilot, when a customer wants to read everything before believing any of it.
+  </p>
+</section>
+
+<!-- 6 -->
+<section id="s6">
+  <div class="sec-head"><span class="sec-num">6</span><h2>One engine, many sectors</h2></div>
+  <p>
+    The machine underneath is not about recruiting. It finds people matching a description, ranks them,
+    writes to them, follows up, routes the replies, and keeps a record. Recruiting supplies the
+    vocabulary, the data sources, and the compliance rules, not the mechanics. That distinction is the
+    single most valuable structural decision in the product, and it is worth defending even when a
+    shortcut would be faster.
+  </p>
+
+  <div class="pair">
+    <h3>What changes between sectors</h3>
+    <ul class="plain">
+      <li>The words on screen: candidate or lead or subscriber, role or offer or launch, and whether a workspace reads as a client, a department, or a team.</li>
+      <li>The criteria that matter: skills, seniority, and location for recruiting; company size, industry, tools in use, and buying signals for sales.</li>
+      <li>The data sources: people databases and LinkedIn for recruiting; the same plus company and intent data for sales.</li>
+      <li>The instructions the assistant writes under, since a recruiter's pitch and a seller's pitch are different jobs.</li>
+      <li>The rules of the road: fair-hiring law for recruiting, marketing consent law for marketing.</li>
+      <li>The default sequences, which differ in length, tone, and cadence by sector.</li>
+    </ul>
+  </div>
+
+  <div class="pair">
+    <h3>What does not change</h3>
+    <ul class="plain">
+      <li>The funnel and every state in it.</li>
+      <li>Approvals and the autonomy dial.</li>
+      <li>Sending limits, quiet hours, warmup, and account health.</li>
+      <li>The do-not-contact list and the audit record.</li>
+      <li>Teams, workspace isolation, plans, and usage.</li>
+      <li>The inbox, handoff, and reporting.</li>
+    </ul>
+  </div>
+  <p>
+    Put plainly, roughly nine tenths of what we are building is sector-neutral, and the last tenth is
+    configuration. A second edition is not a second product.
+  </p>
+
+  <h3>The editions</h3>
+  <div class="editions">
+    <div class="edition now">
+      <div class="edition-head"><h4>Recruiter edition</h4><span class="edition-when">Now</span></div>
+      <p>
+        Find candidates for an open role. The hardest compliance bar of the three, which is useful:
+        building fair-hiring constraints, audit, and approval gates first means the later editions
+        inherit a standard they would not otherwise have been held to.
+      </p>
+    </div>
+    <div class="edition">
+      <div class="edition-head"><h4>Sales edition</h4><span class="edition-when">Next</span></div>
+      <p>
+        Find leads matching an ideal customer profile. Same funnel, different criteria and sources, plus
+        a connection to the customer's CRM in place of the applicant tracking system. The nearest
+        neighbour, and the cheapest to reach.
+      </p>
+    </div>
+    <div class="edition">
+      <div class="edition-head"><h4>Nurture edition</h4><span class="edition-when">Later</span></div>
+      <p>
+        Warm an existing list rather than a cold one, which changes where contacts come from and what
+        consent means, but not what the engine does with them.
+      </p>
+    </div>
+  </div>
+
+  <h3>White label</h3>
+  <p>
+    The same structure makes a white-label offering straightforward. A partner puts their own name,
+    logo, colours, domain, vocabulary, and default sequences on the product and sells it to their own
+    customers, while the engine, the provider contracts, the compliance behaviour, and the operational
+    limits stay ours and stay shared.
+  </p>
+  <p>
+    What makes this cheap is that settings resolve down a chain: our platform default, then the
+    partner, then the customer's company, then the workspace, then the campaign, with the nearest
+    value winning. A partner sets their vertical, their default sequences, and their sending limits
+    once, and every customer they onboard inherits them. A customer can override company-wide, and a
+    single workspace can tighten further. Nothing is forked, so adding a partner is data rather than a
+    new build.
+  </p>
+  <p>
+    A partner sets defaults and carries the billing relationship. They do not get access to their
+    customers' pipelines, and a partner is a label on a company rather than a layer above it, so no
+    customer's data becomes reachable by virtue of who sold them the product.
+  </p>
+  <p>
+    There is a business reason to keep this option open beyond the extra revenue. Agencies and platforms
+    bring distribution we would otherwise buy, and a partner who has put their own name on the product
+    is far harder to displace than one reselling ours.
+  </p>
+
+  <h3>What this asks of us now</h3>
+  <p>
+    The option only stays open if we hold a few lines while building the recruiting edition. There is no
+    separate "job" object, because a campaign already is one. Recruiting words live in a labels layer,
+    never underneath. The audience description stays generic rather than growing recruiting-only fields.
+    Data sources stay pluggable, so adding a sales database is adding an adapter. The assistant's
+    sector-specific instructions stay in a swappable pack rather than in the main prompt. None of this
+    costs meaningful time today, and all of it is expensive to retrofit.
+  </p>
+  <div class="callout">
+    <span class="label">Focus</span>
+    <p>
+      The near-term goal is a recruiting product good enough that a regulated employer runs real roles
+      through it, not a platform that does three things adequately. Everything above should be read as
+      constraints on how we build the recruiting edition, not as work to schedule alongside it. We
+      should be able to demonstrate a sales edition in a week when we choose to, and we should not
+      choose to until recruiting is settled.
+    </p>
+  </div>
+
+  <div class="pair">
+    <h3>What "settled" means</h3>
+    <ul class="plain">
+      <li>A recruiter can run a role end to end without leaving the product or asking us for help.</li>
+      <li>Messages send from real connected mailboxes and LinkedIn seats, at real volume, without account trouble.</li>
+      <li>A compliance reviewer can answer "why was this person contacted, and by whom" from the audit record alone.</li>
+      <li>A team can move a campaign to Autopilot and keep it there for a month.</li>
+      <li>Pipeline quality is good enough that recruiters accept most of what is proposed.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="s7">
+  <div class="sec-head"><span class="sec-num">7</span><h2>What we deliberately do not do</h2></div>
+  <p>
+    Each of these was considered and rejected for a reason worth keeping written down, because they come
+    back up.
+  </p>
+
+  <div class="pair">
+    <h3>We do not send from our own LinkedIn accounts</h3>
+    <p>
+      One shared account messaging on behalf of many customers hits daily limits immediately, makes every
+      message obviously automated, and is exactly the pattern LinkedIn takes to court. Each recruiter
+      connects their own account, we operate it within human limits, and we stop at the first sign of
+      trouble. This caps how fast LinkedIn can scale for us, which we accept.
+    </p>
+  </div>
+
+  <div class="pair">
+    <h3>We do not keep our own copy of a people database</h3>
+    <p>
+      Mirroring a provider's data would breach their terms, cost a great deal, go stale within months,
+      and hand us a privacy liability covering millions of people we have no relationship with. We search
+      live and keep only what a customer chooses to import.
+    </p>
+  </div>
+
+  <div class="pair">
+    <h3>We are not an applicant tracking system</h3>
+    <p>
+      The tracking system is the system of record for a hiring process, and customers already have one.
+      We fill the top of the funnel and hand engaged candidates over. Competing with the record system
+      would mean a much longer sale into a much more crowded market.
+    </p>
+  </div>
+
+  <div class="pair">
+    <h3>We do not store or archive customer communications for compliance</h3>
+    <p>
+      Regulated buyers in this space have not asked for it, and their existing mail archiving already
+      captures it. We will build it if a deal turns on it.
+    </p>
+  </div>
+
+  <div class="pair">
+    <h3>Not in the first release</h3>
+    <p>
+      Deep integration with tracking systems, a browser extension, a mobile app, and the sales and
+      nurture editions are all out of scope until the recruiting edition is settled. The first release is
+      email-first, approval-first, and narrow on purpose.
+    </p>
+  </div>
+</section>
+
+<!-- 8 -->
+<section id="s8">
+  <div class="sec-head"><span class="sec-num">8</span><h2>Open decisions</h2></div>
+  <p>These need a product call and are currently blocking or ambiguous.</p>
+  <ul class="plain">
+    <li>How a campaign decides it has enough candidates, and whether a recruiter sets a target number or the system infers one.</li>
+    <li>How often a campaign should search: a simple fast, normal, or slow choice, or a number of hours.</li>
+    <li>Whether a recruiter can tune what the fit score weighs, or whether we keep one scoring model everyone shares.</li>
+    <li>What a "reject" does to a candidate: hide them from this campaign, from this workspace, or from everything.</li>
+    <li>Whether templates are a company-level library that legal approves, or per-campaign text.</li>
+    <li>Which tracking system we integrate with first, and whether handoff writes into it or only links to it.</li>
+    <li>Whether Autopilot is available to every customer from the start, or unlocked after a track record.</li>
+    <li>Whether the assistant's usage is metered to customers as a cost, and if so how we present it.</li>
+    <li>Whether a partner can be given support access into a customer's workspace, and what the customer sees when they use it.</li>
+    <li>Whether workspace-only do-not-contact entries are worth exposing at all, or whether every opt-out should stay company-wide.</li>
+  </ul>
+</section>
+
+<!-- 9 -->
+<section id="s9">
+  <div class="sec-head"><span class="sec-num">9</span><h2>Where we are today</h2></div>
+  <p>
+    Everything above describes the product as designed. This is an honest read of how much of it exists,
+    so the document can be used for planning rather than only for alignment.
+  </p>
+  <div class="table-wrap">
+    <table class="status narrow-first">
+      <thead><tr><th>Area</th><th>State</th><th>What is missing</th></tr></thead>
+      <tbody>
+        <tr><td>Finding people</td><td><span class="chip built">Built</span></td><td>One search strategy per pass rather than several; no automatic top-up target.</td></tr>
+        <tr><td>Ranking and fit</td><td><span class="chip built">Built</span></td><td>No editable rubric; weights are the same for everyone.</td></tr>
+        <tr><td>Sequences and sending</td><td><span class="chip built">Built</span></td><td>No template library; generated messages are not yet checked before queuing.</td></tr>
+        <tr><td>Inbox and replies</td><td><span class="chip built">Built</span></td><td>Replies arriving by email do not yet reach the assistant.</td></tr>
+        <tr><td>Approvals</td><td><span class="chip part">Partly</span></td><td>Approve and edit work; reject and snooze do not exist.</td></tr>
+        <tr><td>Connecting a mailbox</td><td><span class="chip none">Not started</span></td><td>The screen exists but connecting a Gmail or Outlook account does nothing. This blocks the main channel.</td></tr>
+        <tr><td>Campaign control surface</td><td><span class="chip part">Partly</span></td><td>No draft state or launch step, no per-campaign sources, channels, limits, targets, or threshold.</td></tr>
+        <tr><td>The assistant</td><td><span class="chip part">Partly</span></td><td>Designs and sources well; never revisits a campaign, remembers nothing between runs, and chat cannot take actions.</td></tr>
+        <tr><td>Companies, workspaces, people</td><td><span class="chip built">Built</span></td><td>Two levels, one login across companies, workspace grants, and person-owned seats are all in place. Partner branding is modelled but has no interface yet.</td></tr>
+        <tr><td>Compliance and safety</td><td><span class="chip part">Partly</span></td><td>Audit and do-not-contact work; fair-hiring guarantees, unsubscribe wording in the message, data residency, and the account-wide kill switch do not exist.</td></tr>
+        <tr><td>Reporting</td><td><span class="chip part">Partly</span></td><td>Funnel and reply rates work; per-sender health and message-level comparison do not.</td></tr>
+        <tr><td>Plans and usage</td><td><span class="chip built">Built</span></td><td>Assistant usage is not counted, which is likely our largest variable cost.</td></tr>
+        <tr><td>Running it in production</td><td><span class="chip none">Not started</span></td><td>No deployment setup, error tracking, or monitoring. Nothing is hosted anywhere yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The shape of the work is that the two engines, finding people and sending messages, are close to
+    done, while the surface a customer configures and the safety story a compliance officer reads are
+    the thin parts. Two items block a real pilot outright: connecting a work mailbox, and being able to
+    run the product somewhere other than a laptop.
+  </p>
+</section>
+
+<footer>
+  Working draft for internal discussion. Sections 1 to 7 describe intent and should be argued with;
+  section 8 needs decisions; section 9 is a status read and will go out of date quickly.
+</footer>
+
+</div>
+
+</body>
+</html>
