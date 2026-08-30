@@ -36,12 +36,13 @@ from app.models import (
     EnrollmentState,
     Membership,
     MembershipRole,
-    MembershipScope,
     Message,
     MessageDirection,
     MessageStatus,
     Organization,
     SeatType,
+    SpaceGrant,
+    SpaceRole,
     User,
     Workspace,
     WorkspaceKind,
@@ -224,41 +225,26 @@ async def _org_and_admin(session: AsyncSession) -> tuple[Organization, User]:
     )
     session.add(admin)
     await session.flush()
-    session.add(
-        Membership(
-            user_id=admin.id,
-            organization_id=org.id,
-            scope=MembershipScope.organization,
-            role=MembershipRole.org_admin,
-        )
-    )
+    session.add(Membership(user_id=admin.id, organization_id=org.id, role=MembershipRole.org_admin))
     await session.flush()
     return org, admin
 
 
-async def _seed_team(session: AsyncSession, *, org: Organization, admin: User) -> list[str]:
+async def _seed_team(
+    session: AsyncSession, *, org: Organization, admin: User
+) -> tuple[list[str], dict[str, User]]:
     """Teammates (Members tab) + channel connections (Connections tab). Returns audit actor ids."""
     team = [
-        ("Dana Okafor", "dana@acme.demo", MembershipScope.organization, MembershipRole.member),
-        (
-            "Riley Walsh",
-            "riley@acme.demo",
-            MembershipScope.organization,
-            MembershipRole.workspace_admin,
-        ),
-        (
-            "Sam Patel",
-            "compliance@acme.demo",
-            MembershipScope.organization,
-            MembershipRole.compliance,
-        ),
+        ("Dana Okafor", "dana@acme.demo", MembershipRole.member),
+        ("Riley Walsh", "riley@acme.demo", MembershipRole.member),
+        ("Sam Patel", "compliance@acme.demo", MembershipRole.compliance),
     ]
     users: dict[str, User] = {}
-    for name, email, scope, role in team:
+    for name, email, role in team:
         user = User(email=email, name=name)
         session.add(user)
         await session.flush()
-        session.add(Membership(user_id=user.id, organization_id=org.id, scope=scope, role=role))
+        session.add(Membership(user_id=user.id, organization_id=org.id, role=role))
         users[name] = user
     await session.flush()
 
@@ -302,7 +288,7 @@ async def _seed_team(session: AsyncSession, *, org: Organization, admin: User) -
         ]
     )
     await session.flush()
-    return [admin.id, users["Dana Okafor"].id, users["Riley Walsh"].id]
+    return [admin.id, users["Dana Okafor"].id, users["Riley Walsh"].id], users
 
 
 async def _assign(
@@ -820,12 +806,22 @@ async def seed_demo(
         await _reset(session)
 
     org, admin = await _org_and_admin(session)
-    actor_ids = await _seed_team(session, org=org, admin=admin)
+    actor_ids, team = await _seed_team(session, org=org, admin=admin)
 
     ws_recruit = Workspace(organization_id=org.id, name="Recruiting", kind=WorkspaceKind.team)
     ws_sales = Workspace(organization_id=org.id, name="Enterprise Sales", kind=WorkspaceKind.team)
     ws_partner = Workspace(organization_id=org.id, name="Partnerships", kind=WorkspaceKind.team)
     session.add_all([ws_recruit, ws_sales, ws_partner])
+    await session.flush()
+
+    # Plain members reach only the workspaces they're granted; the admin and compliance see all.
+    session.add_all(
+        [SpaceGrant(user_id=team["Dana Okafor"].id, workspace_id=ws_recruit.id)]
+        + [
+            SpaceGrant(user_id=team["Riley Walsh"].id, workspace_id=ws.id, role=SpaceRole.admin)
+            for ws in (ws_recruit, ws_sales, ws_partner)
+        ]
+    )
     await session.flush()
 
     await _seed_workspace(session, ws_recruit, "eng", RECRUIT_CAMPAIGNS, 18, now, rng)

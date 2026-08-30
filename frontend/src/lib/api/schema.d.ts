@@ -1561,6 +1561,23 @@ export interface paths {
         patch: operations["update_workspace_settings_settings_workspace_patch"];
         trace?: never;
     };
+    "/space-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Space Grant */
+        post: operations["create_space_grant_space_grants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/suppressions": {
         parameters: {
             query?: never;
@@ -2813,8 +2830,7 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Role */
-            role: string;
+            role: components["schemas"]["MembershipRole"];
         };
         /** InviteRequest */
         InviteRequest: {
@@ -2846,41 +2862,31 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Role */
-            role: string;
-            /** Scope */
-            scope: string;
+            role: components["schemas"]["MembershipRole"];
+            /** Workspace Ids */
+            workspace_ids: string[];
         };
         /** MembershipCreate */
         MembershipCreate: {
             role: components["schemas"]["MembershipRole"];
-            scope: components["schemas"]["MembershipScope"];
             /** User Id */
             user_id: string;
-            /** Workspace Id */
-            workspace_id?: string | null;
         };
         /** MembershipRead */
         MembershipRead: {
             /** Id */
             id: string;
+            /** Organization Id */
+            organization_id: string;
             role: components["schemas"]["MembershipRole"];
-            scope: components["schemas"]["MembershipScope"];
             /** User Id */
             user_id: string;
-            /** Workspace Id */
-            workspace_id: string | null;
         };
         /**
          * MembershipRole
          * @enum {string}
          */
-        MembershipRole: "org_admin" | "workspace_admin" | "member" | "compliance";
-        /**
-         * MembershipScope
-         * @enum {string}
-         */
-        MembershipScope: "organization" | "workspace";
+        MembershipRole: "org_admin" | "member" | "compliance";
         /**
          * MessageDirection
          * @enum {string}
@@ -3213,8 +3219,7 @@ export interface components {
         RoleOut: {
             /** Id */
             id: string;
-            /** Role */
-            role: string;
+            role: components["schemas"]["MembershipRole"];
         };
         /** RolePatch */
         RolePatch: {
@@ -3313,6 +3318,30 @@ export interface components {
             /** Organization Id */
             organization_id: string;
         };
+        /** SpaceGrantCreate */
+        SpaceGrantCreate: {
+            /** @default member */
+            role: components["schemas"]["SpaceRole"];
+            /** User Id */
+            user_id: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** SpaceGrantRead */
+        SpaceGrantRead: {
+            /** Id */
+            id: string;
+            role: components["schemas"]["SpaceRole"];
+            /** User Id */
+            user_id: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /**
+         * SpaceRole
+         * @enum {string}
+         */
+        SpaceRole: "admin" | "member";
         /** StatusIdOut */
         StatusIdOut: {
             /** Id */
@@ -6246,6 +6275,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_space_grant_space_grants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpaceGrantCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceGrantRead"];
                 };
             };
             /** @description Validation Error */

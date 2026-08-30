@@ -45,16 +45,15 @@ class UserStatus(enum.StrEnum):
     disabled = "disabled"
 
 
-class MembershipScope(enum.StrEnum):
-    organization = "organization"
-    workspace = "workspace"
-
-
 class MembershipRole(enum.StrEnum):
     org_admin = "org_admin"
-    workspace_admin = "workspace_admin"
     member = "member"
     compliance = "compliance"
+
+
+class SpaceRole(enum.StrEnum):
+    admin = "admin"
+    member = "member"
 
 
 class ConnectionProvider(enum.StrEnum):
@@ -238,26 +237,36 @@ class LoginAttempt(IdMixin, TimestampMixin, Base):
 
 
 class Membership(IdMixin, TimestampMixin, Base):
+    """A user's place in an organization. The sole user↔org link."""
+
     __tablename__ = "membership"
 
     user_id: Mapped[str] = mapped_column(ForeignKey("app_user.id", ondelete="CASCADE"), index=True)
     organization_id: Mapped[str] = mapped_column(
         ForeignKey("organization.id", ondelete="CASCADE"), index=True
     )
-    scope: Mapped[MembershipScope] = mapped_column(sa_enum(MembershipScope))
-    workspace_id: Mapped[str | None] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=True, index=True
-    )
     role: Mapped[MembershipRole] = mapped_column(sa_enum(MembershipRole))
 
     __table_args__ = (
-        UniqueConstraint("user_id", "workspace_id", name="uq_membership_user_workspace"),
-        Index(
-            "uq_membership_user_org",
-            "user_id",
-            unique=True,
-            postgresql_where=text("scope = 'organization'"),
-        ),
+        UniqueConstraint("user_id", "organization_id", name="uq_membership_user_org"),
+    )
+
+
+class SpaceGrant(IdMixin, TimestampMixin, Base):
+    """Explicit access to one workspace. Org admins and compliance reach every workspace in their
+    organization without a grant row, so grants exist only for plain members.
+    """
+
+    __tablename__ = "space_grant"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("app_user.id", ondelete="CASCADE"), index=True)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[SpaceRole] = mapped_column(sa_enum(SpaceRole), default=SpaceRole.member)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "workspace_id", name="uq_space_grant_user_workspace"),
     )
 
 

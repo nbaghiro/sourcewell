@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     Membership,
     MembershipRole,
-    MembershipScope,
     Organization,
+    SpaceGrant,
+    SpaceRole,
     User,
     UserStatus,
     Workspace,
@@ -31,12 +32,7 @@ async def signup(
     session.add(user)
     await session.flush()
 
-    membership = Membership(
-        user_id=user.id,
-        organization_id=org.id,
-        scope=MembershipScope.organization,
-        role=MembershipRole.org_admin,
-    )
+    membership = Membership(user_id=user.id, organization_id=org.id, role=MembershipRole.org_admin)
     session.add(membership)
     await session.flush()
     return org, user
@@ -79,33 +75,33 @@ async def create_user(session: AsyncSession, *, email: str, name: str) -> User:
 
 
 async def add_membership(
-    session: AsyncSession,
-    *,
-    org_id: str,
-    user_id: str,
-    scope: MembershipScope,
-    role: MembershipRole,
-    workspace_id: str | None,
+    session: AsyncSession, *, org_id: str, user_id: str, role: MembershipRole
 ) -> Membership:
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="user not found")
-    if scope == MembershipScope.workspace:
-        if workspace_id is None:
-            raise HTTPException(status_code=422, detail="workspace_id required for workspace scope")
-        ws = await session.get(Workspace, workspace_id)
-        if ws is None or ws.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="workspace not found")
-    else:
-        workspace_id = None
-
-    membership = Membership(
-        user_id=user_id,
-        organization_id=org_id,
-        scope=scope,
-        role=role,
-        workspace_id=workspace_id,
-    )
+    membership = Membership(user_id=user_id, organization_id=org_id, role=role)
     session.add(membership)
     await session.flush()
     return membership
+
+
+async def add_space_grant(
+    session: AsyncSession, *, org_id: str, user_id: str, workspace_id: str, role: SpaceRole
+) -> SpaceGrant:
+    member = (
+        await session.execute(
+            select(Membership).where(
+                Membership.user_id == user_id, Membership.organization_id == org_id
+            )
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=404, detail="user is not a member of this organization")
+    ws = await session.get(Workspace, workspace_id)
+    if ws is None or ws.organization_id != org_id:
+        raise HTTPException(status_code=404, detail="workspace not found")
+    grant = SpaceGrant(user_id=user_id, workspace_id=workspace_id, role=role)
+    session.add(grant)
+    await session.flush()
+    return grant

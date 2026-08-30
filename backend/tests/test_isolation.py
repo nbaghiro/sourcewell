@@ -7,7 +7,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.api.context import get_context
-from app.models import MembershipRole, MembershipScope
+from app.models import MembershipRole
 from app.services.workspace import tenancy as service
 from tests import factories
 
@@ -42,14 +42,8 @@ async def test_workspace_member_sees_only_assigned(db_session: AsyncSession) -> 
     w1 = await factories.make_workspace(db_session, org=org, name="W1")
     w2 = await factories.make_workspace(db_session, org=org, name="W2")
     user = await factories.make_user(db_session)
-    await factories.make_membership(
-        db_session,
-        user=user,
-        org=org,
-        scope=MembershipScope.workspace,
-        role=MembershipRole.member,
-        workspace=w1,
-    )
+    await factories.make_membership(db_session, user=user, org=org, role=MembershipRole.member)
+    await factories.make_space_grant(db_session, user=user, workspace=w1)
 
     ctx = await get_context(_req(user.id), Response(), db_session)
     assert not ctx.is_org_admin
@@ -69,14 +63,8 @@ async def test_foreign_workspace_header_is_rejected(db_session: AsyncSession) ->
     other = await factories.make_org(db_session, slug="other")
     foreign = await factories.make_workspace(db_session, org=other, name="OW")
     user = await factories.make_user(db_session)
-    await factories.make_membership(
-        db_session,
-        user=user,
-        org=org,
-        scope=MembershipScope.workspace,
-        role=MembershipRole.member,
-        workspace=w1,
-    )
+    await factories.make_membership(db_session, user=user, org=org, role=MembershipRole.member)
+    await factories.make_space_grant(db_session, user=user, workspace=w1)
 
     with pytest.raises(HTTPException) as exc:
         await get_context(_req(user.id, foreign.id), Response(), db_session)

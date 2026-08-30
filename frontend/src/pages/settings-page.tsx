@@ -84,7 +84,6 @@ const CONN_STATUS: Record<string, { label: string; variant: BadgeProps["variant"
 };
 const ROLE: Record<string, { label: string; variant: BadgeProps["variant"] }> = {
   org_admin: { label: "Org admin", variant: "accent" },
-  workspace_admin: { label: "Workspace admin", variant: "secondary" },
   member: { label: "Member", variant: "outline" },
   compliance: { label: "Compliance", variant: "warning" },
 };
@@ -551,7 +550,7 @@ function SuppressionTab() {
   );
 }
 
-const ROLE_OPTIONS = ["member", "workspace_admin", "compliance"] as const;
+const ROLE_OPTIONS = ["member", "compliance"] as const;
 
 function MembersTab() {
   const { data: members } = useMembers();
@@ -630,7 +629,7 @@ function InviteDialog() {
   function submit() {
     if (!email.trim() || !name.trim()) return;
     invite.mutate(
-      { email, name, role: role as "member" | "workspace_admin" | "compliance" },
+      { email, name, role: role as "member" | "compliance" },
       {
         onSuccess: () => {
           toast.success(`Invited ${name}`);
@@ -669,7 +668,6 @@ function InviteDialog() {
               onChange={setRole}
               options={[
                 { value: "member", label: "Member" },
-                { value: "workspace_admin", label: "Admin" },
                 { value: "compliance", label: "Compliance" },
               ]}
             />

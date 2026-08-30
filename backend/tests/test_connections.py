@@ -8,7 +8,6 @@ from app.models import (
     ConnectionProvider,
     ConnectionStatus,
     MembershipRole,
-    MembershipScope,
     User,
     UserStatus,
 )
@@ -19,7 +18,13 @@ from app.services.workspace.connections import (
     upsert_seat,
     workspace_seat_account_id,
 )
-from tests.factories import make_membership, make_org, make_user, make_workspace
+from tests.factories import (
+    make_membership,
+    make_org,
+    make_space_grant,
+    make_user,
+    make_workspace,
+)
 
 _LINKEDIN = ConnectionProvider.linkedin
 
@@ -67,14 +72,8 @@ async def test_workspace_seat_resolves_via_membership(db_session: AsyncSession) 
     org = await make_org(db_session, slug="cx-ws")
     ws = await make_workspace(db_session, org=org)
     user = await make_user(db_session)
-    await make_membership(
-        db_session,
-        user=user,
-        org=org,
-        scope=MembershipScope.workspace,
-        role=MembershipRole.member,
-        workspace=ws,
-    )
+    await make_membership(db_session, user=user, org=org, role=MembershipRole.member)
+    await make_space_grant(db_session, user=user, workspace=ws)
     await upsert_seat(
         db_session,
         organization_id=org.id,
@@ -96,13 +95,7 @@ async def test_provision_user_links_invited_member_by_email(db_session: AsyncSes
     )
     db_session.add(invited)
     await db_session.flush()
-    await make_membership(
-        db_session,
-        user=invited,
-        org=org,
-        scope=MembershipScope.organization,
-        role=MembershipRole.member,
-    )
+    await make_membership(db_session, user=invited, org=org, role=MembershipRole.member)
 
     user = await provision_user(
         db_session, subject="wos-new", name="Invitee", email="invitee@co.com"

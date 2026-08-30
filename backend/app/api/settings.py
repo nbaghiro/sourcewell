@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin, require_workspace
@@ -24,11 +24,11 @@ from app.models import (
     Enrollment,
     Membership,
     MembershipRole,
-    MembershipScope,
     Message,
     Organization,
     ProviderCredential,
     SeatType,
+    SpaceGrant,
     User,
     UserStatus,
     Workspace,
@@ -97,8 +97,8 @@ class MemberOut(BaseModel):
     id: str
     name: str
     email: str
-    role: str
-    scope: str
+    role: MembershipRole
+    workspace_ids: list[str]  # explicit grants; empty for the org-wide roles
 
 
 class WorkspaceSettingsOut(BaseModel):
@@ -112,12 +112,12 @@ class InviteOut(BaseModel):
     id: str
     name: str
     email: str
-    role: str
+    role: MembershipRole
 
 
 class RoleOut(BaseModel):
     id: str
-    role: str
+    role: MembershipRole
 
 
 class StatusIdOut(BaseModel):
@@ -139,13 +139,27 @@ async def members(ctx: ContextDep, session: SessionDep) -> list[MemberOut]:
         .tuples()
         .all()
     )
+    grants = (
+        (
+            await session.execute(
+                select(SpaceGrant.user_id, SpaceGrant.workspace_id)
+                .join(Workspace, SpaceGrant.workspace_id == Workspace.id)
+                .where(Workspace.organization_id == ctx.org_id)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    by_user: dict[str, list[str]] = {}
+    for user_id, workspace_id in grants:
+        by_user.setdefault(user_id, []).append(workspace_id)
     return [
         MemberOut(
             id=u.id,
             name=u.name,
             email=u.email,
-            role=m.role.value,
-            scope=m.scope.value,
+            role=m.role,
+            workspace_ids=by_user.get(u.id, []),
         )
         for m, u in rows
     ]
@@ -305,16 +319,9 @@ async def invite_member(body: InviteRequest, ctx: ContextDep, session: SessionDe
         ).first()
         if already is not None:
             raise HTTPException(status_code=409, detail="that person is already a member")
-    session.add(
-        Membership(
-            user_id=user.id,
-            organization_id=ctx.org_id,
-            scope=MembershipScope.organization,
-            role=body.role,
-        )
-    )
+    session.add(Membership(user_id=user.id, organization_id=ctx.org_id, role=body.role))
     await session.flush()
-    return InviteOut(id=user.id, name=user.name, email=user.email, role=body.role.value)
+    return InviteOut(id=user.id, name=user.name, email=user.email, role=body.role)
 
 
 @router.patch("/members/{user_id}", response_model=RoleOut)
@@ -327,7 +334,6 @@ async def update_member_role(
             select(Membership).where(
                 Membership.user_id == user_id,
                 Membership.organization_id == ctx.org_id,
-                Membership.scope == MembershipScope.organization,
             )
         )
     ).scalar_one_or_none()
@@ -335,7 +341,7 @@ async def update_member_role(
         raise HTTPException(status_code=404, detail="member not found")
     membership.role = body.role
     await session.flush()
-    return RoleOut(id=user_id, role=body.role.value)
+    return RoleOut(id=user_id, role=body.role)
 
 
 @router.delete("/members/{user_id}", response_model=StatusIdOut)
@@ -343,21 +349,24 @@ async def remove_member(user_id: str, ctx: ContextDep, session: SessionDep) -> S
     require_org_admin(ctx)
     if user_id == ctx.user_id:
         raise HTTPException(status_code=400, detail="you can't remove yourself")
-    rows = list(
-        (
-            await session.execute(
-                select(Membership).where(
-                    Membership.user_id == user_id, Membership.organization_id == ctx.org_id
-                )
+    membership = (
+        await session.execute(
+            select(Membership).where(
+                Membership.user_id == user_id, Membership.organization_id == ctx.org_id
             )
         )
-        .scalars()
-        .all()
-    )
-    if not rows:
+    ).scalar_one_or_none()
+    if membership is None:
         raise HTTPException(status_code=404, detail="member not found")
-    for row in rows:
-        await session.delete(row)
+    await session.execute(
+        delete(SpaceGrant).where(
+            SpaceGrant.user_id == user_id,
+            SpaceGrant.workspace_id.in_(
+                select(Workspace.id).where(Workspace.organization_id == ctx.org_id)
+            ),
+        )
+    )
+    await session.delete(membership)
     await session.flush()
     return StatusIdOut(status="removed", id=user_id)
 

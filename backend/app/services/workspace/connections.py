@@ -18,9 +18,9 @@ from app.models import (
     ConnectionStatus,
     Membership,
     MembershipRole,
-    MembershipScope,
     Organization,
     SeatType,
+    SpaceGrant,
     User,
     UserStatus,
     Workspace,
@@ -122,9 +122,9 @@ async def workspace_seat_account_id(
         (
             await session.execute(
                 select(Connection.external_id)
-                .join(Membership, Membership.user_id == Connection.user_id)
+                .join(SpaceGrant, SpaceGrant.user_id == Connection.user_id)
                 .where(
-                    Membership.workspace_id == workspace_id,
+                    SpaceGrant.workspace_id == workspace_id,
                     Connection.provider == provider,
                     Connection.status == ConnectionStatus.ok,
                 )
@@ -174,14 +174,7 @@ async def provision_user(
     )
     session.add(user)
     await session.flush()
-    session.add(
-        Membership(
-            user_id=user.id,
-            organization_id=org.id,
-            scope=MembershipScope.organization,
-            role=MembershipRole.org_admin,
-        )
-    )
+    session.add(Membership(user_id=user.id, organization_id=org.id, role=MembershipRole.org_admin))
     await session.flush()
     return user
 

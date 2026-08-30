@@ -11,7 +11,8 @@ from app.api.guards import require_org_admin
 from app.models import (
     Membership,
     MembershipRole,
-    MembershipScope,
+    SpaceGrant,
+    SpaceRole,
     User,
     UserStatus,
     Workspace,
@@ -64,18 +65,29 @@ class UserRead(BaseModel):
 
 class MembershipCreate(BaseModel):
     user_id: str
-    scope: MembershipScope
     role: MembershipRole
-    workspace_id: str | None = None
 
 
 class MembershipRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
     user_id: str
-    scope: MembershipScope
+    organization_id: str
     role: MembershipRole
-    workspace_id: str | None
+
+
+class SpaceGrantCreate(BaseModel):
+    user_id: str
+    workspace_id: str
+    role: SpaceRole = SpaceRole.member
+
+
+class SpaceGrantRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    user_id: str
+    workspace_id: str
+    role: SpaceRole
 
 
 class MeResponse(BaseModel):
@@ -157,10 +169,19 @@ async def create_membership(
 ) -> Membership:
     require_org_admin(ctx)
     return await tenancy_service.add_membership(
+        session, org_id=ctx.org_id, user_id=body.user_id, role=body.role
+    )
+
+
+@router.post("/space-grants", response_model=SpaceGrantRead, status_code=201)
+async def create_space_grant(
+    body: SpaceGrantCreate, ctx: ContextDep, session: SessionDep
+) -> SpaceGrant:
+    require_org_admin(ctx)
+    return await tenancy_service.add_space_grant(
         session,
         org_id=ctx.org_id,
         user_id=body.user_id,
-        scope=body.scope,
-        role=body.role,
         workspace_id=body.workspace_id,
+        role=body.role,
     )

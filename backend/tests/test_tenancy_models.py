@@ -6,9 +6,10 @@ from app.models import (
     ConnectionProvider,
     Membership,
     MembershipRole,
-    MembershipScope,
     Organization,
     SeatType,
+    SpaceGrant,
+    SpaceRole,
     User,
     Workspace,
     WorkspaceKind,
@@ -29,14 +30,12 @@ async def test_tenancy_round_trip(db_session: AsyncSession) -> None:
     db_session.add(user)
     await db_session.flush()
 
-    member = Membership(
-        user_id=user.id,
-        organization_id=org.id,
-        scope=MembershipScope.workspace,
-        workspace_id=ws.id,
-        role=MembershipRole.member,
-    )
+    member = Membership(user_id=user.id, organization_id=org.id, role=MembershipRole.member)
     db_session.add(member)
+    await db_session.flush()
+
+    grant = SpaceGrant(user_id=user.id, workspace_id=ws.id, role=SpaceRole.member)
+    db_session.add(grant)
     await db_session.flush()
 
     conn = Connection(
@@ -51,8 +50,8 @@ async def test_tenancy_round_trip(db_session: AsyncSession) -> None:
     assert len(org.id) == 26  # ULID
     assert ws.organization_id == org.id
     assert member.organization_id == org.id
-    assert member.scope == MembershipScope.workspace
-    assert member.workspace_id == ws.id
     assert member.role == MembershipRole.member
+    assert grant.workspace_id == ws.id
+    assert grant.role == SpaceRole.member
     assert conn.provider == ConnectionProvider.gmail
     assert conn.daily_sent == 0

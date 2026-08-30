@@ -6,8 +6,9 @@ from app.core.db import new_id
 from app.models import (
     Membership,
     MembershipRole,
-    MembershipScope,
     Organization,
+    SpaceGrant,
+    SpaceRole,
     User,
     Workspace,
     WorkspaceKind,
@@ -46,29 +47,34 @@ async def make_membership(
     *,
     user: User,
     org: Organization,
-    scope: MembershipScope,
-    role: MembershipRole,
-    workspace: Workspace | None = None,
+    role: MembershipRole = MembershipRole.member,
 ) -> Membership:
-    membership = Membership(
-        user_id=user.id,
-        organization_id=org.id,
-        scope=scope,
-        role=role,
-        workspace_id=workspace.id if workspace else None,
-    )
+    membership = Membership(user_id=user.id, organization_id=org.id, role=role)
     session.add(membership)
     await session.flush()
     return membership
 
 
+async def make_space_grant(
+    session: AsyncSession, *, user: User, workspace: Workspace, role: SpaceRole = SpaceRole.member
+) -> SpaceGrant:
+    grant = SpaceGrant(user_id=user.id, workspace_id=workspace.id, role=role)
+    session.add(grant)
+    await session.flush()
+    return grant
+
+
 async def make_org_admin(session: AsyncSession, *, org: Organization, name: str = "Admin") -> User:
     user = await make_user(session, name=name)
-    await make_membership(
-        session,
-        user=user,
-        org=org,
-        scope=MembershipScope.organization,
-        role=MembershipRole.org_admin,
-    )
+    await make_membership(session, user=user, org=org, role=MembershipRole.org_admin)
+    return user
+
+
+async def make_workspace_member(
+    session: AsyncSession, *, org: Organization, workspace: Workspace, name: str = "Member"
+) -> User:
+    """A plain org member whose only workspace access is an explicit grant."""
+    user = await make_user(session, name=name)
+    await make_membership(session, user=user, org=org, role=MembershipRole.member)
+    await make_space_grant(session, user=user, workspace=workspace)
     return user

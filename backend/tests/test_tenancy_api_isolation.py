@@ -51,10 +51,12 @@ async def test_member_cannot_create_workspace(db_client: AsyncClient) -> None:
     )
     user_id = user.json()["id"]
     await db_client.post(
-        "/memberships",
-        json={"user_id": user_id, "scope": "workspace", "role": "member", "workspace_id": ws_id},
-        headers=admin_h,
+        "/memberships", json={"user_id": user_id, "role": "member"}, headers=admin_h
     )
+    grant = await db_client.post(
+        "/space-grants", json={"user_id": user_id, "workspace_id": ws_id}, headers=admin_h
+    )
+    assert grant.status_code == 201
 
     # The member is not an org admin → cannot create workspaces.
     denied = await db_client.post("/workspaces", json={"name": "X"}, headers={"X-User-Id": user_id})

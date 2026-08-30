@@ -16,7 +16,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
-from app.models import Membership, MembershipRole, User, Workspace
+from app.models import Membership, MembershipRole, SpaceGrant, User, Workspace
 from app.services.workspace import auth
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -100,19 +100,16 @@ async def get_context(request: Request, response: Response, session: SessionDep)
 
 
 async def _granted_workspace_ids(session: AsyncSession, *, user_id: str) -> frozenset[str]:
-    """Workspaces reached by an explicit per-workspace membership row."""
-    rows = (
+    """Workspaces reached by an explicit `SpaceGrant`."""
+    return frozenset(
         (
             await session.execute(
-                select(Membership.workspace_id).where(
-                    Membership.user_id == user_id, Membership.workspace_id.is_not(None)
-                )
+                select(SpaceGrant.workspace_id).where(SpaceGrant.user_id == user_id)
             )
         )
         .scalars()
         .all()
     )
-    return frozenset(ws_id for ws_id in rows if ws_id is not None)
 
 
 ContextDep = Annotated[TenantContext, Depends(get_context)]
