@@ -221,7 +221,12 @@ async def _org_and_admin(session: AsyncSession) -> tuple[Organization, User]:
     admin = User(
         email=s.demo_admin_email,
         name="Avery Brooks",
+        first_name="Avery",
+        last_name="Brooks",
+        username="avery",
         password_hash=hash_password(s.demo_password),
+        email_verified_at=datetime.now(UTC),  # the demo account signs in without a mail round-trip
+        profile_completed_at=datetime.now(UTC),  # ...and is past signup, so the API isn't gated
     )
     session.add(admin)
     await session.flush()
@@ -241,7 +246,12 @@ async def _seed_team(
     ]
     users: dict[str, User] = {}
     for name, email, role in team:
-        user = User(email=email, name=name)
+        user = User(
+            email=email,
+            name=name,
+            email_verified_at=datetime.now(UTC),
+            profile_completed_at=datetime.now(UTC),
+        )
         session.add(user)
         await session.flush()
         session.add(Membership(user_id=user.id, organization_id=org.id, role=role))

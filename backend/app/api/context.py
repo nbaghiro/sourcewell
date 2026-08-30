@@ -11,7 +11,7 @@ guards import `TenantContext`.
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, Response
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,7 @@ from app.services.workspace import auth
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 # Org roles that reach every workspace in their organization without an explicit grant.
-_ORG_WIDE_ROLES = {MembershipRole.org_admin, MembershipRole.compliance}
+ORG_WIDE_ROLES = {MembershipRole.org_admin, MembershipRole.compliance}
 
 
 @dataclass(frozen=True)
@@ -33,10 +33,19 @@ class TenantContext:
     is_org_admin: bool
     allowed_workspace_ids: frozenset[str]
     current_workspace_id: str | None
+    # False while an OAuth signup is unfinished. Only the two endpoints that exist to finish it
+    # (`SignupContextDep`) ever see a context with this false — `get_context` refuses the rest.
+    profile_complete: bool
 
 
-async def get_context(request: Request, response: Response, session: SessionDep) -> TenantContext:
-    user_id = await auth.resolve_user_from_request(request, response, session)
+async def get_signup_context(request: Request, session: SessionDep) -> TenantContext:
+    """The tenant context *without* the signup-complete gate.
+
+    Only for the two endpoints that have to work while a signup is still unfinished: `GET
+    /auth/me` (which is how the client learns it is unfinished) and `POST /auth/complete-profile`
+    (which finishes it). Everything else takes `ContextDep`.
+    """
+    user_id = await auth.resolve_user_from_request(request, session)
     if user_id is None:
         raise HTTPException(status_code=401, detail="not authenticated")
     user = await session.get(User, user_id)
@@ -52,7 +61,7 @@ async def get_context(request: Request, response: Response, session: SessionDep)
         raise HTTPException(status_code=403, detail="no organization membership")
 
     org_ids = {m.organization_id for m in memberships}
-    org_wide = {m.organization_id for m in memberships if m.role in _ORG_WIDE_ROLES}
+    org_wide = {m.organization_id for m in memberships if m.role in ORG_WIDE_ROLES}
     granted = await _granted_workspace_ids(session, user_id=user_id)
     reachable = (
         (
@@ -97,6 +106,7 @@ async def get_context(request: Request, response: Response, session: SessionDep)
         is_org_admin=MembershipRole.org_admin in roles,
         allowed_workspace_ids=ws_ids,
         current_workspace_id=current,
+        profile_complete=user.profile_completed_at is not None,
     )
 
 
@@ -113,4 +123,19 @@ async def _granted_workspace_ids(session: AsyncSession, *, user_id: str) -> froz
     )
 
 
+async def get_context(ctx: Annotated[TenantContext, Depends(get_signup_context)]) -> TenantContext:
+    """The tenant context every ordinary endpoint takes — and the signup-complete gate.
+
+    A first Google/Microsoft sign-in provisions the account and mints a session *before* asking
+    for the username, company and avatar the provider can't supply. The client routes that user to
+    the form, but routing is not enforcement: without this, skipping the form and calling the API
+    directly left them working in an org still carrying its placeholder name, under a user with no
+    username. 403 rather than 401 — they are signed in, they just aren't finished.
+    """
+    if not ctx.profile_complete:
+        raise HTTPException(status_code=403, detail="profile_incomplete")
+    return ctx
+
+
 ContextDep = Annotated[TenantContext, Depends(get_context)]
+SignupContextDep = Annotated[TenantContext, Depends(get_signup_context)]

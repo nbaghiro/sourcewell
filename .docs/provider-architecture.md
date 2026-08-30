@@ -88,12 +88,13 @@ Consumers:
   list/set/delete/**verify**, iterating `PROVIDER_CATALOG` and using
   `build_one(...).verify_credentials()`; secrets are `seal`ed at rest, only `last4` + status returned.
 
-### Connection role — auth / sign‑in (`services/workspace/auth.py`, `api/auth.py`)
+### Connection role — seat connect (`services/workspace/connections.py`, `api/settings.py`)
 
-`start_linkedin_login` → `UnipileConnection.create_link` (wizard URL); the Unipile notify →
-`complete_linkedin_notify` reads `UnipileConnection.profile()` (`member_urn`) → `provision_from_linkedin`
-(`services/workspace/connections.py`) → upserts the **`Connection` seat** (`external_id = account_id`).
-`seat_account_id()` is how the rest of the system resolves a user's Unipile account.
+`start_linkedin_connect` → `UnipileConnection.create_link` (wizard URL, opened by a user who is
+**already signed in**); the Unipile notify → `complete_linkedin_notify` reads
+`UnipileConnection.profile()` for the account's tier → upserts the **`Connection` seat**
+(`external_id = account_id`). `user_seat()` is how the rest of the system resolves a user's
+Unipile account. This is not a sign‑in path — see `services/workspace/auth.py` for those.
 
 ### Inbound — webhooks (`api/messaging.py`)
 

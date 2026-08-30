@@ -18,6 +18,7 @@ def _ctx(org_id: str, *, is_admin: bool = True) -> TenantContext:
         is_org_admin=is_admin,
         allowed_workspace_ids=frozenset(),
         current_workspace_id=None,
+        profile_complete=True,
     )
 
 

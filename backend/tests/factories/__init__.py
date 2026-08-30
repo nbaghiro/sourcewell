@@ -1,5 +1,7 @@
 """Builders that insert tenancy rows directly into a session for tests."""
 
+from datetime import UTC, datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import new_id
@@ -35,10 +37,30 @@ async def make_workspace(
     return ws
 
 
-async def make_user(session: AsyncSession, *, name: str = "User", email: str | None = None) -> User:
-    user = User(email=email or f"{new_id()}@example.com", name=name)
+async def make_user(
+    session: AsyncSession,
+    *,
+    org: Organization | None = None,
+    role: MembershipRole = MembershipRole.org_admin,
+    name: str = "User",
+    email: str | None = None,
+    verified: bool = True,
+    profile_complete: bool = True,
+) -> User:
+    """An established account: email-verified and past signup, which is what almost every test
+    wants. `verified=False` exercises the email gate; `profile_complete=False` exercises the
+    OAuth signup-completion gate. Identity is global, so `org` is optional — passing it also
+    writes the membership that puts the user in that organization."""
+    user = User(
+        email=email or f"{new_id()}@example.com",
+        name=name,
+        email_verified_at=datetime.now(UTC) if verified else None,
+        profile_completed_at=datetime.now(UTC) if profile_complete else None,
+    )
     session.add(user)
     await session.flush()
+    if org is not None:
+        await make_membership(session, user=user, org=org, role=role)
     return user
 
 

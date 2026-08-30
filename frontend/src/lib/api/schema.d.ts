@@ -345,7 +345,7 @@ export interface paths {
         };
         /**
          * Callback
-         * @description Shared callback: WorkOS sends `code`, LinkedIn sends `state`. Mint the unified session.
+         * @description The OAuth callback: exchange WorkOS's `code` and mint the session.
          */
         get: operations["callback_auth_callback_get"];
         put?: never;
@@ -356,27 +356,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/linkedin/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Linkedin Login
-         * @description Start a LinkedIn sign-in: redirect to the Unipile hosted-auth wizard.
-         */
-        get: operations["linkedin_login_auth_linkedin_login_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/linkedin/notify": {
+    "/auth/complete-profile": {
         parameters: {
             query?: never;
             header?: never;
@@ -386,17 +366,45 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Linkedin Notify
-         * @description Unipile server notify: provision the user for the connected account (token-gated).
+         * Complete Profile
+         * @description Finish a signup that started at Google or Microsoft.
+         *
+         *     The account already exists and its address is already verified — the provider established
+         *     both — so this is authenticated, takes no email and no password, and can only be called while
+         *     the profile is still outstanding.
          */
-        post: operations["linkedin_notify_auth_linkedin_notify_post"];
+        post: operations["complete_profile_auth_complete_profile_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/auth/login": {
+    "/auth/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Accept Invite
+         * @description The emailed invitation link: confirm the address, activate the member, sign them in.
+         *
+         *     This is the *only* door into a pending invite. The row an admin created carries an address
+         *     nobody has agreed to yet, so until this link is clicked it can't be signed in to and can't be
+         *     linked to a Google/Microsoft identity.
+         */
+        get: operations["accept_invite_auth_invite_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login/{provider}": {
         parameters: {
             query?: never;
             header?: never;
@@ -405,9 +413,11 @@ export interface paths {
         };
         /**
          * Login
-         * @description Start WorkOS SSO (Google / Microsoft / email): redirect to AuthKit.
+         * @description Start a Google or Microsoft sign-in, brokered by WorkOS.
+         *
+         *     Each button names its provider outright; see `workos_login_url` for why that matters.
          */
-        get: operations["login_auth_login_get"];
+        get: operations["login_auth_login__provider__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -425,7 +435,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
+        /**
+         * Logout
+         * @description Clear the session cookie. Nothing to bounce through — this used to hand back a WorkOS
+         *     hosted-logout URL for the client to navigate to, but sign-out is purely local now.
+         */
         post: operations["logout_auth_logout_post"];
         delete?: never;
         options?: never;
@@ -481,9 +495,112 @@ export interface paths {
         put?: never;
         /**
          * Password Login
-         * @description Email + password sign-in (the seeded demo account: demo@sourcewell.ai).
+         * @description Email + password sign-in.
          */
         post: operations["password_login_auth_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/password/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forgot Password
+         * @description Mail a reset link. Always 202 — it must not reveal who has an account.
+         */
+        post: operations["forgot_password_auth_password_forgot_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/password/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description Consume a reset link, set the new password, and sign the user in.
+         */
+        post: operations["reset_password_auth_password_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Signup
+         * @description Self-serve signup: create the org + its first admin, then email the confirmation link.
+         *
+         *     No session is minted here — `GET /auth/verify` is what signs the user in, so an address
+         *     nobody controls can never reach the app.
+         */
+        post: operations["signup_auth_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Verify Email
+         * @description The emailed confirmation link: stamp the address verified and sign the user in.
+         */
+        get: operations["verify_email_auth_verify_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/verify/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Verification
+         * @description Re-send the confirmation link. Always 202 — it must not reveal who has an account.
+         */
+        post: operations["resend_verification_auth_verify_resend_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1197,7 +1314,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Signup Endpoint */
+        /**
+         * Signup Endpoint
+         * @description Local-only org bootstrap: an organization and its first admin, in one unauthenticated call.
+         *
+         *     Kept for tests and the QA guide, and refused outside local. It takes no password and no
+         *     confirmation, so in production it was an anonymous writer of `User` rows carrying any address
+         *     the caller named — junk data at best, and the row that made an email a claim on someone's
+         *     identity before `provision_user` started demanding a proven address. Real accounts come from
+         *     `POST /auth/signup` or an OAuth sign-in; teammates come from an invitation.
+         */
         post: operations["signup_endpoint_organizations_post"];
         delete?: never;
         options?: never;
@@ -1344,6 +1470,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/connections/linkedin/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Linkedin Connect Link
+         * @description Start connecting *this* user's LinkedIn sending seat (Unipile hosted auth).
+         *
+         *     Returns the wizard URL for the client to redirect to; Unipile's notify webhook attaches the
+         *     resulting account to the user, which is what the messaging layer sends from. `null` means
+         *     Unipile isn't configured — the caller falls back to the local stub connect.
+         */
+        post: operations["linkedin_connect_link_settings_connections_linkedin_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/connections/linkedin/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Linkedin Notify
+         * @description Unipile's server-side notify hop: attach the connected seat to the user who started it.
+         *
+         *     Public and token-gated (the shared secret rides in the query string, which is all the wizard
+         *     link lets us template). Not a sign-in: the wizard is only ever opened by someone already
+         *     signed in, and an attempt naming no user is ignored.
+         */
+        post: operations["linkedin_notify_settings_connections_linkedin_notify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/connections/{connection_id}/disconnect": {
         parameters: {
             query?: never;
@@ -1372,23 +1546,6 @@ export interface paths {
         put?: never;
         /** Reauth */
         post: operations["reauth_settings_connections__connection_id__reauth_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/settings/connections/{provider}/connect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Connect */
-        post: operations["connect_settings_connections__provider__connect_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1496,7 +1653,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Invite Member */
+        /**
+         * Invite Member
+         * @description Invite a teammate: create their pending seat and mail them the link that activates it.
+         *
+         *     Re-inviting an address whose invite is still pending re-sends that link rather than failing —
+         *     an admin's natural "did they get it?" retry, and the only resend path there needs to be.
+         */
         post: operations["invite_member_settings_members_invite_post"];
         delete?: never;
         options?: never;
@@ -1775,6 +1938,40 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AccountSignupRequest
+         * @description Self-serve signup: the profile, plus the address to confirm and the password to sign in
+         *     with afterwards.
+         */
+        AccountSignupRequest: {
+            /** Avatar */
+            avatar?: string | null;
+            /** Company Name */
+            company_name: string;
+            /** Email */
+            email: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
+        };
+        /**
+         * AccountSignupResponse
+         * @description No user/session here on purpose — the account is inert until the email is confirmed.
+         *
+         *     `email_sent` is the only thing the client branches on: false means the mail hop failed and the
+         *     confirm screen should lead with its resend button.
+         */
+        AccountSignupResponse: {
+            /** Email */
+            email: string;
+            /** Email Sent */
+            email_sent: boolean;
+        };
         /** ActivityEvent */
         ActivityEvent: {
             campaign?: components["schemas"]["Ref"] | null;
@@ -1949,14 +2146,20 @@ export interface components {
             /** Workspace Id */
             workspace_id: string | null;
         };
-        /** AuthOptions */
+        /**
+         * AuthOptions
+         * @description Which OAuth buttons this deployment can actually offer, so the login screen doesn't render
+         *     one that dead-ends.
+         *
+         *     Only the brokered providers are here. Email+password needs no configuration, so it is always
+         *     available and the form is unconditional; LinkedIn is a sending seat connected from Settings,
+         *     never a way in.
+         */
         AuthOptions: {
-            /** Linkedin */
-            linkedin: boolean;
-            /** Password */
-            password: boolean;
-            /** Workos */
-            workos: boolean;
+            /** Google */
+            google: boolean;
+            /** Microsoft */
+            microsoft: boolean;
         };
         /**
          * Authorship
@@ -2179,6 +2382,14 @@ export interface components {
             /** Plan */
             plan: string;
         };
+        /**
+         * ConnectLinkOut
+         * @description The hosted-auth wizard to redirect to, or null when LinkedIn connect isn't configured.
+         */
+        ConnectLinkOut: {
+            /** Url */
+            url: string | null;
+        };
         /** ConnectionOut */
         ConnectionOut: {
             /** Display Name */
@@ -2187,6 +2398,8 @@ export interface components {
             external_id: string | null;
             /** Id */
             id: string;
+            /** Linked */
+            linked: boolean;
             /** Provider */
             provider: string;
             /** Seat Type */
@@ -2196,11 +2409,6 @@ export interface components {
             /** User Email */
             user_email: string;
         };
-        /**
-         * ConnectionProvider
-         * @enum {string}
-         */
-        ConnectionProvider: "gmail" | "graph" | "linkedin";
         /** ContactActivityOut */
         ContactActivityOut: {
             /** Body */
@@ -2755,6 +2963,11 @@ export interface components {
             /** Next Run At */
             next_run_at: string;
         };
+        /** ForgotPasswordRequest */
+        ForgotPasswordRequest: {
+            /** Email */
+            email: string;
+        };
         /** FunnelOut */
         FunnelOut: {
             /** Contacted */
@@ -2837,6 +3050,8 @@ export interface components {
         InviteOut: {
             /** Email */
             email: string;
+            /** Email Sent */
+            email_sent: boolean;
             /** Id */
             id: string;
             /** Name */
@@ -2880,6 +3095,11 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** LogoutResponse */
+        LogoutResponse: {
+            /** Status */
+            status: string;
+        };
         /** MeResponse */
         MeResponse: {
             /** Current Workspace Id */
@@ -2890,6 +3110,8 @@ export interface components {
             organization: components["schemas"]["OrgSummary"] | null;
             /** Organizations */
             organizations: components["schemas"]["OrgSummary"][];
+            /** Profile Complete */
+            profile_complete: boolean;
             user: components["schemas"]["UserSummary"] | null;
             /** Workspaces */
             workspaces: components["schemas"]["WorkspaceSummary"][];
@@ -3032,10 +3254,6 @@ export interface components {
             email: string;
             /** Password */
             password: string;
-        };
-        /** PasswordLoginResponse */
-        PasswordLoginResponse: {
-            user: components["schemas"]["UserSummary"];
         };
         /** PeopleSearchIn */
         PeopleSearchIn: {
@@ -3255,6 +3473,18 @@ export interface components {
             intent: string;
             message: components["schemas"]["MessageOut"];
         };
+        /** ResendVerificationRequest */
+        ResendVerificationRequest: {
+            /** Email */
+            email: string;
+        };
+        /** ResetPasswordRequest */
+        ResetPasswordRequest: {
+            /** Password */
+            password: string;
+            /** Token */
+            token: string;
+        };
         /** RoleOut */
         RoleOut: {
             /** Id */
@@ -3339,6 +3569,34 @@ export interface components {
             delay_days: number;
             /** Subject */
             subject?: string | null;
+        };
+        /**
+         * SignedInUser
+         * @description What every endpoint that leaves the caller signed in returns: password sign-in, password
+         *     reset, and finishing an OAuth signup.
+         */
+        SignedInUser: {
+            user: components["schemas"]["UserSummary"];
+        };
+        /**
+         * SignupProfile
+         * @description The profile fields the signup form collects, whichever door the user came through.
+         *
+         *     Password signup posts these with an email + password; an OAuth user posts them on their own
+         *     (`/auth/complete-profile`) — the provider already established the address, so there is nothing
+         *     to verify and no password to set. Validation mirrors the client-side checks either way.
+         */
+        SignupProfile: {
+            /** Avatar */
+            avatar?: string | null;
+            /** Company Name */
+            company_name: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Username */
+            username: string;
         };
         /** SignupRequest */
         SignupRequest: {
@@ -3540,12 +3798,16 @@ export interface components {
         UserStatus: "active" | "invited" | "disabled";
         /** UserSummary */
         UserSummary: {
+            /** Avatar Url */
+            avatar_url?: string | null;
             /** Email */
             email: string;
             /** Id */
             id: string;
             /** Name */
             name: string;
+            /** Username */
+            username?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -4171,7 +4433,6 @@ export interface operations {
         parameters: {
             query?: {
                 code?: string | null;
-                state?: string | null;
             };
             header?: never;
             path?: never;
@@ -4199,9 +4460,44 @@ export interface operations {
             };
         };
     };
-    linkedin_login_auth_linkedin_login_get: {
+    complete_profile_auth_complete_profile_post: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupProfile"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedInUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_invite_auth_invite_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4217,35 +4513,24 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
-        };
-    };
-    linkedin_notify_auth_linkedin_notify_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    login_auth_login_get: {
+    login_auth_login__provider__get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -4257,6 +4542,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4276,9 +4570,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
+                    "application/json": components["schemas"]["LogoutResponse"];
                 };
             };
         };
@@ -4342,7 +4634,174 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PasswordLoginResponse"];
+                    "application/json": components["schemas"]["SignedInUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forgot_password_auth_password_forgot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_password_auth_password_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedInUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    signup_auth_signup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountSignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountSignupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_email_auth_verify_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resend_verification_auth_verify_resend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResendVerificationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -5898,6 +6357,48 @@ export interface operations {
             };
         };
     };
+    linkedin_connect_link_settings_connections_linkedin_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectLinkOut"];
+                };
+            };
+        };
+    };
+    linkedin_notify_settings_connections_linkedin_notify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
     disconnect_settings_connections__connection_id__disconnect_post: {
         parameters: {
             query?: never;
@@ -5935,37 +6436,6 @@ export interface operations {
             header?: never;
             path: {
                 connection_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConnectionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    connect_settings_connections__provider__connect_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider: components["schemas"]["ConnectionProvider"];
             };
             cookie?: never;
         };

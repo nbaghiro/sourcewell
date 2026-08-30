@@ -38,6 +38,16 @@ _RL_LIMIT = 600
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging()
+
+    # Refuse to boot insecurely rather than serve a deployment that looks healthy but isn't.
+    problems = settings.production_config_errors()
+    if problems:
+        listed = "\n  - ".join(problems)
+        raise RuntimeError(
+            f"Refusing to start in environment={settings.environment!r} with insecure "
+            f"settings:\n  - {listed}"
+        )
+
     app = FastAPI(title=settings.app_name)
 
     # The React app is a separate origin (:8900) and sends the session cookie, so allow

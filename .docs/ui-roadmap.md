@@ -5,7 +5,7 @@ swaps in with no FE change). This is the remaining UI surface, ordered by impact
 backend/demo work each piece needs.
 
 ## ✅ Done
-Auth (WorkOS + dev login) · app shell (pinned sidebar/topbar) · Dashboard · Contacts list +
+Auth (Google / Microsoft OAuth · email+password signup) · app shell (pinned sidebar/topbar) · Dashboard · Contacts list +
 **Contact detail** (hero, stats, activity timeline) · Campaigns list + **node-based builder**
 (linear/multi-channel, audience estimate, preview, exit rules, reorder) · Approvals queue (approve
 works) · **3-pane Inbox messenger** (channel indicators, context rail, suggested replies) ·

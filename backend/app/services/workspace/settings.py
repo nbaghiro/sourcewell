@@ -25,6 +25,9 @@ class ConnectionOut(BaseModel):
     user_email: str
     external_id: str | None
     display_name: str | None
+    # False when no provider account sits behind this seat — a local stub or an abandoned
+    # hosted-auth run. Such a seat cannot send, and must not read as "connected" in the UI.
+    linked: bool
 
 
 class DataProviderOut(BaseModel):
@@ -48,6 +51,7 @@ def _dump_connection(c: Connection, email: str) -> ConnectionOut:
         user_email=email,
         external_id=c.external_id,
         display_name=raw_name if isinstance(raw_name, str) else None,
+        linked=bool(c.external_id),
     )
 
 

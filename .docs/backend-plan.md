@@ -29,7 +29,7 @@ approve/send/handoff/opt-out/bulk-approve · agent seams `draft_reply` + `summar
 Migration `a611023b1e40` adds `audit_event`, `enrollment.last_read_at`, `app_user.notifications_seen_at`.
 
 ### Auth — ✅ complete
-`POST /auth/login` · `GET /auth/callback` · `GET /auth/me` · `POST /auth/logout` · `POST /auth/dev-login`
+`GET /auth/login/{provider}` (google | microsoft) · `GET /auth/callback` · `GET /auth/options` · `POST /auth/signup` · `GET /auth/verify` · `POST /auth/verify/resend` · `POST /auth/password` · `POST /auth/password/forgot` · `POST /auth/password/reset` · `GET /auth/me` · `POST /auth/logout`
 
 ### Workspaces / tenancy
 ✅ `POST /organizations` · `GET /workspaces` · `POST /workspaces` · `GET /workspaces/{id}`
@@ -48,11 +48,11 @@ Migration `a611023b1e40` adds `audit_event`, `enrollment.last_read_at`, `app_use
 ⬚ `POST /{id}/snooze` — optional, deferred
 
 ### Messaging / Inbox
-✅ `GET /approvals` · `POST /messages/{id}/approve` · `PATCH /messages/{id}` · `GET /inbox` · `GET /inbox/{id}` · `POST /inbox/{id}/reply` · `POST /inbox/{id}/draft` · `GET /inbox/{id}/summary` · `POST /inbox/{id}/read` · `GET /enrollments/{id}/messages` · `POST /webhooks/reply`
+✅ `GET /approvals` · `POST /messages/{id}/approve` · `PATCH /messages/{id}` · `GET /inbox` · `GET /inbox/{id}` · `POST /inbox/{id}/reply` · `POST /inbox/{id}/draft` · `GET /inbox/{id}/summary` · `POST /inbox/{id}/read` · `GET /enrollments/{id}/messages` · `POST /webhooks/inbound` · `POST /webhooks/unipile`
 
 ### Settings
 ✅ `GET /settings/members` · `POST /settings/members/invite` · `PATCH /settings/members/{id}` · `DELETE /settings/members/{id}`
-✅ `GET /settings/connections` · `POST /settings/connections/{provider}/connect` · `POST /settings/connections/{id}/disconnect` · `POST /settings/connections/{id}/reauth`
+✅ `GET /settings/connections` · `POST /settings/connections/linkedin/link` · `POST /settings/connections/{id}/disconnect` · `POST /settings/connections/{id}/reauth`
 ✅ `GET/PATCH /settings/workspace` (autonomy default, sending window, daily caps, brand voice → `Workspace.settings`)
 
 ### Read surfaces — ✅ complete

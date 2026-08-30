@@ -36,12 +36,15 @@ def seal(value: str) -> str:
     return _ENC + fernets[0].encrypt(value.encode()).decode()
 
 
-def unseal(token: str) -> str:
+def unseal(token: str, *, ttl_seconds: int | None = None) -> str:
+    """Unseal a value. `ttl_seconds` rejects tokens older than that (Fernet stamps the time) —
+    used for session cookies, so a copied cookie value can't be replayed forever. Stored secrets
+    pass no ttl: they are valid until rotated."""
     if token.startswith(_ENC):
         body = token[len(_ENC) :].encode()
         for fernet in _fernets():
             try:
-                return fernet.decrypt(body).decode()
+                return fernet.decrypt(body, ttl=ttl_seconds).decode()
             except Exception:
                 continue
         raise RuntimeError("cannot decrypt secret: no matching key configured")
@@ -105,8 +108,19 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored: str) -> bool:
+    """Check a password against a stored `scrypt$<salt_hex>$<hash_hex>`.
+
+    Anything that isn't that shape is a failed check, not an exception: a truncated or
+    non-hex salt would otherwise raise out of `bytes.fromhex` and turn one corrupted row into a
+    500 on sign-in — an error the caller can't act on, where "wrong password" is both true and
+    actionable (reset it). Unparseable stored material can never authenticate anyone.
+    """
     parts = stored.split("$")
     if len(parts) != 3 or parts[0] != "scrypt":
         return False
-    dk = hashlib.scrypt(password.encode(), salt=bytes.fromhex(parts[1]), **_SCRYPT)
+    try:
+        salt = bytes.fromhex(parts[1])
+    except ValueError:
+        return False
+    dk = hashlib.scrypt(password.encode(), salt=salt, **_SCRYPT)
     return hmac.compare_digest(dk.hex(), parts[2])

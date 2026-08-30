@@ -56,6 +56,7 @@ async def _thread_with_draft(session: AsyncSession) -> tuple[TenantContext, str]
         is_org_admin=True,
         allowed_workspace_ids=frozenset({ws.id}),
         current_workspace_id=ws.id,
+        profile_complete=True,
     )
     return ctx, enr.id
 

@@ -20,3 +20,12 @@ export function unwrap<T>(result: { data?: T; error?: unknown }): T {
   if (result.error) throw result.error;
   return result.data as T;
 }
+
+/** The human-readable message behind an API failure (FastAPI's `detail`), or a fallback. */
+export function apiErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === "object" && error !== null && "detail" in error) {
+    const detail = (error as { detail: unknown }).detail;
+    if (typeof detail === "string" && detail) return detail;
+  }
+  return fallback;
+}

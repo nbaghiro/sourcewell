@@ -1,6 +1,8 @@
 import pytest
 from httpx import AsyncClient
 
+from app.core.config import Settings
+
 
 async def _signup(client: AsyncClient, slug: str) -> str:
     r = await client.post(
@@ -46,3 +48,38 @@ async def test_create_and_list_workspaces(db_client: AsyncClient) -> None:
 @pytest.mark.db
 async def test_me_requires_auth(db_client: AsyncClient) -> None:
     assert (await db_client.get("/me")).status_code == 401
+
+
+@pytest.mark.db
+async def test_every_new_org_gets_a_default_workspace(db_client: AsyncClient) -> None:
+    """An org with no workspace is an account that can't do anything — `require_workspace`
+    rejects every scoped request — so creating one is part of creating an organization, not
+    something each caller remembers to do afterwards.
+
+    This used to be bolted on by two of the three paths that create an org and skipped by the
+    third, so a bootstrap through this endpoint landed its admin in a dead tenant.
+    """
+    uid = await _signup(db_client, "initech")
+    listed = await db_client.get("/workspaces", headers={"X-User-Id": uid})
+    assert listed.status_code == 200
+    assert [w["name"] for w in listed.json()] == ["Default workspace"]
+
+
+@pytest.mark.db
+async def test_org_bootstrap_is_refused_outside_local(
+    db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """This endpoint takes no password and no confirmation, so in production it was an anonymous
+    writer of `User` rows carrying any address the caller named. Real accounts come from
+    `POST /auth/signup` or an OAuth sign-in; teammates come from an invitation."""
+    monkeypatch.setattr("app.api.tenancy.get_settings", lambda: Settings(environment="production"))
+    r = await db_client.post(
+        "/organizations",
+        json={
+            "org_name": "Evil Corp",
+            "slug": "evil",
+            "admin_email": "someone@elsewhere.com",
+            "admin_name": "Nobody",
+        },
+    )
+    assert r.status_code == 404

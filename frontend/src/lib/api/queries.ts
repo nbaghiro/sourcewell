@@ -774,12 +774,10 @@ export function useUpdateWorkspaceSettings() {
   });
 }
 
-export function useConnect() {
-  const qc = useQueryClient();
+/** Start connecting a real LinkedIn sending seat (Unipile hosted auth). */
+export function useLinkedInConnectLink() {
   return useMutation({
-    mutationFn: async (provider: "gmail" | "graph" | "linkedin") =>
-      unwrap(await client.POST("/settings/connections/{provider}/connect", { params: { path: { provider } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["connections"] }),
+    mutationFn: async () => unwrap(await client.POST("/settings/connections/linkedin/link")),
   });
 }
 
@@ -845,7 +843,7 @@ export function useSearch(q: string) {
 const CAMPAIGN_KEYS = ["campaign", "campaigns", "campaignFunnel"];
 
 function invalidateInbox(qc: ReturnType<typeof useQueryClient>) {
-  const keys = ["inbox", "conversation", "notifications", "dashboard", "analytics", "audit"];
+  const keys = ["inbox", "conversation", "convChannels", "notifications", "dashboard", "analytics", "audit"];
   for (const key of [...keys, ...CAMPAIGN_KEYS]) {
     qc.invalidateQueries({ queryKey: [key] });
   }

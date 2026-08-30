@@ -4,7 +4,7 @@
 > (the agents call everything through the `data` / `channel` / `inbound` seams below).
 
 ## 0 · Principles
-- **Unipile is the spine**: sign‑in, LinkedIn search (sourcing), email + LinkedIn send, inbound webhooks — one integration for the MVP.
+- **Unipile is the spine**: LinkedIn search (sourcing), email + LinkedIn send, inbound webhooks — one integration for the MVP. It is *not* a sign‑in route; seats are connected from Settings.
 - **Auth = Unipile hosted‑auth** (connect LinkedIn at login → identity via `member_urn` + the seat `account_id`). Retire WorkOS. Returning login = session cookie, `type:"reconnect"` on expiry. No separate OIDC.
 - **Three provider *roles***: `DataProvider` (search/enrich), `ChannelProvider` (send/reply), `ConnectionProvider` (seats/webhooks). Unipile fills all three; PDL/Apollo/Hunter = Data only; SMTP = Channel(email) floor. *(Cognism was evaluated and dropped — its endpoints sit behind a gated dev portal we can't confirm.)*
 - **Per‑seat, not global**: resolve `account_id` from the `Connection` model per user (never `settings.unipile_account_id`).
@@ -15,7 +15,7 @@
 ### Unipile — base `{dsn}/api/v1`, header `X-API-KEY`
 | Purpose | Call |
 |---|---|
-| Connect seat / sign‑in | `POST /hosted/accounts/link` `{type, providers:["LINKEDIN"], api_url, expiresOn, notify_url, success/failure_redirect_url, name}` → `{url}`; notify → `{status, account_id, name}` |
+| Connect a sending seat | `POST /hosted/accounts/link` `{type, providers:["LINKEDIN"], api_url, expiresOn, notify_url, success/failure_redirect_url, name}` → `{url}`; notify → `{status, account_id, name}` |
 | Identity | `GET /users/me?account_id=` → `{provider_id, public_identifier, member_urn, first_name, last_name, headline}` (**member_urn = identity key**) |
 | Accounts | `GET /accounts`, `GET /accounts/{id}` |
 | Search | `POST /linkedin/search?account_id={id}` body `{api, category:"people", keywords, …filters}` — **account_id in QUERY STRING** |
@@ -44,13 +44,13 @@
 ## 3 · Build phases
 
 > **Status:** the data/channel/connection layer is ✅ built and CI‑green on `main` (143 tests), and
-> **WorkOS is fully retired** in favour of LinkedIn‑only sign‑in via Unipile. What each phase shipped
+> **Sign‑in is Google / Microsoft OAuth (via WorkOS) or email+password.** What each phase shipped
 > is noted inline. The **only** remaining work is the **live‑send cutover** (§3a) — staged for when
-> manual QA pauses, since it rewrites the live send path. dev‑login still covers local/QA.
+> manual QA pauses, since it rewrites the live send path. Header auth still covers local/QA.
 
 **Track A — Unipile MVP spine**
 1. ✅ **Seams + seat resolver** — `ChannelProvider`/`ConnectionProvider` protocols in `ext/base.py`; `services/workspace/connections.py` resolves `account_id` from `Connection`; `UnipileProvider` takes `account_id`.
-2. ✅ **Auth = Unipile sign‑in** — hosted‑auth `/auth/login → /auth/linkedin/notify → /auth/callback`, Fernet‑sealed session, `provision_from_linkedin` (identity via `member_urn`); **WorkOS fully retired** (dep, config, `workos_org_id` dropped). dev‑login kept for local/QA.
+2. ✅ **Auth** — `/auth/login/{google|microsoft}` → WorkOS → `/auth/callback`, Fernet‑sealed session; email+password signup with verification alongside it. Unipile hosted‑auth is reused for *seat connect* only (`/settings/connections/linkedin/link` → `/settings/connections/linkedin/notify`), which binds an account to an already‑signed‑in user. The `X-User-Id` header stands in for sign‑in in local/test runs with no provider configured.
 3. ✅ **Connection lifecycle** — account webhook (`CREDENTIALS`/disconnect → `needs_reauth`) in the inbound receiver.
 4. ◑ **Channel send** — `UnipileChannel` (multipart `POST /chats` + reply + InMail + email `POST /emails`) + `Message.external_id`/`account_id` **built**; wiring it into the live `send_via_channel` is the **cutover** (§6).
 5. ✅ **Inbound webhooks** — public token‑verified `POST /webhooks/unipile` → maps `account_id`+`chat_id`→Enrollment → `handle_reply`. (Webhook registration call happens at connect — cutover.)

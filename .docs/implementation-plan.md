@@ -155,7 +155,7 @@ Each phase below states: **Goal · Build · Endpoints · Automated tests · Manu
 ### Phase 6 — Inbox / threads / replies
 - **Build:** inbox list (`GET /inbox`) grouped by enrollment with last message + `StateBadge`;
   thread view; a "simulate reply" control (for QA) posting to the reply webhook; hand-off badge.
-- **Endpoints:** `GET /inbox`, `GET /enrollments/{id}/messages`, `POST /webhooks/reply`.
+- **Endpoints:** `GET /inbox`, `GET /enrollments/{id}/messages`, `POST /webhooks/inbound`, `POST /webhooks/unipile`.
 - **Automated:** thread renders messages in order; reply intent flips the state chip.
 - **Manual QA:** open inbox → thread → post an "interested" reply → enrollment → `handed_off`.
 - **Done when:** conversations + outcomes are visible.
@@ -198,7 +198,6 @@ Each phase below states: **Goal · Build · Endpoints · Automated tests · Manu
 
 ## Backend touch-ups (tracked alongside the FE phases)
 - **Phase 0:** CORS middleware.
-- **Phase 1:** optional `GET /users` for a nicer dev-login picker.
 - **Phase 3/5:** optional `PATCH /campaigns/{id}` and `PATCH /messages/{id}` (edit before approve).
 - **Ongoing:** pagination on list endpoints as data grows.
 - **Post-alpha:** real auth (sessions/SSO), connections endpoints (LinkedIn/email OAuth),

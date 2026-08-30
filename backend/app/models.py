@@ -233,11 +233,40 @@ class User(IdMixin, TimestampMixin, Base):
     __tablename__ = "app_user"  # "user" is reserved in Postgres
 
     email: Mapped[str] = mapped_column(String(320), unique=True)
-    name: Mapped[str] = mapped_column(String(200))
+    name: Mapped[str] = mapped_column(String(200))  # display name — "First Last"
+    # Signup profile. Null until supplied: an OAuth sign-in or an org invite only ever learns
+    # a display name, so those users fill these in on the completion form.
+    first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
+    # A `data:image/...` URL — the signup form crops + resizes to 256px before upload.
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # When the address was confirmed. Null = unverified: no session is minted for this user, so
+    # a password sign-in is refused until the emailed link is clicked. OAuth users are verified
+    # by their provider, so provisioning stamps them immediately.
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When the signup profile (the fields above) was actually supplied. Null = the account exists
+    # but still owes us them: Google/Microsoft hand over an email and a display name and nothing
+    # else, so a first-time OAuth user is provisioned and then sent to the signup form to finish.
+    # Set at creation for password signup (the form filled it) and for an invited teammate (who
+    # joins an existing org, so there is nothing left to ask).
+    profile_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Brute-force throttle for email/password sign-in: consecutive failures, and the instant the
+    # account unlocks. Both reset on a successful sign-in or a password reset.
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Sessions are stateless (a sealed cookie), so this is how they are revoked: the epoch is
+    # sealed into the cookie and bumped on password reset, retiring every session at once.
+    session_epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     status: Mapped[UserStatus] = mapped_column(sa_enum(UserStatus), default=UserStatus.active)
-    # The federated identity key: the LinkedIn member_urn from Unipile hosted-auth sign-in.
+    # The federated identity key: the WorkOS user id behind the Google / Microsoft buttons.
+    # Deliberately generic — an enterprise SSO connection would land here too.
     sso_subject: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
-    # Local password hash (scrypt) for the email/password login; null for SSO-provisioned users.
+    # Local password hash (scrypt) for the email/password login; null for OAuth users.
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notifications_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -245,8 +274,9 @@ class User(IdMixin, TimestampMixin, Base):
 
 
 class LoginAttempt(IdMixin, TimestampMixin, Base):
-    """A pending LinkedIn (Unipile hosted-auth) sign-in. Correlates the server-side notify webhook
-    with the browser redirect via a one-time `state` token; consumed when the session is minted.
+    """A pending LinkedIn seat connect (Unipile hosted-auth), started from Settings by a signed-in
+    user. Correlates the server-side notify webhook with the browser redirect via a one-time
+    `state` token; `user_id` is the user the resulting account is bound to.
     """
 
     __tablename__ = "login_attempt"

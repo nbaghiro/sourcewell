@@ -3,9 +3,11 @@
 Serializers + data-access helpers live in `app.services.workspace.settings`.
 """
 
+import hmac
+import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 
@@ -21,7 +23,6 @@ from app.ext.registry import PROVIDER_CATALOG, build_one
 from app.models import (
     Campaign,
     Connection,
-    ConnectionProvider,
     ConnectionStatus,
     Contact,
     Enrollment,
@@ -30,7 +31,6 @@ from app.models import (
     Message,
     Organization,
     ProviderCredential,
-    SeatType,
     SpaceGrant,
     User,
     UserStatus,
@@ -40,7 +40,8 @@ from app.models import (
 from app.services.billing import subscriptions
 from app.services.billing.credits import credit_status
 from app.services.insights import audit
-from app.services.workspace.connections import register_inbound_webhooks
+from app.services.workspace import auth as auth_service
+from app.services.workspace import connections as connections_service
 from app.services.workspace.settings import (
     ConnectionOut,
     DataProviderOut,
@@ -60,7 +61,7 @@ class UsageOut(BaseModel):
     over: bool
     pct: int
     period_start: datetime
-    breakdown: dict[str, int]  # emails / inmails / sourced counts this period
+    breakdown: dict[str, int]  # emails / linkedin_dms / inmails / sourced counts this period
     billing_enabled: bool  # whether Stripe is configured (gates the upgrade / portal UI)
 
 
@@ -85,7 +86,11 @@ async def account_usage(ctx: ContextDep, session: SessionDep) -> UsageOut:
         over=st.over,
         pct=st.pct,
         period_start=st.period_start,
-        breakdown={"emails": st.emails, "inmails": st.inmails, "sourced": st.sourced},
+        breakdown={
+            "emails": st.emails,
+            "inmails": st.inmails,
+            "sourced": st.sourced,
+        },
         billing_enabled=subscriptions.is_enabled(),
     )
 
@@ -114,6 +119,9 @@ class InviteOut(BaseModel):
     name: str
     email: str
     role: MembershipRole
+    # False when the mail hop failed. The seat exists either way, but nobody can use it until the
+    # link lands, so the UI has to say so rather than reporting a clean success.
+    email_sent: bool
 
 
 class RoleOut(BaseModel):
@@ -225,45 +233,57 @@ async def update_workspace_settings(
     return await _workspace_settings(session, workspace)
 
 
-# ---- connection management (stub OAuth: connecting just marks the seat live) ----
+# ---- connection management ----
+#
+# A seat is only ever created by a real provider round-trip: LinkedIn through Unipile's
+# hosted-auth wizard (`/connections/linkedin/link`), whose notify webhook writes the Connection.
+# There is deliberately no endpoint that marks a seat "connected" without an account behind it —
+# that is what made Settings claim LinkedIn was live when nothing had been authorised.
 
-_SEAT_FOR = {
-    ConnectionProvider.gmail: SeatType.email,
-    ConnectionProvider.graph: SeatType.email,
-    ConnectionProvider.linkedin: SeatType.recruiter,
-}
+
+class ConnectLinkOut(BaseModel):
+    """The hosted-auth wizard to redirect to, or null when LinkedIn connect isn't configured."""
+
+    url: str | None
 
 
-@router.post("/connections/{provider}/connect", response_model=ConnectionOut)
-async def connect(
-    provider: ConnectionProvider, ctx: ContextDep, session: SessionDep
-) -> ConnectionOut:
-    existing = (
-        await session.execute(
-            select(Connection).where(
-                Connection.organization_id == ctx.org_id,
-                Connection.user_id == ctx.user_id,
-                Connection.provider == provider,
-            )
+@router.post("/connections/linkedin/link", response_model=ConnectLinkOut)
+async def linkedin_connect_link(ctx: ContextDep, session: SessionDep) -> ConnectLinkOut:
+    """Start connecting *this* user's LinkedIn sending seat (Unipile hosted auth).
+
+    Returns the wizard URL for the client to redirect to; Unipile's notify webhook attaches the
+    resulting account to the user, which is what the messaging layer sends from. `null` means
+    Unipile isn't configured — the caller falls back to the local stub connect.
+    """
+    return ConnectLinkOut(
+        url=await connections_service.start_linkedin_connect(session, user_id=ctx.user_id)
+    )
+
+
+@router.post("/connections/linkedin/notify")
+async def linkedin_notify(request: Request, session: SessionDep) -> dict[str, str]:
+    """Unipile's server-side notify hop: attach the connected seat to the user who started it.
+
+    Public and token-gated (the shared secret rides in the query string, which is all the wizard
+    link lets us template). Not a sign-in: the wizard is only ever opened by someone already
+    signed in, and an attempt naming no user is ignored.
+    """
+    secret = get_settings().unipile_webhook_secret
+    token = request.query_params.get("token") or ""
+    if not secret or not hmac.compare_digest(token, secret):
+        raise HTTPException(status_code=401, detail="invalid token")
+    try:
+        parsed: object = json.loads(await request.body() or b"{}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="invalid JSON") from None
+    payload = parsed if isinstance(parsed, dict) else {}
+    account_id = payload.get("account_id")
+    state = payload.get("name")  # the state token we set as `name` on the hosted-auth link
+    if isinstance(account_id, str) and isinstance(state, str):
+        await connections_service.complete_linkedin_notify(
+            session, state=state, account_id=account_id
         )
-    ).scalar_one_or_none()
-    if existing is not None:
-        existing.status = ConnectionStatus.ok
-        conn = existing
-    else:
-        conn = Connection(
-            organization_id=ctx.org_id,
-            user_id=ctx.user_id,
-            provider=provider,
-            seat_type=_SEAT_FOR.get(provider, SeatType.email),
-            status=ConnectionStatus.ok,
-        )
-        session.add(conn)
-    await session.flush()
-    # Ensure Unipile forwards inbound replies (LinkedIn + email) for this org's seats.
-    await register_inbound_webhooks(get_settings())
-    user = await session.get(User, ctx.user_id)
-    return _dump_connection(conn, user.email if user else "")
+    return {"status": "ok"}
 
 
 @router.post("/connections/{connection_id}/disconnect", response_model=StatusIdOut)
@@ -298,28 +318,45 @@ class RolePatch(BaseModel):
 
 @router.post("/members/invite", response_model=InviteOut)
 async def invite_member(body: InviteRequest, ctx: ContextDep, session: SessionDep) -> InviteOut:
+    """Invite a teammate: create their pending seat and mail them the link that activates it.
+
+    Re-inviting an address whose invite is still pending re-sends that link rather than failing —
+    an admin's natural "did they get it?" retry, and the only resend path there needs to be.
+    """
     require_org_admin(ctx)
+    email = body.email.strip().lower()
+    inviter = await session.get(User, ctx.user_id)
     # Identity is global: an existing user is invited into this org, not duplicated.
-    user = (
-        await session.execute(select(User).where(User.email == body.email))
-    ).scalar_one_or_none()
+    user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
     if user is None:
-        user = User(email=body.email, name=body.name, status=UserStatus.invited)
+        user = User(
+            email=email,
+            name=body.name,
+            status=UserStatus.invited,
+            # They join an org that already exists — no company to name, no password to set.
+            profile_completed_at=datetime.now(UTC),
+        )
         session.add(user)
         await session.flush()
-    else:
-        already = (
-            await session.execute(
-                select(Membership).where(
-                    Membership.user_id == user.id, Membership.organization_id == ctx.org_id
-                )
+    membership = (
+        await session.execute(
+            select(Membership).where(
+                Membership.user_id == user.id, Membership.organization_id == ctx.org_id
             )
-        ).first()
-        if already is not None:
-            raise HTTPException(status_code=409, detail="that person is already a member")
-    session.add(Membership(user_id=user.id, organization_id=ctx.org_id, role=body.role))
-    await session.flush()
-    return InviteOut(id=user.id, name=user.name, email=user.email, role=body.role)
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        membership = Membership(user_id=user.id, organization_id=ctx.org_id, role=body.role)
+        session.add(membership)
+        await session.flush()
+    elif user.status is not UserStatus.invited:
+        raise HTTPException(status_code=409, detail="that person is already a member")
+    sent = await auth_service.send_invite_email(
+        session, user=user, inviter=inviter, organization_id=ctx.org_id
+    )
+    return InviteOut(
+        id=user.id, name=user.name, email=user.email, role=membership.role, email_sent=sent
+    )
 
 
 @router.patch("/members/{user_id}", response_model=RoleOut)

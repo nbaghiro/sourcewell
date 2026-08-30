@@ -3,11 +3,12 @@
 Business logic lives in `app.services.workspace.tenancy`; request-context DI lives in `app/deps.py`.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin
+from app.core.config import get_settings
 from app.models import (
     Membership,
     MembershipRole,
@@ -106,6 +107,16 @@ router = APIRouter(tags=["tenancy"])
 
 @router.post("/organizations", response_model=SignupResponse, status_code=201)
 async def signup_endpoint(body: SignupRequest, session: SessionDep) -> SignupResponse:
+    """Local-only org bootstrap: an organization and its first admin, in one unauthenticated call.
+
+    Kept for tests and the QA guide, and refused outside local. It takes no password and no
+    confirmation, so in production it was an anonymous writer of `User` rows carrying any address
+    the caller named — junk data at best, and the row that made an email a claim on someone's
+    identity before `provision_user` started demanding a proven address. Real accounts come from
+    `POST /auth/signup` or an OAuth sign-in; teammates come from an invitation.
+    """
+    if not get_settings().is_local:
+        raise HTTPException(status_code=404, detail="not found")
     org, user = await tenancy_service.signup(
         session,
         org_name=body.org_name,

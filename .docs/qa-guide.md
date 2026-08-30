@@ -3,6 +3,59 @@
 This walks the alpha backend end to end: **import contacts → rank into a campaign → approve →
 draft → send → reply → hand-off**. Everything runs locally on the 89xx port band.
 
+## 0. Signing in
+
+Three doors, all landing on the same user and the same sealed session cookie:
+
+| Door | What it needs | Where a new user ends up |
+|---|---|---|
+| Email + password | nothing (Mailpit catches the mail) | `/verify-email` → click the link → app |
+| Continue with Google | `WORKOS_*` + Google OAuth configured in WorkOS | `/signup` completion form → app |
+| Continue with Microsoft | `WORKOS_*` + Microsoft OAuth configured in WorkOS | `/signup` completion form → app |
+
+LinkedIn is **not** a way in. It is connected from Settings → Connections as a *sending seat*, by
+someone already signed in.
+
+**Invited teammates** are a fourth arrival, not a fourth door: Settings → Members → Invite creates
+a *pending* seat and emails a signed link (7 days). Clicking it is what proves the address — until
+then the seat cannot be signed in to, and cannot be linked to a Google/Microsoft identity. Inviting
+the same pending address again re-sends the link. Worth checking: invite someone, then try
+"Continue with Google" as that person *without* clicking the link — they must land in their own new
+org, not the inviting one.
+
+Once they *have* accepted, "Forgot password?" will send them a **"Set your Sourcewell password"**
+link even though they never had one — that is how a teammate with no Google or Microsoft account
+gets back in after their first session expires. It is refused for an address nobody has proven, so
+an unaccepted invite still gets nothing.
+
+`POST /organizations` (the unauthenticated org bootstrap used below) is **local only** and 404s
+anywhere else. Real accounts come from `/auth/signup` or an OAuth sign-in.
+
+### The OAuth signup flow
+
+`/auth/login/{google|microsoft}` → WorkOS → `/auth/callback`. The callback decides where you land:
+
+- **Returning user** — matched on `sso_subject` (the WorkOS user id). Straight into the app.
+- **First time** — provisioned right there: a user with `email_verified_at` set (the provider
+  proved the address, so no confirmation mail), an org named off the email domain as a
+  *placeholder*, a default workspace, and an org-admin membership. `profile_completed_at` is left
+  null, which is what sends the browser to `/signup`.
+
+That form is the same page as email signup, in completion mode: email prefilled and read-only, no
+password fields, first/last name and avatar prefilled from the provider where it gave them. It
+posts to `POST /auth/complete-profile` (authenticated), which fills in the profile and **renames
+the org** from the company name typed there. Until it's posted, `GET /auth/me` reports
+`profile_complete: false` and the app keeps routing back to the form.
+
+Worth checking by hand:
+
+- Sign in with Google twice — the second time must go straight in, with **one** org, not two.
+- Sign up with a password at `x@acme.com`, then "Continue with Google" as `x@acme.com` — it links
+  to the existing account rather than making a second one.
+- Invite a teammate, then have them sign in with Google — they join *your* org and are never asked
+  for a company name.
+- Abandon the completion form and reload — you land back on it, still signed in.
+
 ## 0. Bring up infra + API
 
 ```bash
@@ -122,19 +175,34 @@ Open **http://localhost:8904** — the email is there. The send is a real SMTP d
 curl -s localhost:8901/enrollments/<EID>/messages -H 'X-User-Id: <UID>' -H 'X-Workspace-Id: <WS>'
 ```
 
-## 6. Simulate a reply → hand-off
+## 6. Feed in a reply → hand-off
 
-There's no inbound email poller yet, so post the reply directly:
+Replies arrive on the public, HMAC-signed receiver — the same door a provider uses, so QA
+exercises the real path rather than a simulator. Set `INBOUND_WEBHOOK_SECRET` in `backend/.env`
+first (any string), then sign the exact request body:
 
 ```bash
+SECRET=your-inbound-webhook-secret
 # "interested" / "let's talk" -> handed_off ;  "not interested" / "unsubscribe" -> opted_out
-curl -sX POST localhost:8901/webhooks/reply \
-  -H 'Content-Type: application/json' -H 'X-User-Id: <UID>' -H 'X-Workspace-Id: <WS>' \
-  -d '{"enrollment_id":"<EID>","text":"Interested, let'\''s talk!"}'
+BODY='{"enrollment_id":"<EID>","text":"Interested, let'\''s talk!"}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')
+curl -sX POST localhost:8901/webhooks/inbound \
+  -H 'Content-Type: application/json' -H "X-Signature: $SIG" -d "$BODY"
+# -> {"status":"queued"}
+```
+
+The receiver only *records* the reply. Classification and the hand-off run on the worker, so
+route it before checking the inbox — `/admin/run-due` handles parked replies first, then ticks:
+
+```bash
+curl -sX POST localhost:8901/admin/run-due -H 'X-User-Id: <UID>' -H 'X-Workspace-Id: <WS>'
 
 # the inbox view across enrollments
 curl -s localhost:8901/inbox -H 'X-User-Id: <UID>' -H 'X-Workspace-Id: <WS>'
 ```
+
+LinkedIn replies come in the same way via `/webhooks/unipile` (token in the query string), which
+Unipile is subscribed to automatically at boot — see `services/outreach/receiving.py`.
 
 ## State machine (what each tick does)
 

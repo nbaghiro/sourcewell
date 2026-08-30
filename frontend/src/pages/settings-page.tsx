@@ -39,8 +39,8 @@ import {
   useChangePlan,
   useOpenBillingPortal,
   useStartCheckout,
-  useConnect,
   useConnections,
+  useLinkedInConnectLink,
   useDataProviders,
   useDeleteDataProvider,
   useDisconnect,
@@ -262,10 +262,32 @@ function UsageStat({ label, weight, value }: { label: string; weight: string; va
 
 function ConnectionsTab() {
   const { data: connections } = useConnections();
-  const connect = useConnect();
+  const connectLink = useLinkedInConnectLink();
   const disconnect = useDisconnect();
   const reauth = useReauth();
-  const busy = connect.isPending || disconnect.isPending || reauth.isPending;
+  const busy =
+    connectLink.isPending || disconnect.isPending || reauth.isPending;
+
+  // Real LinkedIn seats come back from Unipile's hosted-auth wizard, so connecting means
+  // leaving the app.
+  /** Send the recruiter to Unipile's hosted-auth wizard — the only way a real seat is created.
+   *  There is deliberately no fallback: marking a seat "connected" without an account behind it
+   *  is what made Settings claim LinkedIn was live when nothing had been authorised. */
+  async function connectLinkedIn() {
+    try {
+      const { url } = await connectLink.mutateAsync();
+      if (!url) {
+        toast.error("LinkedIn isn't configured on this deployment", {
+          description:
+            "Unipile needs an API key, a DSN and a webhook secret before seats can be connected.",
+        });
+        return;
+      }
+      window.location.href = url;
+    } catch {
+      toast.error("Couldn't start the LinkedIn connection");
+    }
+  }
 
   return (
     <Card>
@@ -280,7 +302,9 @@ function ConnectionsTab() {
           <>
             {connections.map((c) => {
               const p = PROVIDER[c.provider] ?? { label: c.provider, icon: <Mail className="size-5" /> };
-              const st = CONN_STATUS[c.status] ?? { label: c.status, variant: "secondary" as const };
+              const st = c.linked
+                ? (CONN_STATUS[c.status] ?? { label: c.status, variant: "secondary" as const })
+                : { label: "Not linked", variant: "secondary" as const };
               return (
                 <div key={c.id} className="flex items-center gap-4 border-b border-border/60 py-4 last:border-0">
                   <div className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/40" style={{ color: p.color }}>
@@ -288,12 +312,19 @@ function ConnectionsTab() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-foreground">{p.label}</div>
-                    <div className="text-xs text-muted-foreground">{c.user_email} · {c.seat_type}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {c.user_email} · {c.seat_type}
+                      {!c.linked && " · no account authorised — this seat can't send"}
+                    </div>
                   </div>
                   <Badge variant={st.variant}>{st.label}</Badge>
-                  {c.status === "ok" ? (
+                  {c.status === "ok" && c.linked ? (
                     <Button variant="outline" size="sm" disabled={busy} onClick={() => disconnect.mutate(c.id, { onSuccess: () => toast.success("Disconnected") })}>
                       Disconnect
+                    </Button>
+                  ) : c.provider === "linkedin" ? (
+                    <Button variant="outline" size="sm" disabled={busy} onClick={connectLinkedIn}>
+                      {c.linked ? "Reconnect" : "Finish connecting"}
                     </Button>
                   ) : (
                     <Button variant="outline" size="sm" disabled={busy} onClick={() => reauth.mutate(c.id, { onSuccess: () => toast.success("Reconnected") })}>
@@ -311,7 +342,7 @@ function ConnectionsTab() {
                 <div className="text-sm font-semibold text-foreground">LinkedIn · per-recruiter</div>
                 <div className="text-xs text-muted-foreground">Connect another seat via Unipile (~150/day)</div>
               </div>
-              <Button variant="outline" size="sm" disabled={busy} onClick={() => connect.mutate("linkedin", { onSuccess: () => toast.success("LinkedIn connected") })}>
+              <Button variant="outline" size="sm" disabled={busy} onClick={connectLinkedIn}>
                 Connect
               </Button>
             </div>
@@ -640,8 +671,16 @@ function InviteDialog() {
     invite.mutate(
       { email, name, role: role as "member" | "compliance" },
       {
-        onSuccess: () => {
-          toast.success(`Invited ${name}`);
+        onSuccess: (result) => {
+          // The seat is pending until they click the emailed link, so a failed mail hop is not a
+          // success — nobody can get in, and the admin needs to know to send it again.
+          if (result.email_sent) {
+            toast.success(`Invited ${name}`, { description: `Sent an invitation to ${email}.` });
+          } else {
+            toast.warning(`Couldn't email ${email}`, {
+              description: "The seat is reserved — invite them again to resend the link.",
+            });
+          }
           setEmail("");
           setName("");
         },

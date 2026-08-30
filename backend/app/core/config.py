@@ -22,13 +22,13 @@ class Settings(BaseSettings):
     # Where the React app is served — used for CORS + post-auth redirects.
     frontend_url: str = "http://localhost:8900"
 
-    # --- WorkOS AuthKit (SSO: Google / Microsoft / email) ---
+    # --- WorkOS (brokers the Google / Microsoft OAuth buttons) ---
     workos_api_key: str = ""
     workos_client_id: str = ""
     workos_redirect_uri: str = "http://localhost:8901/auth/callback"
 
     # --- Session ---
-    # Both WorkOS SSO and LinkedIn (Unipile hosted-auth) sign-in mint the SAME sealed session: a
+    # Google/Microsoft OAuth and email/password sign-in mint the SAME sealed session: a
     # Fernet-encrypted cookie holding the local user id. Generate the key with:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     session_cookie_password: str = ""
@@ -39,6 +39,35 @@ class Settings(BaseSettings):
     # "none" (with cookie_secure=true) lets the session cookie ride cross-site — needed when the
     # frontend (localhost) talks to a backend served through an HTTPS tunnel (ngrok/cloudflared).
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+
+    # --- Abuse limits on the unauthenticated auth endpoints ---
+    # Off in the test suite (which signs up dozens of times); on everywhere else.
+    auth_rate_limits_enabled: bool = True
+    auth_signup_per_hour: int = 10
+    auth_login_per_5min: int = 20
+    auth_mail_per_hour: int = 5  # forgot-password + resend-verification, per IP
+    auth_email_cooldown_seconds: int = 60  # per address, whoever asks
+
+    # --- LinkedIn (Unipile hosted-auth) seat connect ---
+    # How long a pending connect attempt stays valid (matched to the wizard link's own 1h expiry).
+    login_attempt_ttl_minutes: int = 60
+
+    # --- Email/password sign-in ---
+    # Consecutive failures before the account is locked, and for how long. The lock is per
+    # account (the global middleware limiter is per IP; an attacker rotating IPs still hits this).
+    login_max_attempts: int = 8
+    login_lockout_minutes: int = 15
+    password_reset_ttl_minutes: int = 60
+
+    # --- Transactional email (verification + account mail) ---
+    # Key-gated: blank = plain SMTP (Mailpit locally, so signup stays testable offline). Resend
+    # delivers over HTTPS, so hosts that block outbound SMTP still send.
+    resend_api_key: str = ""
+    transactional_from_email: str = "Sourcewell <hello@sourcewell.dev>"
+    email_verification_ttl_hours: int = 24
+    # Longer than a signup confirmation on purpose: an invite arrives unprompted, so it has to
+    # survive a weekend and a holiday rather than assuming the recipient was waiting for it.
+    invite_ttl_hours: int = 24 * 7
 
     # --- AI (Anthropic Claude) ---
     # Blank = deterministic fallback everywhere; set to enable real generation/scoring.
@@ -71,6 +100,7 @@ class Settings(BaseSettings):
 
     # --- LinkedIn / multichannel send (Unipile) ---
     # Blank = LinkedIn sends are a no-op (dry-run), so multichannel sequences still complete in QA.
+    # Never a sign-in path: LinkedIn is connected from Settings as a sending seat.
     unipile_api_key: str = ""
     unipile_dsn: str = ""  # e.g. https://apiXX.unipile.com:14XXX
     unipile_account_id: str = ""  # the connected LinkedIn account in Unipile
@@ -98,23 +128,73 @@ class Settings(BaseSettings):
 
     @property
     def workos_enabled(self) -> bool:
-        """WorkOS SSO (Google / Microsoft / email) is available."""
+        """The Google / Microsoft OAuth buttons are available."""
         return bool(self.workos_api_key and self.workos_client_id and self.session_cookie_password)
 
     @property
-    def linkedin_auth_enabled(self) -> bool:
-        """Sign in with LinkedIn (via Unipile hosted-auth) is available."""
-        return bool(self.unipile_api_key and self.unipile_dsn and self.session_cookie_password)
+    def linkedin_connect_enabled(self) -> bool:
+        """Connecting a LinkedIn sending seat (via Unipile hosted-auth) is available.
+
+        The webhook secret counts: the wizard hands the connected account to us over the
+        server-side notify hop, and that endpoint is disabled without it — so without the secret
+        every connect would leave the wizard with nowhere to report back to.
+        """
+        return bool(
+            self.unipile_api_key
+            and self.unipile_dsn
+            and self.unipile_webhook_secret
+            and self.session_cookie_password
+        )
 
     @property
     def auth_enabled(self) -> bool:
-        """At least one real sign-in provider is configured; otherwise dev-header auth is used."""
-        return self.workos_enabled or self.linkedin_auth_enabled
+        """A real sign-in provider is configured; otherwise dev-header auth is used.
+
+        LinkedIn does not count — it is a sending seat, not a way in — so a deployment with only
+        Unipile configured still has no sign-in provider and falls back to header auth
+        in local/test.
+        """
+        return self.workos_enabled
+
+    @property
+    def is_local(self) -> bool:
+        return self.environment.lower() in {"local", "test"}
 
     @property
     def header_auth_enabled(self) -> bool:
-        """X-User-Id header auth — only when no provider is configured (tests / no-SSO)."""
-        return not self.auth_enabled
+        """X-User-Id header auth — a local-only convenience for tests and the QA guide.
+
+        Gated on the environment, never on which providers happen to be configured: a
+        password-only production deployment has no OAuth provider either, and trusting a caller-
+        supplied user id there would let anyone sign in as anyone.
+        """
+        return self.is_local and not self.auth_enabled
+
+    def production_config_errors(self) -> list[str]:
+        """Security settings that must not keep their development defaults outside local.
+
+        Checked at startup — each of these is a full compromise on its own, and every one of them
+        fails silently (the app works fine, it just isn't secure).
+        """
+        if self.is_local:
+            return []
+        problems = []
+        if not self.session_cookie_password:
+            problems.append(
+                "SESSION_COOKIE_PASSWORD is unset: session cookies would be unencrypted "
+                "plaintext user ids, and anyone could forge one. Generate with: python -c "
+                '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
+        if not (self.signing_secret or self.session_cookie_password):
+            problems.append(
+                "SIGNING_SECRET is unset: email-verification and password-reset links would be "
+                "signed with the public development fallback key, so anyone could forge them."
+            )
+        if not self.cookie_secure:
+            problems.append("COOKIE_SECURE is false: the session cookie would ride plain HTTP.")
+        if self.cookie_samesite == "none" and not self.cookie_secure:
+            problems.append("COOKIE_SAMESITE=none requires COOKIE_SECURE=true.")
+        return problems
 
 
 @lru_cache

@@ -4,22 +4,49 @@ import { api, API_URL, ApiError } from "@/lib/api";
 import type { components } from "@/lib/api/schema";
 import { clearApiTenant } from "@/lib/api/tenant";
 
-export type Workspace = components["schemas"]["WorkspaceSummary"];
-export type Me = components["schemas"]["MeResponse"];
-export type OrgSummary = components["schemas"]["OrgSummary"];
+// Derived from the backend's OpenAPI schema rather than re-declared here. The hand-written `Me`
+// had drifted: it was missing `user.username` and `user.avatar_url`, both of which /auth/me has
+// returned since the signup form started collecting them, so no caller could reach them.
+type S = components["schemas"];
+
+export type Workspace = S["WorkspaceSummary"];
+export type Me = S["MeResponse"];
+export type OrgSummary = S["OrgSummary"];
+export type AuthOptions = S["AuthOptions"];
+/** `email_sent` is false when the mail hop failed — the UI then surfaces a resend. */
+export type SignupResult = S["AccountSignupResponse"];
+/** `avatar` is a `data:image/...` URL the signup form produces by resizing the picked file;
+ * omitted or null, the UI falls back to initials. */
+export type SignupPayload = S["AccountSignupRequest"];
+/** The profile fields both signup doors collect. An OAuth user posts these on their own, with no
+ * email and no password — the provider established the address. */
+export type SignupProfile = S["SignupProfile"];
+/** The OAuth buttons we offer. LinkedIn is not one: it's connected in Settings as a sending
+ * seat, by someone already signed in. */
+export type OAuthProvider = "google" | "microsoft";
 
 type Status = "loading" | "authed" | "anon";
 
 interface AuthContextValue {
   status: Status;
   me: Me | null;
-  /** Redirect to WorkOS AuthKit (SSO: Google / Microsoft / email). */
-  login: () => void;
-  /** Redirect to the LinkedIn hosted-auth (Unipile) sign-in. */
-  linkedinLogin: () => void;
-  /** Sign in with email + password (the seeded demo account: demo@sourcewell.ai). */
+  /** Redirect to Google or Microsoft OAuth (brokered by WorkOS). */
+  login: (provider: OAuthProvider) => void;
+  /** Sign in with email + password. */
   passwordLogin: (creds: { email: string; password: string }) => Promise<void>;
-  /** Clear the session and bounce through the WorkOS logout. */
+  /** Self-serve signup: create the org + admin user. No session — the emailed link signs in. */
+  signup: (payload: SignupPayload) => Promise<SignupResult>;
+  /** Finish a signup that started at Google/Microsoft: supply the profile the provider couldn't. */
+  completeProfile: (profile: SignupProfile) => Promise<void>;
+  /** Re-send the confirmation link. Always resolves — the API never says who has an account. */
+  resendVerification: (email: string) => Promise<void>;
+  /** Which sign-in providers this deployment actually has configured. */
+  options: AuthOptions | null;
+  /** Mail a password-reset link. Always resolves, whether or not the address has an account. */
+  forgotPassword: (email: string) => Promise<void>;
+  /** Consume a reset link, set the new password, and sign in. */
+  resetPassword: (token: string, password: string) => Promise<void>;
+  /** Clear the session cookie and return to the login screen. */
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -43,13 +70,24 @@ async function fetchMe(): Promise<Me> {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = React.useState<Status>("loading");
   const [me, setMe] = React.useState<Me | null>(null);
+  const [options, setOptions] = React.useState<AuthOptions | null>(null);
+
+  // Which providers are configured — the login screen only offers buttons that work.
+  React.useEffect(() => {
+    void api<AuthOptions>("/auth/options")
+      .then(setOptions)
+      .catch(() => setOptions({ google: false, microsoft: false }));
+  }, []);
 
   const refresh = React.useCallback(async () => {
     try {
       setMe(await fetchMe());
       setStatus("authed");
+      // The server gates the rest of the API on this too (403 profile_incomplete), so a client
+      // that ignored it would just render pages full of failed requests. <RequireAuth> reads it.
     } catch {
-      // 401, or a network error / backend down — treat as signed out so the UI is usable.
+      // 401, or a network error / backend down: either way there is no usable session, and the
+      // app renders the login screen rather than a permanent splash loader.
       setMe(null);
       setStatus("anon");
     }
@@ -59,40 +97,97 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  // Both of these leave `status` alone until they succeed: flipping it to "loading" would swap
+  // the form for the splash loader, unmounting it — and a failed attempt would come back to a
+  // blank form with no error on it. The pages render their own in-button busy state instead.
   const passwordLogin = React.useCallback(
     async (creds: { email: string; password: string }) => {
-      setStatus("loading"); // swap the login page for the splash loader while we sign in
-      try {
-        await api("/auth/password", { method: "POST", body: JSON.stringify(creds) });
-        await refresh();
-      } catch (err) {
-        setStatus("anon");
-        throw err;
-      }
+      await api("/auth/password", { method: "POST", body: JSON.stringify(creds) });
+      await refresh();
     },
     [refresh],
   );
 
-  const login = React.useCallback(() => {
-    window.location.href = `${API_URL}/auth/login`;
+  // No refresh() here: signup deliberately mints no session. The user is signed in when they
+  // click the emailed link, which lands on the API and redirects back with the cookie set.
+  const signup = React.useCallback(
+    (payload: SignupPayload) =>
+      api<SignupResult>("/auth/signup", { method: "POST", body: JSON.stringify(payload) }),
+    [],
+  );
+
+  // Unlike signup this *does* refresh: the user is already signed in, and `profile_complete`
+  // flipping is what lets <RequireAuth> stop routing them back to the form.
+  const completeProfile = React.useCallback(
+    async (profile: SignupProfile) => {
+      await api("/auth/complete-profile", { method: "POST", body: JSON.stringify(profile) });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const resendVerification = React.useCallback(async (email: string) => {
+    await api("/auth/verify/resend", { method: "POST", body: JSON.stringify({ email }) });
   }, []);
 
-  const linkedinLogin = React.useCallback(() => {
-    window.location.href = `${API_URL}/auth/linkedin/login`;
+  const forgotPassword = React.useCallback(async (email: string) => {
+    await api("/auth/password/forgot", { method: "POST", body: JSON.stringify({ email }) });
+  }, []);
+
+  const resetPassword = React.useCallback(
+    async (token: string, password: string) => {
+      await api("/auth/password/reset", {
+        method: "POST",
+        body: JSON.stringify({ token, password }),
+      });
+      await refresh(); // the reset response carries the session — go straight into the app
+    },
+    [refresh],
+  );
+
+  const login = React.useCallback((provider: OAuthProvider) => {
+    window.location.href = `${API_URL}/auth/login/${provider}`;
   }, []);
 
   const logout = React.useCallback(async () => {
+    // A hard navigation, not a route change: it drops every cached query and React state along
+    // with the session, so nothing from the old account can survive into the next sign-in.
     try {
-      const { logout_url } = await api<{ logout_url: string }>("/auth/logout", { method: "POST" });
-      window.location.href = logout_url;
-    } catch {
+      await api("/auth/logout", { method: "POST" });
+    } finally {
       window.location.href = "/login";
     }
   }, []);
 
   const value = React.useMemo(
-    () => ({ status, me, login, linkedinLogin, passwordLogin, logout, refresh }),
-    [status, me, login, linkedinLogin, passwordLogin, logout, refresh],
+    () => ({
+      status,
+      me,
+      options,
+      login,
+      passwordLogin,
+      signup,
+      completeProfile,
+      resendVerification,
+      forgotPassword,
+      resetPassword,
+      logout,
+      refresh,
+    }),
+    [
+      status,
+      me,
+      options,
+      login,
+      passwordLogin,
+      signup,
+      completeProfile,
+      resendVerification,
+      forgotPassword,
+      resetPassword,
+      logout,
+      refresh,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
