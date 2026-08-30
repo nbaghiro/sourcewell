@@ -115,11 +115,15 @@ async def test_user_in_two_orgs_resolves_by_header_or_workspace(db_session: Asyn
     assert ctx.org_id == org_b.id
     assert not ctx.is_org_admin
 
-    # Ambiguous with neither header, and an org the user isn't in is not accepted.
-    for req in (_req(user.id), _req(user.id, organization_id="not-a-member")):
-        with pytest.raises(HTTPException) as exc:
-            await get_context(req, Response(), db_session)
-        assert exc.value.status_code == 400
+    # A fresh browser sends no selection at all: fall back to a membership rather than locking
+    # the user out, so the app can load and let them switch.
+    ctx = await get_context(_req(user.id), Response(), db_session)
+    assert ctx.org_id in {org_a.id, org_b.id}
+
+    # An organization the user does not belong to is refused outright.
+    with pytest.raises(HTTPException) as exc:
+        await get_context(_req(user.id, organization_id="not-a-member"), Response(), db_session)
+    assert exc.value.status_code == 403
 
 
 @pytest.mark.db

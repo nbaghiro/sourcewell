@@ -81,12 +81,13 @@ async def get_context(request: Request, response: Response, session: SessionDep)
         org_id = next(iter(org_ids))
     else:
         header_org = request.headers.get("X-Organization-Id")
-        if header_org is None or header_org not in org_ids:
-            raise HTTPException(
-                status_code=400,
-                detail="X-Organization-Id is required and must name one of your organizations",
-            )
-        org_id = header_org
+        if header_org is not None and header_org not in org_ids:
+            raise HTTPException(status_code=403, detail="organization not accessible")
+        # A fresh browser sends no selection; fall back to the oldest membership so a multi-org
+        # user is never locked out of the app before they can choose. Rows written in one
+        # transaction share a timestamp, so the id breaks the tie.
+        oldest = min(memberships, key=lambda m: (m.created_at, m.id))
+        org_id = header_org or oldest.organization_id
 
     roles = frozenset(m.role for m in memberships if m.organization_id == org_id)
     return TenantContext(

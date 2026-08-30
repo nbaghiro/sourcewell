@@ -100,9 +100,10 @@ The workspace noun comes from `Workspace.kind` first (`client` → "Client", `de
 "Department", `team` → "Team") and falls back to the vertical pack. The resolved pack is on the
 `/auth/me` response and on workspace settings; the frontend reads it through `useLabels()`.
 
-## Known gap
+## First load with no stored selection
 
-A user who belongs to more than one organization and arrives with no stored tenant selection (a fresh
-browser, or cleared site data) has no way to name an organization, so `/auth/me` answers 400. Closing
-it needs either a bootstrap endpoint that lists memberships without a resolved org, or a relaxation of
-rule 2 in `get_context` to fall back to the oldest membership.
+A user in more than one organization who arrives with no stored tenant (a fresh browser, or cleared
+site data) cannot send `X-Organization-Id`. Rather than refuse the request and leave the app looking
+signed out, `get_context` falls back to the oldest membership, tie-broken by id so rows written in one
+transaction resolve deterministically. The client then switches organizations normally. A header that
+names an organization the user does not belong to is still refused, with a 403.
