@@ -812,7 +812,12 @@ async def seed_demo(
     actor_ids, team = await _seed_team(session, org=org, admin=admin)
 
     ws_recruit = Workspace(organization_id=org.id, name="Recruiting", kind=WorkspaceKind.team)
-    ws_sales = Workspace(organization_id=org.id, name="Enterprise Sales", kind=WorkspaceKind.team)
+    ws_sales = Workspace(
+        organization_id=org.id,
+        name="Enterprise Sales",
+        kind=WorkspaceKind.team,
+        settings={"vertical": "sales"},
+    )
     ws_partner = Workspace(organization_id=org.id, name="Partnerships", kind=WorkspaceKind.team)
     session.add_all([ws_recruit, ws_sales, ws_partner])
     await session.flush()
