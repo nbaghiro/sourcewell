@@ -1,17 +1,12 @@
 import * as React from "react";
 
 import { api } from "@/lib/api";
-
-export interface WorkspaceLite {
-  id: string;
-  name: string;
-  kind: string;
-}
+import type { Workspace } from "@/lib/auth";
 
 interface WorkspaceCtx {
   workspaceId: string | null;
   setWorkspaceId: (id: string) => void;
-  workspaces: WorkspaceLite[];
+  workspaces: Workspace[];
 }
 
 export const WorkspaceContext = React.createContext<WorkspaceCtx | null>(null);

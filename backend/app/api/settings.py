@@ -9,8 +9,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 
+from app.agents.prompts import resolve_labels
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin, require_workspace
+from app.api.labels import LabelPack
 from app.core import policy
 from app.core.config import get_settings
 from app.core.crypto import seal, unseal
@@ -33,6 +35,7 @@ from app.models import (
     User,
     UserStatus,
     Workspace,
+    WorkspaceKind,
 )
 from app.services.billing import subscriptions
 from app.services.billing.credits import credit_status
@@ -98,6 +101,8 @@ class MemberOut(BaseModel):
 class WorkspaceSettingsOut(BaseModel):
     id: str
     name: str
+    kind: WorkspaceKind
+    labels: LabelPack
     # The whole policy chain flattened: platform → partner → org → workspace.
     settings: JsonObject
     # Just this workspace's own overrides, so the UI can tell "inherited" from "set here".
@@ -190,6 +195,8 @@ async def _workspace_settings(session: SessionDep, workspace: Workspace) -> Work
     return WorkspaceSettingsOut(
         id=workspace.id,
         name=workspace.name,
+        kind=workspace.kind,
+        labels=LabelPack(**vars(resolve_labels(resolved.get_str("vertical"), workspace.kind))),
         settings=resolved.effective(),
         overrides=workspace.settings or {},
     )

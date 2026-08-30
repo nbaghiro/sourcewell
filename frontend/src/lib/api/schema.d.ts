@@ -2856,6 +2856,21 @@ export interface components {
         JsonObject: {
             [key: string]: unknown;
         };
+        /** LabelPack */
+        LabelPack: {
+            /** Campaign */
+            campaign: string;
+            /** Campaign Plural */
+            campaign_plural: string;
+            /** Contact */
+            contact: string;
+            /** Contact Plural */
+            contact_plural: string;
+            /** Goal */
+            goal: string;
+            /** Workspace */
+            workspace: string;
+        };
         /** LinkedInJob */
         LinkedInJob: {
             /** Description */
@@ -2864,6 +2879,20 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /** MeResponse */
+        MeResponse: {
+            /** Current Workspace Id */
+            current_workspace_id: string | null;
+            /** Is Org Admin */
+            is_org_admin: boolean;
+            labels: components["schemas"]["LabelPack"];
+            organization: components["schemas"]["OrgSummary"] | null;
+            /** Organizations */
+            organizations: components["schemas"]["OrgSummary"][];
+            user: components["schemas"]["UserSummary"] | null;
+            /** Workspaces */
+            workspaces: components["schemas"]["WorkspaceSummary"][];
         };
         /** MemberOut */
         MemberOut: {
@@ -3467,6 +3496,21 @@ export interface components {
              */
             titles: string[];
         };
+        /** TenantContextOut */
+        TenantContextOut: {
+            /** Allowed Workspace Ids */
+            allowed_workspace_ids: string[];
+            /** Current Workspace Id */
+            current_workspace_id: string | null;
+            /** Is Org Admin */
+            is_org_admin: boolean;
+            /** Org Id */
+            org_id: string;
+            /** Roles */
+            roles: components["schemas"]["MembershipRole"][];
+            /** User Id */
+            user_id: string;
+        };
         /** UrlOut */
         UrlOut: {
             /** Url */
@@ -3554,6 +3598,8 @@ export interface components {
         WorkspaceSettingsOut: {
             /** Id */
             id: string;
+            kind: components["schemas"]["WorkspaceKind"];
+            labels: components["schemas"]["LabelPack"];
             /** Name */
             name: string;
             overrides: components["schemas"]["JsonObject"];
@@ -3573,19 +3619,6 @@ export interface components {
             name: string;
             /** Organization Id */
             organization_id: string;
-        };
-        /** MeResponse */
-        app__api__auth__MeResponse: {
-            /** Current Workspace Id */
-            current_workspace_id: string | null;
-            /** Is Org Admin */
-            is_org_admin: boolean;
-            organization: components["schemas"]["OrgSummary"] | null;
-            /** Organizations */
-            organizations: components["schemas"]["OrgSummary"][];
-            user: components["schemas"]["UserSummary"] | null;
-            /** Workspaces */
-            workspaces: components["schemas"]["WorkspaceSummary"][];
         };
         /** ImportOut */
         app__api__contacts__ImportOut: {
@@ -3635,21 +3668,6 @@ export interface components {
             plan: string;
             /** Used */
             used: number;
-        };
-        /** MeResponse */
-        app__api__tenancy__MeResponse: {
-            /** Allowed Workspace Ids */
-            allowed_workspace_ids: string[];
-            /** Current Workspace Id */
-            current_workspace_id: string | null;
-            /** Is Org Admin */
-            is_org_admin: boolean;
-            /** Org Id */
-            org_id: string;
-            /** Roles */
-            roles: components["schemas"]["MembershipRole"][];
-            /** User Id */
-            user_id: string;
         };
     };
     responses: never;
@@ -4280,7 +4298,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__api__auth__MeResponse"];
+                    "application/json": components["schemas"]["MeResponse"];
                 };
             };
         };
@@ -5480,7 +5498,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__api__tenancy__MeResponse"];
+                    "application/json": components["schemas"]["TenantContextOut"];
                 };
             };
         };

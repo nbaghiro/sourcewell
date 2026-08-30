@@ -1,20 +1,10 @@
 import * as React from "react";
 
 import { api, API_URL, ApiError } from "@/lib/api";
+import type { components } from "@/lib/api/schema";
 
-export interface Workspace {
-  id: string;
-  name: string;
-  kind: string;
-}
-
-export interface Me {
-  user: { id: string; email: string; name: string } | null;
-  organization: { id: string; name: string } | null;
-  is_org_admin: boolean;
-  current_workspace_id: string | null;
-  workspaces: Workspace[];
-}
+export type Workspace = components["schemas"]["WorkspaceSummary"];
+export type Me = components["schemas"]["MeResponse"];
 
 type Status = "loading" | "authed" | "anon";
 

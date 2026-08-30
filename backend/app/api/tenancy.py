@@ -90,7 +90,7 @@ class SpaceGrantRead(BaseModel):
     role: SpaceRole
 
 
-class MeResponse(BaseModel):
+class TenantContextOut(BaseModel):
     user_id: str
     org_id: str
     roles: list[MembershipRole]
@@ -116,9 +116,9 @@ async def signup_endpoint(body: SignupRequest, session: SessionDep) -> SignupRes
     return SignupResponse(organization_id=org.id, admin_user_id=user.id)
 
 
-@router.get("/me", response_model=MeResponse)
-async def me(ctx: ContextDep) -> MeResponse:
-    return MeResponse(
+@router.get("/me", response_model=TenantContextOut)
+async def me(ctx: ContextDep) -> TenantContextOut:
+    return TenantContextOut(
         user_id=ctx.user_id,
         org_id=ctx.org_id,
         roles=sorted(ctx.roles),

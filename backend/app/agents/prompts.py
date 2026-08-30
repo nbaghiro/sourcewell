@@ -1,14 +1,13 @@
-"""Hardcoded vertical packs (industry prompt overlays) + prompt composition.
+"""Hardcoded vertical packs (industry prompt overlays + label packs) + prompt composition.
 
-Verticals live in code for now — only "recruiting"; `Workspace.vertical` is the pointer. The runtime
-composes an agent's system prompt as: BASE[role] + the vertical overlay + the per-run context.
-Adding an industry later = another entry here, no schema change.
+Verticals live in code; the `vertical` policy key is the pointer. The runtime composes an agent's
+system prompt as: BASE[role] + the vertical overlay + the per-run context, and the UI takes its
+nouns from the same pack's labels. Adding an industry later = another entry here, no schema change.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from app.core.types import JsonObject
-from app.models import AgentRole
+from app.models import AgentRole, WorkspaceKind
 
 # Base behavior per agent role (industry-agnostic).
 _BASE: dict[AgentRole, str] = {
@@ -32,10 +31,22 @@ _BASE: dict[AgentRole, str] = {
 
 
 @dataclass(frozen=True)
+class Labels:
+    """The nouns the UI uses. One pack per vertical; `workspace` is overridden by workspace kind."""
+
+    contact: str
+    contact_plural: str
+    campaign: str
+    campaign_plural: str
+    workspace: str
+    goal: str
+
+
+@dataclass(frozen=True)
 class Vertical:
     name: str
     prompts: dict[AgentRole, str]  # per-role overlay appended to the base
-    vocabulary: JsonObject
+    labels: Labels
 
 
 _RECRUITING = Vertical(
@@ -54,15 +65,63 @@ _RECRUITING = Vertical(
             "role. Be warm and concise; hand off to the human once they're genuinely interested."
         ),
     },
-    vocabulary={"target": "candidate", "goal": "role"},
+    labels=Labels(
+        contact="candidate",
+        contact_plural="candidates",
+        campaign="role",
+        campaign_plural="roles",
+        workspace="client",
+        goal="role",
+    ),
 )
 
-VERTICALS: dict[str, Vertical] = {"recruiting": _RECRUITING}
+_SALES = Vertical(
+    name="sales",
+    prompts={
+        AgentRole.strategy: (
+            "Domain: B2B sales. The audience is buyers and economic champions; the goal is a "
+            "qualified meeting. Favor targeting by title, company size, and technology fit, and "
+            "lead with a concrete outcome rather than a product tour."
+        ),
+        AgentRole.sourcing: (
+            "Domain: B2B sales. A strong match sits in the buying committee for this offer at a "
+            "company that plausibly has the problem. Prefer decision-makers over end users."
+        ),
+        AgentRole.outreach: (
+            "Domain: B2B sales. You are a rep working an outbound thread about a specific offer. "
+            "Qualify gently, answer objections plainly, and hand off once there's real interest."
+        ),
+    },
+    labels=Labels(
+        contact="lead",
+        contact_plural="leads",
+        campaign="sequence",
+        campaign_plural="sequences",
+        workspace="client",
+        goal="offer",
+    ),
+)
+
+VERTICALS: dict[str, Vertical] = {"recruiting": _RECRUITING, "sales": _SALES}
 DEFAULT_VERTICAL = "recruiting"
+
+_WORKSPACE_LABEL: dict[WorkspaceKind, str] = {
+    WorkspaceKind.client: "Client",
+    WorkspaceKind.department: "Department",
+    WorkspaceKind.team: "Team",
+}
 
 
 def get_vertical(name: str) -> Vertical:
     return VERTICALS.get(name, VERTICALS[DEFAULT_VERTICAL])
+
+
+def resolve_labels(vertical: str, kind: WorkspaceKind | None = None) -> Labels:
+    """The vertical's label pack, with the workspace noun taken from its kind when we know it."""
+    labels = get_vertical(vertical).labels
+    if kind is None:
+        return labels
+    return replace(labels, workspace=_WORKSPACE_LABEL[kind])
 
 
 def compose_system(role: AgentRole, vertical: str, *, context: str = "") -> str:

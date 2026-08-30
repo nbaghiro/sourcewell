@@ -5,6 +5,7 @@ import { AUTONOMY, stopFrom } from "@/components/autonomy-dial";
 import { DataError } from "@/components/data-error";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { title, useLabels } from "@/lib/labels";
 import { PageLayout } from "@/components/page-layout";
 import { StateBadge } from "@/components/state-badge";
 import { Badge } from "@/components/ui/badge";
@@ -17,16 +18,17 @@ import { useCampaigns } from "@/lib/api/queries";
 export function CampaignsPage() {
   const { data, isLoading, isError, refetch } = useCampaigns();
   const navigate = useNavigate();
+  const labels = useLabels();
 
   return (
     <PageLayout>
       <PageHeader
         eyebrow="Outreach"
-        title="Campaigns"
+        title={title(labels.campaign_plural)}
         description="Each campaign defines who to reach (criteria) and how (a multi-touchpoint sequence)."
       >
         <Button size="sm" onClick={() => navigate("/campaigns/new")}>
-          <Plus /> New campaign
+          <Plus /> New {labels.campaign}
         </Button>
       </PageHeader>
 
@@ -35,7 +37,11 @@ export function CampaignsPage() {
       ) : isLoading ? (
         <Skeleton className="h-80" />
       ) : !data || data.length === 0 ? (
-        <EmptyState icon={Send} title="No campaigns yet" description="Create a campaign to start sourcing." />
+        <EmptyState
+          icon={Send}
+          title={`No ${labels.campaign_plural} yet`}
+          description={`Create a ${labels.campaign} to start sourcing.`}
+        />
       ) : (
         <Card>
           <Table>

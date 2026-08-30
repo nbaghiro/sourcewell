@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.api.context import ContextDep, SessionDep
+from app.api.labels import LabelPack, label_pack
 from app.core.config import get_settings
 from app.models import Membership, Organization, User, Workspace, WorkspaceKind
 from app.services.workspace import auth as auth_service
@@ -137,6 +138,7 @@ class MeResponse(BaseModel):
     is_org_admin: bool
     current_workspace_id: str | None
     workspaces: list[WorkspaceSummary]
+    labels: LabelPack
 
 
 @router.get("/me", response_model=MeResponse)
@@ -166,6 +168,7 @@ async def me(ctx: ContextDep, session: SessionDep) -> MeResponse:
         .scalars()
         .all()
     )
+    current = next((w for w in workspaces if w.id == ctx.current_workspace_id), None)
     return MeResponse(
         user=UserSummary(id=user.id, email=user.email, name=user.name) if user else None,
         organization=OrgSummary(id=org.id, name=org.name) if org else None,
@@ -176,6 +179,7 @@ async def me(ctx: ContextDep, session: SessionDep) -> MeResponse:
             WorkspaceSummary(id=w.id, organization_id=w.organization_id, name=w.name, kind=w.kind)
             for w in workspaces
         ],
+        labels=await label_pack(session, workspace=current),
     )
 
 

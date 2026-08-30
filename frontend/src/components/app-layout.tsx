@@ -16,20 +16,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { initials } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
+import { title, useLabels } from "@/lib/labels";
 import { useWorkspace } from "@/lib/workspace";
-
-const NAV: NavItemDef[] = [
-  { label: "Home", icon: LayoutDashboard, href: "/" },
-  { label: "Inbox", icon: Inbox, href: "/inbox" },
-  { label: "People", icon: Users, href: "/people" },
-  { label: "Campaigns", icon: Send, href: "/campaigns" },
-  { label: "Pipeline", icon: Filter, href: "/pipeline" },
-  { label: "Settings", icon: Settings, href: "/settings" },
-];
 
 export function AppLayout() {
   const { me, logout } = useAuth();
   const { workspaces, workspaceId, setWorkspaceId } = useWorkspace();
+  const labels = useLabels();
+
+  const nav: NavItemDef[] = [
+    { label: "Home", icon: LayoutDashboard, href: "/" },
+    { label: "Inbox", icon: Inbox, href: "/inbox" },
+    { label: title(labels.contact_plural), icon: Users, href: "/people" },
+    { label: title(labels.campaign_plural), icon: Send, href: "/campaigns" },
+    { label: "Pipeline", icon: Filter, href: "/pipeline" },
+    { label: "Settings", icon: Settings, href: "/settings" },
+  ];
 
   const user = me?.user;
   const org = me?.organization;
@@ -70,12 +72,13 @@ export function AppLayout() {
         <AppSidebar
           workspace={current?.name ?? "No workspace"}
           org={org?.name ?? "Sourcewell"}
-          items={NAV}
+          items={nav}
           user={{
             name: user?.name ?? "—",
             role: me?.is_org_admin ? "Org admin" : "Member",
             initials: initials(user?.name),
           }}
+          workspaceLabel={labels.workspace}
           workspaces={workspaces}
           currentWorkspaceId={workspaceId}
           onSelectWorkspace={setWorkspaceId}

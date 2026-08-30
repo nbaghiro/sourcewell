@@ -10,7 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { WorkspaceLite } from "@/lib/workspace";
+import type { Workspace } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 interface NavItemDef {
@@ -27,7 +27,8 @@ interface AppSidebarProps {
   items: NavItemDef[];
   user: { name: string; role: string; initials: string };
   className?: string;
-  workspaces?: WorkspaceLite[];
+  workspaceLabel?: string;
+  workspaces?: Workspace[];
   currentWorkspaceId?: string | null;
   onSelectWorkspace?: (id: string) => void;
 }
@@ -79,6 +80,7 @@ function AppSidebar({
   items,
   user,
   className,
+  workspaceLabel = "Workspace",
   workspaces,
   currentWorkspaceId,
   onSelectWorkspace,
@@ -105,7 +107,9 @@ function AppSidebar({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuLabel>{org}</DropdownMenuLabel>
+            <DropdownMenuLabel>
+              {org} · {workspaceLabel}
+            </DropdownMenuLabel>
             {workspaces!.map((w) => (
               <DropdownMenuItem key={w.id} onClick={() => onSelectWorkspace!(w.id)}>
                 <span className="flex-1 truncate">{w.name}</span>

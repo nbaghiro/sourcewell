@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { DataError } from "@/components/data-error";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { title, useLabels } from "@/lib/labels";
 import { PageLayout } from "@/components/page-layout";
 import { PersonCell } from "@/components/person-cell";
 import { Badge } from "@/components/ui/badge";
@@ -29,16 +30,17 @@ import { type ContactIn, useContacts, useImportContacts } from "@/lib/api/querie
 export function PeoplePage() {
   const { data, isLoading, isError, refetch } = useContacts();
   const navigate = useNavigate();
+  const labels = useLabels();
 
   return (
     <PageLayout>
       <PageHeader
         eyebrow="People"
-        title="People"
-        description="People sourced into this workspace. Rank them into a campaign to start outreach."
+        title={title(labels.contact_plural)}
+        description={`People sourced into this workspace. Rank them into a ${labels.campaign} to start outreach.`}
       >
         <Button variant="outline" size="sm" onClick={() => navigate("/people/find")}>
-          <UserSearch /> Find people
+          <UserSearch /> Find {labels.contact_plural}
         </Button>
         <ImportDialog />
       </PageHeader>
@@ -50,8 +52,8 @@ export function PeoplePage() {
       ) : !data || data.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No people yet"
-          description="Import your own list to start ranking candidates."
+          title={`No ${labels.contact_plural} yet`}
+          description={`Import your own list to start ranking ${labels.contact_plural}.`}
           action={<ImportDialog />}
         />
       ) : (
