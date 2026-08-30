@@ -64,7 +64,9 @@ def sourcing_tools(ctx: SourcingContext) -> list[Tool]:
 
     async def search(data: JsonObject) -> JsonObject:
         limit = min(_int(data, "limit", 25), 50)
-        hits = await search_people(ctx.providers, ctx.targeting, limit=limit, use_cache=False)
+        hits = (
+            await search_people(ctx.providers, ctx.targeting, limit=limit, use_cache=False)
+        ).hits
         for p in ctx.providers:
             await usage.record(
                 ctx.session, organization_id=ctx.organization_id, provider=p.key, kind="search"
@@ -245,7 +247,7 @@ async def deterministic_source(
         session, organization_id, selection=resolved.get_str_list("providers") or None
     )
     targeting = as_targeting(campaign.criteria)
-    hits = await search_people(providers, targeting, limit=25, use_cache=False)
+    hits = (await search_people(providers, targeting, limit=25, use_cache=False)).hits
     kept: list[PersonHit] = []
     for h in hits:
         if h.email and await is_suppressed(

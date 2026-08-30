@@ -188,8 +188,13 @@ function PlanUsageTab() {
           </p>
         ) : null}
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <UsageStat label="Emails sent" weight="×1" value={data.breakdown.emails ?? 0} />
+          <UsageStat
+            label="LinkedIn messages"
+            weight="×1"
+            value={data.breakdown.linkedin_dms ?? 0}
+          />
           <UsageStat label="InMails sent" weight="×2" value={data.breakdown.inmails ?? 0} />
           <UsageStat label="Sourced" weight="×1" value={data.breakdown.sourced ?? 0} />
         </div>

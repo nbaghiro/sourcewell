@@ -88,6 +88,7 @@ async def account_usage(ctx: ContextDep, session: SessionDep) -> UsageOut:
         period_start=st.period_start,
         breakdown={
             "emails": st.emails,
+            "linkedin_dms": st.linkedin_dms,
             "inmails": st.inmails,
             "sourced": st.sourced,
         },

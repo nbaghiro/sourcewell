@@ -571,6 +571,7 @@ async def _summary(
         "enrollments_by_state": by_state,
         "credits": {
             "emails": credits.emails,
+            "linkedin_dms": credits.linkedin_dms,
             "inmails": credits.inmails,
             "sourced": credits.sourced,
             "used": credits.used,

@@ -41,6 +41,7 @@ async def create_campaign(
     seed_contact_ids: list[str] | None = None,
     created_by_user_id: str | None = None,
     seat_id: str | None = None,
+    use_inmail: bool = False,
 ) -> Campaign:
     agent_authored = authored_by == Authorship.agent
     if autonomy_level is None:
@@ -57,6 +58,7 @@ async def create_campaign(
         seat_id=seat_id,
         criteria=criteria,
         sequence=sequence,
+        use_inmail=use_inmail,
         # Active campaigns source on the next worker tick; the agent owns the sections it authored.
         next_source_at=datetime.now(UTC),
         field_owners={"audience": "agent", "sequence": "agent"} if agent_authored else {},

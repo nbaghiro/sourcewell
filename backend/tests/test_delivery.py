@@ -27,6 +27,7 @@ from app.models import (
     MessageDirection,
     MessageStatus,
     Organization,
+    SeatType,
     Suppression,
     SuppressionReason,
 )
@@ -44,10 +45,12 @@ from tests.factories import make_org, make_user, make_workspace
 class FakeChannel:
     """Records send/reply calls in place of a live Unipile channel."""
 
-    def __init__(self, channel: str) -> None:
+    def __init__(self, channel: str, *, reply_accepted: bool = True) -> None:
         self.channel = channel
         self.sent: list[dict[str, object]] = []
         self.replied: list[dict[str, object]] = []
+        # Mirrors the real client: False is a permanent provider rejection of a reply.
+        self.reply_accepted = reply_accepted
 
     async def send(
         self,
@@ -71,10 +74,11 @@ class FakeChannel:
 
     async def reply(
         self, *, account_id: str, thread_id: str, body: str, idempotency_key: str | None = None
-    ) -> None:
+    ) -> bool:
         self.replied.append(
             {"account_id": account_id, "thread_id": thread_id, "idempotency_key": idempotency_key}
         )
+        return self.reply_accepted
 
 
 def _use_channel(monkeypatch: pytest.MonkeyPatch, channel_str: str, fake: FakeChannel) -> None:
@@ -129,6 +133,9 @@ def _seat(
     status: ConnectionStatus = ConnectionStatus.ok,
     external_id: str = "acct-1",
     caps: dict[str, object] | None = None,
+    # A paid tier by default: InMail needs credits a free ("basic") seat doesn't have, and most of
+    # these tests are about the transport rather than the seat's plan.
+    seat_type: SeatType = SeatType.recruiter,
 ) -> Connection:
     return Connection(
         organization_id=org_id,
@@ -136,6 +143,7 @@ def _seat(
         provider=provider,
         external_id=external_id,
         status=status,
+        seat_type=seat_type,
         capabilities=caps or {},
     )
 
@@ -166,11 +174,18 @@ async def test_linkedin_send_uses_seat_inmail_and_captures_thread(
     user = await make_user(db_session)
     seat = _seat(org.id, user.id, ConnectionProvider.linkedin, external_id="acct-li")
 
-    await deliver_outbound(db_session, message=msg, contact=contact, seat=seat, sender="rec@x.com")
+    await deliver_outbound(
+        db_session,
+        message=msg,
+        contact=contact,
+        seat=seat,
+        sender="rec@x.com",
+        inmail=True,  # the campaign opted in; InMail is never the default (it needs seat credits)
+    )
 
     assert len(fake.sent) == 1
     assert fake.sent[0]["account_id"] == "acct-li"  # the per-seat account, not a global one
-    assert fake.sent[0]["inmail"] is True  # cold recruiting reach → InMail
+    assert fake.sent[0]["inmail"] is True
     assert fake.sent[0]["idempotency_key"] == "idem-1"  # dedupe key forwarded to the provider
     assert msg.external_id == "thread-xyz"  # provider thread captured for reply mapping
     assert msg.account_id == "acct-li"
@@ -357,6 +372,33 @@ async def test_linkedin_reply_threads_and_forwards_idempotency_key(
     assert len(fake.replied) == 1
     assert fake.replied[0]["thread_id"] == "chat-1"
     assert fake.replied[0]["idempotency_key"] == "idem-r"  # dedupe on reply retries
+
+
+@pytest.mark.db
+async def test_rejected_linkedin_reply_fails_hard_instead_of_retrying(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider that refuses the reply is a permanent failure, not a retry.
+
+    The transport used to swallow the rejection (`reply` returned None either way), so the message
+    was stamped `sent` and left a thread bubble for something that never left.
+    """
+    org, contact, enr = await _thread(db_session, slug="lireject")
+    _live(monkeypatch, linkedin=True)
+    _use_channel(monkeypatch, "linkedin", FakeChannel("linkedin", reply_accepted=False))
+    db_session.add(
+        _outbound(enr, Channel.linkedin, status=MessageStatus.sent, external_id="chat-dead")
+    )
+    msg = _outbound(enr, Channel.linkedin)
+    db_session.add(msg)
+    await db_session.flush()
+    user = await make_user(db_session, org=org)
+    seat = _seat(org.id, user.id, ConnectionProvider.linkedin, external_id="acct-li")
+
+    with pytest.raises(PermanentSendError):
+        await deliver_outbound(
+            db_session, message=msg, contact=contact, seat=seat, sender="r@x.com", reply=True
+        )
 
 
 @pytest.mark.db

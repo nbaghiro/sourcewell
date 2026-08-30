@@ -19,10 +19,21 @@ from app.models import (
     CampaignStatus,
     Enrollment,
     EnrollmentState,
+    Message,
 )
+from app.services.outreach import messaging
 from tests.factories import make_org, make_workspace
 from tests.fake_llm import FakeLLM, text_turn, tool_turn
 from tests.fakes import FakeSourceProvider
+
+
+async def _inbound(session: AsyncSession, enrollment: Enrollment, text: str) -> Message:
+    """Record the reply the way the receiver would, so the agent has a message to route."""
+    message = await messaging.record_inbound(
+        session, enrollment=enrollment, text=text, now=datetime.now(UTC)
+    )
+    assert message is not None
+    return message
 
 
 async def _enrollments(session: AsyncSession, campaign_id: str) -> list[Enrollment]:
@@ -99,7 +110,7 @@ async def test_full_autonomy_lifecycle(
         db_session,
         llm=conv_llm,
         enrollment=enrollments[0],
-        inbound_text="I'm interested — let's talk!",
+        message=await _inbound(db_session, enrollments[0], "I'm interested — let's talk!"),
         organization_id=org.id,
         now=now,
     )

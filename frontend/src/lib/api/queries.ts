@@ -16,6 +16,8 @@ export type Approval = S["ApprovalOut"];
 export type InboxItem = S["InboxItemOut"];
 export type Conversation = S["ConversationOut"];
 export type Message = S["MessageOut"];
+export type Channel = S["Channel"];
+export type ChannelOption = S["ChannelOptionOut"];
 export type DashboardSummary = S["DashboardSummary"];
 export type Analytics = S["AnalyticsOut"];
 export type Notifications = S["NotificationsOut"];
@@ -43,6 +45,7 @@ const k = {
   approvals: (ws: string | null) => ["approvals", ws] as const,
   inbox: (ws: string | null) => ["inbox", ws] as const,
   conversation: (ws: string | null, id: string) => ["conversation", ws, id] as const,
+  convChannels: (ws: string | null, id: string) => ["convChannels", ws, id] as const,
   dashboard: (ws: string | null) => ["dashboard", ws] as const,
   analytics: (ws: string | null) => ["analytics", ws] as const,
   notifications: (ws: string | null) => ["notifications", ws] as const,
@@ -345,14 +348,40 @@ export function useConversation(id: string | null) {
   });
 }
 
+/** Which channels can reach this contact, and the one the composer preselects. */
+export function useConversationChannels(id: string | null) {
+  const ws = useWorkspaceId();
+  return useQuery({
+    queryKey: k.convChannels(ws, id ?? ""),
+    enabled: !!ws && !!id,
+    queryFn: async () =>
+      unwrap(
+        await client.GET("/inbox/{enrollment_id}/channels", {
+          params: { path: { enrollment_id: id! } },
+        }),
+      ),
+  });
+}
+
 export function useSendReply() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { id: string; text: string; origin?: string }) =>
+    mutationFn: async (vars: {
+      id: string;
+      text: string;
+      channel?: Channel;
+      subject?: string;
+      origin?: string;
+    }) =>
       unwrap(
         await client.POST("/inbox/{enrollment_id}/reply", {
           params: { path: { enrollment_id: vars.id } },
-          body: { text: vars.text, origin: vars.origin ?? "human" },
+          body: {
+            text: vars.text,
+            channel: vars.channel ?? null,
+            subject: vars.subject ?? null,
+            origin: vars.origin ?? "human",
+          },
         }),
       ),
     onSuccess: () => invalidateInbox(qc),

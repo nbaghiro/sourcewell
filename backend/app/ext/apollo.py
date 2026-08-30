@@ -7,6 +7,7 @@ from app.ext.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,
+    ProviderError,
     SearchPage,
     json_body,
     json_list,
@@ -108,10 +109,10 @@ class ApolloProvider:
                 resp = await client.post(
                     f"{_BASE}/mixed_people/search", headers=self._headers(), json=payload
                 )
-        except Exception:
-            return SearchPage(hits=[], total=0)
+        except Exception as exc:
+            raise ProviderError(self.key, f"Apollo is unreachable ({exc})") from exc
         if resp.status_code >= 400:
-            return SearchPage(hits=[], total=0)
+            raise ProviderError(self.key, f"HTTP {resp.status_code}", status=resp.status_code)
         data = json_body(resp)
         hits = [self._normalize(p) for p in json_list(data.get("people"))]
         total = json_object(data.get("pagination")).get("total_entries")

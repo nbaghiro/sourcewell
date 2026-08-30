@@ -25,7 +25,9 @@ from app.services.billing.credits import (
 from tests.factories import make_org, make_workspace
 
 
-def _sent(ws_id: str, enr_id: str, channel: Channel, when: datetime) -> Message:
+def _sent(
+    ws_id: str, enr_id: str, channel: Channel, when: datetime, *, inmail: bool = False
+) -> Message:
     return Message(
         workspace_id=ws_id,
         enrollment_id=enr_id,
@@ -33,6 +35,7 @@ def _sent(ws_id: str, enr_id: str, channel: Channel, when: datetime) -> Message:
         channel=channel,
         status=MessageStatus.sent,
         sent_at=when,
+        is_inmail=inmail,
     )
 
 
@@ -73,8 +76,8 @@ async def test_credit_status_pools_sends_and_sourcing(db_session: AsyncSession) 
             _sent(ws.id, e, Channel.email, in_period),
             _sent(ws.id, e, Channel.email, in_period),
             _sent(ws.id, e, Channel.email, in_period),
-            _sent(ws.id, e, Channel.linkedin, in_period),
-            _sent(ws.id, e, Channel.linkedin, in_period),
+            _sent(ws.id, e, Channel.linkedin, in_period),  # a DM — the cheap LinkedIn send
+            _sent(ws.id, e, Channel.linkedin, in_period, inmail=True),
             _sent(ws.id, e, Channel.email, last_period),  # before the period — excluded
             Message(  # a draft — never sent, excluded
                 workspace_id=ws.id,
@@ -88,16 +91,24 @@ async def test_credit_status_pools_sends_and_sourcing(db_session: AsyncSession) 
     await db_session.flush()
 
     st = await credit_status(db_session, organization_id=org.id, plan=org.plan, now=now)
-    assert (st.emails, st.inmails, st.sourced) == (3, 2, 4)
+    # A LinkedIn DM is not an InMail: only the send that actually went out as one costs double.
+    assert (st.emails, st.linkedin_dms, st.inmails, st.sourced) == (3, 1, 1, 4)
     assert st.used == (
-        3 * CREDIT_WEIGHTS["email"] + 2 * CREDIT_WEIGHTS["inmail"] + 4 * CREDIT_WEIGHTS["sourced"]
+        3 * CREDIT_WEIGHTS["email"]
+        + 1 * CREDIT_WEIGHTS["linkedin"]
+        + 1 * CREDIT_WEIGHTS["inmail"]
+        + 4 * CREDIT_WEIGHTS["sourced"]
     )
     assert st.allowance == monthly_allowance(org.plan)
 
 
 def test_credit_status_over_and_pct() -> None:
     now = datetime.now(UTC)
-    over = CreditStatus(emails=0, inmails=0, sourced=0, used=250, allowance=200, period_start=now)
+    over = CreditStatus(
+        emails=0, linkedin_dms=0, inmails=0, sourced=0, used=250, allowance=200, period_start=now
+    )
     assert over.over is True and over.pct == 125
-    ok = CreditStatus(emails=0, inmails=0, sourced=0, used=50, allowance=200, period_start=now)
+    ok = CreditStatus(
+        emails=0, linkedin_dms=0, inmails=0, sourced=0, used=50, allowance=200, period_start=now
+    )
     assert ok.over is False and ok.pct == 25

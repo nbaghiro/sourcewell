@@ -19,7 +19,7 @@ from httpx import Request, Response
 from app.core.config import Settings
 from app.core.types import JsonObject
 from app.ext.apollo import ApolloProvider
-from app.ext.base import json_object
+from app.ext.base import ProviderError, json_object
 from app.ext.hunter import HunterProvider
 from app.ext.pdl import PDLProvider
 from app.ext.unipile import UnipileProvider
@@ -127,13 +127,14 @@ async def test_pdl_enrich_returns_none_on_4xx() -> None:
 
 
 @respx.mock
-async def test_pdl_search_empty_on_500() -> None:
+async def test_pdl_search_raises_on_500() -> None:
+    """A provider failure is raised, not flattened into an empty page — the fan-out reports it."""
     respx.post("https://api.peopledatalabs.com/v5/person/search").mock(
         return_value=Response(500, text="boom")
     )
-    page = await PDLProvider("test-key").search(Targeting(titles=["VP Sales"]))
-    assert page.hits == []
-    assert page.total == 0
+    with pytest.raises(ProviderError) as caught:
+        await PDLProvider("test-key").search(Targeting(titles=["VP Sales"]))
+    assert caught.value.status == 500
 
 
 # --------------------------------------------------------------------------- Apollo
@@ -236,13 +237,14 @@ async def test_apollo_enrich_returns_none_on_4xx() -> None:
 
 
 @respx.mock
-async def test_apollo_search_empty_on_error() -> None:
+async def test_apollo_search_raises_on_error() -> None:
+    """A revoked key has to be distinguishable from a search that matched nobody."""
     respx.post("https://api.apollo.io/api/v1/mixed_people/search").mock(
         return_value=Response(401, json={"error": "unauthorized"})
     )
-    page = await ApolloProvider("test-key").search(Targeting(titles=["VP Sales"]))
-    assert page.hits == []
-    assert page.total == 0
+    with pytest.raises(ProviderError) as caught:
+        await ApolloProvider("test-key").search(Targeting(titles=["VP Sales"]))
+    assert caught.value.status == 401
 
 
 # --------------------------------------------------------------------------- Hunter
@@ -451,21 +453,21 @@ async def test_unipile_enrich_returns_none_on_4xx(unipile_settings: None) -> Non
 
 
 @respx.mock
-async def test_unipile_search_empty_on_error(unipile_settings: None) -> None:
+async def test_unipile_search_raises_on_error(unipile_settings: None) -> None:
     respx.post(f"{_UNIPILE_DSN}/api/v1/linkedin/search").mock(
         return_value=Response(500, text="boom")
     )
-    page = await UnipileProvider("test-key").search(Targeting(titles=["VP Sales"]))
-    assert page.hits == []
-    assert page.total == 0
+    with pytest.raises(ProviderError) as caught:
+        await UnipileProvider("test-key").search(Targeting(titles=["VP Sales"]))
+    assert caught.value.status == 500
 
 
-async def test_unipile_search_unconfigured_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Without a DSN/account the `_ready()` gate short-circuits — no HTTP call, empty page.
+async def test_unipile_search_unconfigured_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The `_ready()` gate makes no HTTP call — but it must not look like an empty result either.
+    An unconfigured deployment and an unconnected seat are different fixes, so they say so."""
     monkeypatch.setattr("app.ext.unipile.get_settings", lambda: Settings(unipile_dsn=""))
-    page = await UnipileProvider("test-key").search(Targeting(titles=["VP Sales"]))
-    assert page.hits == []
-    assert page.total == 0
+    with pytest.raises(ProviderError, match="not configured"):
+        await UnipileProvider("test-key").search(Targeting(titles=["VP Sales"]))
 
 
 async def test_unipile_enrich_unconfigured_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:

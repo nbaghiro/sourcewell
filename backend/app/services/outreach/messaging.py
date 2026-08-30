@@ -1,11 +1,14 @@
-"""Messaging: channels, Writer/Responder agents, and service.
+"""Messaging: Writer/Responder agents, and the conversation service.
 
 Each agent function has a deterministic baseline (template fill / keyword intent) and an async
 Claude-backed variant that falls back to the baseline when the model is unconfigured or errors.
+Delivery itself (seat resolution, transports, thread continuation) lives in this module too —
+see `deliver_outbound`.
 """
 
 import asyncio
 import smtplib
+from dataclasses import dataclass
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import make_msgid
@@ -18,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import llm
 from app.core.config import get_settings
 from app.core.db import new_id
+from app.core.logging import logger
 from app.core.types import JsonList, JsonObject
 from app.ext.unipile import unipile_channel
 from app.models import (
@@ -32,6 +36,7 @@ from app.models import (
     Message,
     MessageDirection,
     MessageStatus,
+    SeatType,
     SuppressionReason,
     Workspace,
 )
@@ -89,6 +94,20 @@ async def resolve_channel_seat(
         .scalars()
         .first()
     )
+
+
+# The LinkedIn tiers that carry InMail credits. A `basic` (free) seat has none, so an InMail from
+# one is rejected by LinkedIn every time.
+_INMAIL_SEATS = (SeatType.premium, SeatType.sales_nav, SeatType.recruiter)
+
+
+def seat_can_inmail(seat: Connection | None) -> bool:
+    """Whether this seat could send an InMail at all.
+
+    An unknown seat (None — the single-tenant fallback account) is allowed through: we can't read
+    its tier, and refusing would break a deployment that is configured entirely by env.
+    """
+    return seat is None or seat.seat_type in _INMAIL_SEATS
 
 
 def linkedin_transport_ready(seat: Connection | None) -> bool:
@@ -154,6 +173,7 @@ async def deliver_outbound(
     sender: str,
     unsubscribe_url: str | None = None,
     reply: bool = False,
+    inmail: bool = False,
 ) -> None:
     """Transmit `message` over its channel from the resolved seat, capturing the provider thread id
     on `message.external_id` (and the seat on `message.account_id`). Uses the real Unipile channel
@@ -175,6 +195,10 @@ async def deliver_outbound(
     )
 
     if channel == Channel.linkedin:
+        # An InMail only ever opens a conversation. Continuing one is an ordinary message in a chat
+        # that already exists, so it must not be recorded (or billed) as an InMail. Stamped here
+        # rather than by the caller, because only the transport knows which path it took.
+        message.is_inmail = inmail and not (reply and thread_ref)
         if s.linkedin_dry_run:
             return  # dev/demo: LinkedIn is simulated offline — nothing to send
         if provider is None or not account_id:
@@ -183,14 +207,23 @@ async def deliver_outbound(
             raise PermanentSendError("no LinkedIn account connected")
         if seat is not None and seat.status != ConnectionStatus.ok:
             raise PermanentSendError("LinkedIn seat needs reauthentication")
+        if message.is_inmail and not seat_can_inmail(seat):
+            # LinkedIn would reject this outright: InMail spends credits only a paid seat has.
+            # Say which fix is needed, instead of letting the provider return a bare 4xx that
+            # surfaces as the misleading "recipient unreachable".
+            raise PermanentSendError(
+                "this LinkedIn seat has no InMail credits — it needs Premium, Sales Navigator or "
+                "Recruiter, or turn InMail off on the campaign"
+            )
         try:
             if reply and thread_ref:
-                await provider.reply(
+                if not await provider.reply(
                     account_id=account_id,
                     thread_id=thread_ref,
                     body=message.body,
                     idempotency_key=message.idempotency_key,
-                )
+                ):
+                    raise PermanentSendError("LinkedIn rejected this reply — the chat is gone")
                 message.external_id = thread_ref
             else:
                 chat_id = await provider.send(
@@ -198,7 +231,10 @@ async def deliver_outbound(
                     to=target,
                     subject=message.subject,
                     body=message.body,
-                    inmail=True,  # cold recruiting reach → InMail, not a connection-gated chat
+                    # InMail is the campaign's opt-in, never the default: it needs credits the
+                    # seat may not have (a free/basic account has none, and the send fails), and
+                    # it bills at twice a DM. `use_inmail` on the campaign decides.
+                    inmail=inmail,
                     idempotency_key=message.idempotency_key,
                 )
                 if chat_id is None:
@@ -216,12 +252,13 @@ async def deliver_outbound(
             raise PermanentSendError("email seat needs reauthentication")
         try:
             if reply and thread_ref:
-                await provider.reply(
+                if not await provider.reply(
                     account_id=account_id,
                     thread_id=thread_ref,
                     body=message.body,
                     idempotency_key=message.idempotency_key,
-                )
+                ):
+                    raise PermanentSendError("the email provider rejected this reply")
                 message.external_id = thread_ref
             else:
                 mid = await provider.send(
@@ -231,8 +268,14 @@ async def deliver_outbound(
                     body=message.body,
                     idempotency_key=message.idempotency_key,
                 )
-                if mid:
-                    message.external_id = mid
+                if mid is None:
+                    # `send` returns None only for a permanent rejection (a transient one raises
+                    # out of `_permanent`). Recording the message anyway stamped it `sent` with no
+                    # provider id behind it — a thread bubble for mail that was never accepted.
+                    raise PermanentSendError("the email provider rejected this recipient")
+                message.external_id = mid
+        except PermanentSendError:
+            raise
         except Exception as exc:
             raise TransientSendError(str(exc)) from exc
         return
@@ -490,14 +533,161 @@ async def summarize_thread(state: str, last_inbound: str | None) -> str:
 # --- Service -----------------------------------------------------------------
 
 
-async def list_drafts(session: AsyncSession, *, workspace_id: str) -> list[Message]:
-    """Outbound drafts awaiting human approval (the approval queue)."""
-    rows = await session.execute(
-        select(Message)
-        .where(Message.workspace_id == workspace_id, Message.status == MessageStatus.draft)
-        .order_by(Message.created_at)
+@dataclass(frozen=True)
+class ChannelAvailability:
+    """Whether one channel can carry a message to this contact right now, and why not."""
+
+    channel: Channel
+    available: bool
+    target: str | None
+    reason: str | None = None
+
+
+async def channel_availability(
+    session: AsyncSession, *, campaign: Campaign, contact: Contact
+) -> list[ChannelAvailability]:
+    """Which channels can reach this contact — what the composer offers as a send option.
+
+    A channel needs a destination on the contact; LinkedIn additionally needs a seat the campaign
+    can actually send from (there is no fallback transport for it the way SMTP backs email). The
+    two LinkedIn reasons are kept apart because they need different fixes: a missing profile is a
+    data problem, a missing seat is a setup one.
+    """
+    email_ok = bool(contact.email)
+    seat = await resolve_channel_seat(session, campaign=campaign, channel=Channel.linkedin)
+    if not contact.linkedin_url:
+        li_reason: str | None = "no LinkedIn profile on this contact"
+    elif not linkedin_transport_ready(seat):
+        li_reason = "no LinkedIn account connected"
+    else:
+        li_reason = None
+    return [
+        ChannelAvailability(
+            channel=Channel.email,
+            available=email_ok,
+            target=contact.email,
+            reason=None if email_ok else "no email address on this contact",
+        ),
+        ChannelAvailability(
+            channel=Channel.linkedin,
+            available=li_reason is None,
+            target=contact.linkedin_url,
+            reason=li_reason,
+        ),
+    ]
+
+
+async def resolve_channel(
+    session: AsyncSession, *, campaign: Campaign, enrollment_id: str, contact: Contact
+) -> Channel:
+    """The channel a reply defaults to: the one the thread is already on, if it still works.
+
+    A thread that started on LinkedIn stays on LinkedIn — unless that channel can't carry a message
+    to this contact (no profile, no connected seat), in which case we fall back to the other one.
+    """
+    options = {
+        opt.channel: opt
+        for opt in await channel_availability(session, campaign=campaign, contact=contact)
+    }
+    last = (
+        (
+            await session.execute(
+                select(Message.channel)
+                .where(Message.enrollment_id == enrollment_id)
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
     )
-    return list(rows.scalars().all())
+    if last is not None and options[last].available:
+        return last
+    for candidate in (Channel.email, Channel.linkedin):
+        if options[candidate].available:
+            return candidate
+    return last or Channel.email
+
+
+async def send_conversation_message(
+    session: AsyncSession,
+    *,
+    workspace_id: str,
+    enrollment: Enrollment,
+    campaign: Campaign,
+    contact: Contact,
+    channel: Channel,
+    subject: str | None,
+    body: str,
+    sender: str,
+    organization_id: str | None,
+    now: datetime,
+    origin: str = "human",
+) -> Message:
+    """Deliver one outbound message in a live conversation, then record it on the thread.
+
+    The single path for a *human or agent* reply (the sequence's own touchpoints go through the
+    enrollment state machine). Delivery happens first: a `Message` is only written as `sent` once
+    the provider accepted it, so the thread never shows a message that never left.
+
+    LinkedIn sends inherit the campaign's InMail setting, so a manual reply and a touchpoint on
+    the same campaign go out the same way.
+    """
+    text = body.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="message body is empty")
+    if channel == Channel.email and organization_id and contact.email:
+        if await suppression.is_suppressed(
+            session,
+            organization_id=organization_id,
+            email=contact.email,
+            workspace_id=workspace_id,
+        ):
+            raise HTTPException(status_code=409, detail="this contact has opted out of email")
+
+    unsub = (
+        suppression.unsubscribe_url(organization_id, contact.email)
+        if organization_id and contact.email and channel == Channel.email
+        else None
+    )
+    seat = await resolve_channel_seat(session, campaign=campaign, channel=channel)
+    # Built first so the transport can stamp the provider thread id and idempotency key onto it,
+    # but only added to the session once the send succeeded: the thread must never show a message
+    # that never left.
+    message = Message(
+        workspace_id=workspace_id,
+        enrollment_id=enrollment.id,
+        direction=MessageDirection.outbound,
+        channel=channel,
+        status=MessageStatus.sent,
+        # LinkedIn carries no subject: the transport drops it, so storing one would show a subject
+        # line in the thread that was never sent.
+        subject=(subject or None) if channel == Channel.email else None,
+        body=text,
+        sent_at=now,
+        created_at=now,
+        origin=origin,
+    )
+    try:
+        await deliver_outbound(
+            session,
+            message=message,
+            contact=contact,
+            seat=seat,
+            sender=sender,
+            unsubscribe_url=unsub,
+            reply=True,
+            inmail=campaign.use_inmail,
+        )
+    except PermanentSendError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except TransientSendError as exc:
+        raise HTTPException(status_code=502, detail=f"send failed: {exc}") from exc
+
+    session.add(message)
+    enrollment.reply_pending = False
+    await session.flush()
+    return message
 
 
 async def approve_message(
@@ -520,15 +710,34 @@ async def approve_message(
     return message
 
 
-async def already_ingested(session: AsyncSession, *, provider_message_id: str | None) -> bool:
-    """True if a webhook with this provider message id was already recorded (redelivery dedupe)."""
+# --- Inbound: record, then route ---------------------------------------------
+#
+# The two halves are deliberately separate. *Recording* is cheap and must happen inside the
+# provider webhook so the reply is durable before we acknowledge it. *Routing* — classify, move
+# the enrollment, possibly run the Outreach agent — is slow (LLM calls) and runs on the worker.
+# Splitting them is also what makes the receiver idempotent: `provider_message_id` is checked at
+# record time, so a webhook redelivery never reaches the agent a second time.
+
+
+async def already_ingested(
+    session: AsyncSession, *, provider_message_id: str | None, workspace_id: str
+) -> bool:
+    """True if this provider message id was already recorded *in this workspace*.
+
+    Scoped, not global: provider ids are not unique across accounts, so a global check made one
+    workspace's recorded id shadow every other workspace's identical id — dropping a real reply as
+    a "redelivery".
+    """
     if not provider_message_id:
         return False
     seen = (
         (
             await session.execute(
                 select(Message.id)
-                .where(Message.provider_message_id == provider_message_id)
+                .where(
+                    Message.workspace_id == workspace_id,
+                    Message.provider_message_id == provider_message_id,
+                )
                 .limit(1)
             )
         )
@@ -538,7 +747,7 @@ async def already_ingested(session: AsyncSession, *, provider_message_id: str | 
     return seen is not None
 
 
-async def _apply_inbound(
+async def record_inbound(
     session: AsyncSession,
     *,
     enrollment: Enrollment,
@@ -546,8 +755,23 @@ async def _apply_inbound(
     now: datetime,
     channel: Channel = Channel.email,
     provider_message_id: str | None = None,
-) -> tuple[Message, str]:
-    """Record an inbound reply on an enrollment, classify intent, and transition state."""
+    external_id: str | None = None,
+    routed: bool = False,
+) -> Message | None:
+    """Write an inbound message onto the thread.
+
+    Returns None when `provider_message_id` is already recorded *in this workspace* — the provider
+    redelivered an event we've handled, and re-recording it would both duplicate the bubble and
+    re-trigger the agent (which at full autonomy means a second real message to the candidate).
+
+    `routed=True` marks it handled on arrival, for the synchronous in-app path.
+    """
+    if await already_ingested(
+        session,
+        provider_message_id=provider_message_id,
+        workspace_id=enrollment.workspace_id,
+    ):
+        return None
     message = Message(
         workspace_id=enrollment.workspace_id,
         enrollment_id=enrollment.id,
@@ -556,18 +780,42 @@ async def _apply_inbound(
         status=MessageStatus.received,
         body=text,
         created_at=now,
+        external_id=external_id,
         provider_message_id=provider_message_id,
+        processed_at=now if routed else None,
     )
-    session.add(message)
     try:
-        # Insert in a savepoint so a concurrent redelivery (same provider_message_id) hits the
-        # unique index here and is caught, rather than poisoning the whole transaction.
+        # A savepoint, not the outer transaction: two redeliveries can race past the check above
+        # and only the losing INSERT should unwind, leaving the caller's work intact. The unique
+        # index — not just the check — is what makes this safe under concurrency.
         async with session.begin_nested():
+            session.add(message)
             await session.flush()
     except IntegrityError:
         session.expunge(message)
-        return message, "duplicate"
+        return None
+    return message
 
+
+async def pending_inbound(session: AsyncSession, *, limit: int = 50) -> list[Message]:
+    """Inbound messages a provider webhook parked for the worker to route, oldest first."""
+    rows = await session.execute(
+        select(Message)
+        .where(
+            Message.direction == MessageDirection.inbound,
+            Message.processed_at.is_(None),
+        )
+        .order_by(Message.created_at)
+        .limit(limit)
+    )
+    return list(rows.scalars().all())
+
+
+async def route_inbound(
+    session: AsyncSession, *, enrollment: Enrollment, message: Message, now: datetime
+) -> str:
+    """Classify a recorded reply and transition the enrollment. Returns the intent."""
+    text = message.body
     intent = await classify_reply_intent(text)
     if intent == "interested":
         enrollment.state = EnrollmentState.handed_off
@@ -589,32 +837,48 @@ async def _apply_inbound(
             )
     else:
         enrollment.reply_pending = True
+    message.processed_at = now
     await session.flush()
-    return message, intent
+    return intent
 
 
-async def ingest_reply(
-    session: AsyncSession,
-    *,
-    workspace_id: str,
-    enrollment_id: str,
-    text: str,
-    now: datetime,
-    channel: Channel = Channel.email,
-    provider_message_id: str | None = None,
-) -> tuple[Message, str]:
-    """Workspace-scoped reply ingestion (the in-app / authed webhook)."""
-    enrollment = await session.get(Enrollment, enrollment_id)
-    if enrollment is None or enrollment.workspace_id != workspace_id:
-        raise HTTPException(status_code=404, detail="enrollment not found")
-    return await _apply_inbound(
-        session,
-        enrollment=enrollment,
-        text=text,
-        now=now,
-        channel=channel,
-        provider_message_id=provider_message_id,
+async def resolve_inbound_enrollment(
+    session: AsyncSession, *, from_email: str, enrollment_id: str | None = None
+) -> Enrollment | None:
+    """Thread a provider event to an enrollment by explicit id, else by the sender's address.
+
+    The address lookup has no tenant to anchor on, so when the same address is enrolled in more
+    than one workspace it refuses to choose: attaching a candidate's reply to the wrong customer's
+    thread is worse than not recording it. Senders that resolve to a single workspace — the
+    ordinary case — are unaffected.
+    """
+    if enrollment_id:
+        return await session.get(Enrollment, enrollment_id)
+    address = (from_email or "").strip().lower()
+    if not address:
+        return None
+    candidates = list(
+        (
+            await session.execute(
+                select(Enrollment)
+                .join(Contact, Enrollment.contact_id == Contact.id)
+                .where(func.lower(Contact.email) == address)
+                .order_by(Enrollment.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
     )
+    if not candidates:
+        return None
+    if len({e.workspace_id for e in candidates}) > 1:
+        logger.warning(
+            "inbound: sender %s is enrolled in %d workspaces — dropping, nothing to scope by",
+            address,
+            len({e.workspace_id for e in candidates}),
+        )
+        return None
+    return candidates[0]
 
 
 async def ingest_inbound(
@@ -627,35 +891,32 @@ async def ingest_inbound(
     channel: Channel = Channel.email,
     provider_message_id: str | None = None,
 ) -> tuple[Message, str] | None:
-    """System inbound (signed provider webhook): thread by enrollment id or sender email."""
-    if await already_ingested(session, provider_message_id=provider_message_id):
-        return None
-    enrollment: Enrollment | None
-    if enrollment_id:
-        enrollment = await session.get(Enrollment, enrollment_id)
-    else:
-        enrollment = (
-            (
-                await session.execute(
-                    select(Enrollment)
-                    .join(Contact, Enrollment.contact_id == Contact.id)
-                    .where(func.lower(Contact.email) == (from_email or "").strip().lower())
-                    .order_by(Enrollment.created_at.desc())
-                )
-            )
-            .scalars()
-            .first()
-        )
+    """System inbound, recorded *and* routed in one call — the synchronous service entry point.
+
+    The provider webhooks don't use this: they record and let the worker route, so a provider retry
+    can never run the agent twice. This is the seam for callers that want the intent back
+    immediately. Threading goes through `resolve_inbound_enrollment`, which refuses to pick when an
+    address spans two workspaces; the dedupe check then happens inside `record_inbound`, where the
+    workspace is known, and a redelivery comes back as None.
+    """
+    enrollment = await resolve_inbound_enrollment(
+        session, from_email=from_email, enrollment_id=enrollment_id
+    )
     if enrollment is None:
         return None
-    return await _apply_inbound(
+    message = await record_inbound(
         session,
         enrollment=enrollment,
         text=text,
         now=now,
         channel=channel,
         provider_message_id=provider_message_id,
+        routed=True,
     )
+    if message is None:
+        return None  # a redelivery of an event we've already handled
+    intent = await route_inbound(session, enrollment=enrollment, message=message, now=now)
+    return message, intent
 
 
 async def list_thread(

@@ -1,7 +1,8 @@
 """FastAPI application factory."""
 
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +29,7 @@ from app.api.tenancy import router as tenancy_router
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, logger
+from app.services.outreach.receiving import ensure_inbound_webhooks_quietly
 
 # In-process fixed-window rate limiter (per client IP). Front with a shared store for multi-process.
 _RL: dict[str, tuple[float, int]] = {}
@@ -48,7 +50,15 @@ def create_app() -> FastAPI:
             f"settings:\n  - {listed}"
         )
 
-    app = FastAPI(title=settings.app_name)
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        # Assert the inbound subscription on every boot. Unipile only pushes to URLs we've
+        # subscribed, and the URL changes with the deployment (and with every dev tunnel), so
+        # without this the receiver is correct but never hears anything. Fail-soft by design.
+        await ensure_inbound_webhooks_quietly()
+        yield
+
+    app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
     # The React app is a separate origin (:8900) and sends the session cookie, so allow
     # credentialed requests from it. Methods/headers are scoped (not "*") alongside credentials.

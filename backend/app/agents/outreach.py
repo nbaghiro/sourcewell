@@ -8,8 +8,9 @@ classify+route path when no LLM is available.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,11 +32,9 @@ from app.models import (
     SuppressionReason,
 )
 from app.services.outreach.messaging import (
-    PermanentSendError,
-    TransientSendError,
-    deliver_outbound,
-    ingest_reply,
-    resolve_channel_seat,
+    resolve_channel,
+    route_inbound,
+    send_conversation_message,
 )
 from app.services.sourcing import suppression
 
@@ -49,6 +48,7 @@ class ConversationContext:
     campaign: Campaign
     contact: Contact
     organization_id: str
+    now: datetime
 
 
 def _str(data: JsonObject, key: str) -> str | None:
@@ -74,39 +74,56 @@ def conversation_tools(ctx: ConversationContext) -> list[Tool]:
         text = _str(data, "text") or ""
         if not text:
             return {"error": "empty reply"}
-        channel = Channel.email if ctx.contact.email else Channel.linkedin
-        auto = ctx.campaign.autonomy_level == AutonomyLevel.full
-        message = Message(
-            workspace_id=ctx.enrollment.workspace_id,
+        # Stay on the thread's own channel (falling back if it can't carry a message any more)
+        # rather than assuming email whenever an address exists.
+        channel = await resolve_channel(
+            ctx.session,
+            campaign=ctx.campaign,
             enrollment_id=ctx.enrollment.id,
-            direction=MessageDirection.outbound,
-            channel=channel,
-            status=MessageStatus.sent if auto else MessageStatus.draft,
-            subject="Re:",
-            body=text,
-            origin="ai",
+            contact=ctx.contact,
         )
-        ctx.session.add(message)
-        if auto:
-            seat = await resolve_channel_seat(ctx.session, campaign=ctx.campaign, channel=channel)
-            try:
-                await deliver_outbound(
-                    ctx.session,
-                    message=message,
-                    contact=ctx.contact,
-                    seat=seat,
-                    sender=ctx.campaign.from_email or _DEFAULT_SENDER,
-                    reply=True,
+
+        async def queue_for_approval() -> None:
+            """Park the reply as a draft in the approval queue instead of sending it."""
+            ctx.session.add(
+                Message(
+                    workspace_id=ctx.enrollment.workspace_id,
+                    enrollment_id=ctx.enrollment.id,
+                    direction=MessageDirection.outbound,
+                    channel=channel,
+                    status=MessageStatus.draft,
+                    subject="Re:" if channel == Channel.email else None,
+                    body=text,
+                    origin="ai",
                 )
-                message.sent_at = datetime.now(UTC)
-            except (PermanentSendError, TransientSendError):
-                message.status = MessageStatus.failed
-            ctx.enrollment.state = EnrollmentState.awaiting_reply
-            ctx.enrollment.reply_pending = False
-        else:
+            )
             ctx.enrollment.state = EnrollmentState.awaiting_approval
+            await ctx.session.flush()
+
+        if ctx.campaign.autonomy_level != AutonomyLevel.full:
+            await queue_for_approval()
+            return {"replied": True, "sent": False}
+        try:
+            await send_conversation_message(
+                ctx.session,
+                workspace_id=ctx.enrollment.workspace_id,
+                enrollment=ctx.enrollment,
+                campaign=ctx.campaign,
+                contact=ctx.contact,
+                channel=channel,
+                subject="Re:" if channel == Channel.email else None,
+                body=text,
+                sender=ctx.campaign.from_email or _DEFAULT_SENDER,
+                organization_id=ctx.organization_id,
+                now=ctx.now,
+            )
+        except HTTPException as exc:
+            # Undeliverable at full autonomy: queue it for a human instead of dropping the reply.
+            await queue_for_approval()
+            return {"replied": True, "sent": False, "error": str(exc.detail)}
+        ctx.enrollment.state = EnrollmentState.awaiting_reply
         await ctx.session.flush()
-        return {"replied": True, "sent": auto}
+        return {"replied": True, "sent": True}
 
     async def hand_off(data: JsonObject) -> JsonObject:
         ctx.enrollment.state = EnrollmentState.handed_off
@@ -166,27 +183,19 @@ async def run_conversation(
     *,
     llm: AgentLLM,
     enrollment: Enrollment,
-    inbound_text: str,
+    message: Message,
     organization_id: str,
     now: datetime,
     channel: Channel = Channel.email,
     provider_message_id: str | None = None,
 ) -> AgentResult:
-    """Record an inbound reply and run one bounded Outreach conversation."""
-    session.add(
-        Message(
-            workspace_id=enrollment.workspace_id,
-            enrollment_id=enrollment.id,
-            direction=MessageDirection.inbound,
-            channel=channel,
-            status=MessageStatus.received,
-            body=inbound_text,
-            created_at=now,
-            provider_message_id=provider_message_id,
-        )
-    )
-    await session.flush()
+    """Run one bounded Outreach conversation over an already-recorded inbound reply.
 
+    The reply is written to the thread by the receiver (`messaging.record_inbound`) before this
+    runs — recording is what the provider webhook acknowledges, and it carries the idempotency
+    key. Re-recording here would duplicate the bubble on every worker retry.
+    """
+    inbound_text = message.body
     campaign = await session.get(Campaign, enrollment.campaign_id)
     contact = await session.get(Contact, enrollment.contact_id)
     if campaign is None or contact is None:
@@ -198,6 +207,7 @@ async def run_conversation(
         campaign=campaign,
         contact=contact,
         organization_id=organization_id,
+        now=now,
     )
     user = (
         f"The candidate {contact.full_name} replied:\n{inbound_text!r}\n\n"
@@ -221,34 +231,32 @@ async def handle_reply(
     session: AsyncSession,
     *,
     enrollment: Enrollment,
-    text: str,
+    message: Message,
     now: datetime,
     organization_id: str,
     llm: AgentLLM | None = None,
     channel: Channel = Channel.email,
     provider_message_id: str | None = None,
 ) -> str:
-    """Route an inbound reply: the Outreach agent when an LLM is available, else deterministic."""
+    """Route a recorded inbound reply: the Outreach agent when an LLM is available, else the
+    deterministic classify-and-transition path.
+
+    Marks the message routed either way, so the worker's sweep won't pick it up again.
+    """
     client = llm if llm is not None else default_llm()
     if client is None:
-        await ingest_reply(
-            session,
-            workspace_id=enrollment.workspace_id,
-            enrollment_id=enrollment.id,
-            text=text,
-            now=now,
-            channel=channel,
-            provider_message_id=provider_message_id,
-        )
+        await route_inbound(session, enrollment=enrollment, message=message, now=now)
         return "deterministic"
     await run_conversation(
         session,
         llm=client,
         enrollment=enrollment,
-        inbound_text=text,
+        message=message,
         organization_id=organization_id,
         now=now,
         channel=channel,
         provider_message_id=provider_message_id,
     )
+    message.processed_at = now
+    await session.flush()
     return "agent"

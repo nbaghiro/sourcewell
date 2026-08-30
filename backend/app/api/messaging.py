@@ -3,19 +3,20 @@
 import hmac
 import json
 from datetime import UTC, datetime
+from hashlib import sha256
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.outreach import handle_reply
-from app.api.context import ContextDep, SessionDep
+from app.api.context import ORG_WIDE_ROLES, ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.config import get_settings
 from app.core.crypto import verify_hmac
 from app.core.db import get_session
+from app.core.logging import logger
 from app.core.types import JsonObject
 from app.models import (
     Campaign,
@@ -25,23 +26,24 @@ from app.models import (
     Contact,
     Enrollment,
     EnrollmentState,
+    Membership,
     Message,
     MessageDirection,
     MessageStatus,
+    SpaceGrant,
     Workspace,
 )
 from app.services.insights import audit
+from app.services.outreach.enrollment import tick
 from app.services.outreach.messaging import (
-    PermanentSendError,
-    TransientSendError,
-    already_ingested,
     approve_message,
-    deliver_outbound,
+    channel_availability,
     draft_reply_text,
-    ingest_inbound,
-    ingest_reply,
     list_thread,
-    resolve_channel_seat,
+    record_inbound,
+    resolve_channel,
+    resolve_inbound_enrollment,
+    send_conversation_message,
     summarize_thread,
 )
 
@@ -54,13 +56,12 @@ _WEBHOOK_MAX_SKEW_SECONDS = 300
 # --- Schemas -----------------------------------------------------------------
 
 
-class ReplyRequest(BaseModel):
-    enrollment_id: str
-    text: str
-
-
 class SendRequest(BaseModel):
     text: str
+    # Which channel to send on. Omitted = whichever the thread is already on (see resolve_channel).
+    channel: Channel | None = None
+    # Email only; ignored on LinkedIn, which has no subject line.
+    subject: str | None = None
     origin: str = "human"  # "human" (typed) or "ai" (sending an AI suggestion as-is)
 
 
@@ -165,9 +166,18 @@ class StatusIdOut(BaseModel):
     id: str
 
 
-class ReplyWebhookOut(BaseModel):
-    intent: str
-    message: MessageOut
+class ChannelOptionOut(BaseModel):
+    """One send option for the composer: can we reach this contact here, and if not why not."""
+
+    channel: str
+    available: bool
+    target: str | None
+    reason: str | None
+
+
+class ChannelsOut(BaseModel):
+    default: str
+    options: list[ChannelOptionOut]
 
 
 # --- Endpoints ---------------------------------------------------------------
@@ -208,9 +218,16 @@ async def approve_message_endpoint(
     message_id: str, ctx: ContextDep, session: SessionDep
 ) -> MessageOut:
     ws = require_workspace(ctx)
-    message = await approve_message(
-        session, workspace_id=ws, message_id=message_id, now=datetime.now(UTC)
-    )
+    now = datetime.now(UTC)
+    message = await approve_message(session, workspace_id=ws, message_id=message_id, now=now)
+    # Approving *is* the send: drive the state machine now instead of leaving the message queued
+    # until the next worker poll, so the UI can report what actually happened. `tick` sends the
+    # approved message — this very row — and stamps its status, which is what we return. The
+    # governor can still defer it (cap / sending window): it then stays `approved` and the worker
+    # picks it up at retry time.
+    enrollment = await session.get(Enrollment, message.enrollment_id)
+    if enrollment is not None and enrollment.state == EnrollmentState.scheduled:
+        await tick(session, enrollment=enrollment, now=now)
     await audit.record(
         session,
         org_id=ctx.org_id,
@@ -354,64 +371,82 @@ async def conversation(enrollment_id: str, ctx: ContextDep, session: SessionDep)
     )
 
 
-@router.post("/inbox/{enrollment_id}/reply", response_model=MessageOut)
-async def send_reply(
-    enrollment_id: str, body: SendRequest, ctx: ContextDep, session: SessionDep
-) -> MessageOut:
-    """Send a manual outbound reply from the recruiter in this conversation."""
+@router.get("/inbox/{enrollment_id}/channels", response_model=ChannelsOut)
+async def conversation_channels(
+    enrollment_id: str, ctx: ContextDep, session: SessionDep
+) -> ChannelsOut:
+    """Which channels this conversation can be sent on, and which one the composer preselects."""
     ws = require_workspace(ctx)
-    enrollment = await session.get(Enrollment, enrollment_id)
-    if enrollment is None or enrollment.workspace_id != ws:
-        raise HTTPException(status_code=404, detail="conversation not found")
-    last = await list_thread(session, workspace_id=ws, enrollment_id=enrollment_id)
-    channel = last[-1].channel if last else Channel.email
-    now = datetime.now(UTC)
-    # Sending supersedes any AI-suggested draft in this thread — consume it so it doesn't linger.
-    await session.execute(
-        delete(Message).where(
-            Message.enrollment_id == enrollment_id, Message.status == MessageStatus.draft
-        )
-    )
-    message = Message(
-        workspace_id=ws,
-        enrollment_id=enrollment_id,
-        direction=MessageDirection.outbound,
-        channel=channel,
-        status=MessageStatus.sent,
-        body=body.text,
-        sent_at=now,
-        created_at=now,
-        origin="ai" if body.origin == "ai" else "human",
-    )
-    session.add(message)
-    await session.flush()
-
-    # Actually transmit the reply over the channel (into the existing thread), capturing the
-    # provider thread id. On send failure the request rolls back so nothing is falsely marked sent.
+    enrollment = await _owned_enrollment(session, ws, enrollment_id)
     contact = await session.get(Contact, enrollment.contact_id)
     if contact is None:
         raise HTTPException(status_code=404, detail="contact not found")
     campaign = await session.get(Campaign, enrollment.campaign_id)
     if campaign is None:
         raise HTTPException(status_code=404, detail="campaign not found")
-    seat = await resolve_channel_seat(session, campaign=campaign, channel=channel)
-    sender = campaign.from_email or get_settings().default_from_email
-    try:
-        await deliver_outbound(
-            session, message=message, contact=contact, seat=seat, sender=sender, reply=True
-        )
-    except (PermanentSendError, TransientSendError) as exc:
-        raise HTTPException(status_code=502, detail="couldn't send the reply") from exc
+    options = await channel_availability(session, campaign=campaign, contact=contact)
+    default = await resolve_channel(
+        session, campaign=campaign, enrollment_id=enrollment_id, contact=contact
+    )
+    return ChannelsOut(
+        default=default.value,
+        options=[
+            ChannelOptionOut(
+                channel=o.channel.value, available=o.available, target=o.target, reason=o.reason
+            )
+            for o in options
+        ],
+    )
 
-    enrollment.reply_pending = False
-    await session.flush()
+
+@router.post("/inbox/{enrollment_id}/reply", response_model=MessageOut)
+async def send_reply(
+    enrollment_id: str, body: SendRequest, ctx: ContextDep, session: SessionDep
+) -> MessageOut:
+    """Send a manual outbound message from the recruiter — over email or LinkedIn.
+
+    `channel` picks the transport; omitted, the thread's existing channel is used. The message is
+    delivered before it is recorded, so a failure surfaces as an error rather than a phantom
+    "sent" bubble in the thread.
+    """
+    ws = require_workspace(ctx)
+    enrollment = await _owned_enrollment(session, ws, enrollment_id)
+    contact = await session.get(Contact, enrollment.contact_id)
+    if contact is None:
+        raise HTTPException(status_code=404, detail="contact not found")
+    campaign = await session.get(Campaign, enrollment.campaign_id)
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="campaign not found")
+    channel = body.channel or await resolve_channel(
+        session, campaign=campaign, enrollment_id=enrollment_id, contact=contact
+    )
+    # Sending supersedes any AI-suggested draft in this thread — consume it so it doesn't linger.
+    await session.execute(
+        delete(Message).where(
+            Message.enrollment_id == enrollment_id, Message.status == MessageStatus.draft
+        )
+    )
+    message = await send_conversation_message(
+        session,
+        workspace_id=ws,
+        enrollment=enrollment,
+        campaign=campaign,
+        contact=contact,
+        channel=channel,
+        subject=body.subject if channel == Channel.email else None,
+        body=body.text,
+        sender=campaign.from_email or get_settings().default_from_email,
+        organization_id=ctx.org_id,
+        now=datetime.now(UTC),
+        origin="ai" if body.origin == "ai" else "human",
+    )
     await audit.record(
         session,
         org_id=ctx.org_id,
         workspace_id=ctx.current_workspace_id,
         actor_user_id=ctx.user_id,
         action="reply.sent",
-        summary="Sent a manual reply",
+        summary=f"Sent a manual reply over {channel.value}",
         target_type="enrollment",
         target_id=enrollment_id,
     )
@@ -460,22 +495,6 @@ async def thread(enrollment_id: str, ctx: ContextDep, session: SessionDep) -> li
     return [dump_message(m) for m in messages]
 
 
-@router.post("/webhooks/reply", response_model=ReplyWebhookOut)
-async def reply_webhook(
-    body: ReplyRequest, ctx: ContextDep, session: SessionDep
-) -> ReplyWebhookOut:
-    """In-app / authed reply (used by the inbox 'simulate reply' and QA)."""
-    ws = require_workspace(ctx)
-    message, intent = await ingest_reply(
-        session,
-        workspace_id=ws,
-        enrollment_id=body.enrollment_id,
-        text=body.text,
-        now=datetime.now(UTC),
-    )
-    return ReplyWebhookOut(intent=intent, message=dump_message(message))
-
-
 class InboundWebhookOut(BaseModel):
     status: str
     intent: str | None
@@ -488,7 +507,8 @@ async def inbound_webhook(
     """System inbound from an email provider (HMAC-signed, no user session).
 
     Threads to an enrollment by `enrollment_id` or by the sender's email. Payload (JSON):
-    `{"from": str, "text": str, "enrollment_id"?: str}`, signed in the `X-Signature` header.
+    `{"from": str, "text": str, "enrollment_id"?: str, "message_id"?: str}`, signed in the
+    `X-Signature` header. Like the Unipile receiver this only records — the worker routes it.
     """
     secret = get_settings().inbound_webhook_secret
     if not secret:
@@ -513,20 +533,71 @@ async def inbound_webhook(
         if abs(datetime.now(UTC).timestamp() - float(ts)) > _WEBHOOK_MAX_SKEW_SECONDS:
             raise HTTPException(status_code=401, detail="stale webhook")
 
-    result = await ingest_inbound(
+    text = _str("text") or _str("body") or ""
+    enrollment = await resolve_inbound_enrollment(
         session,
         from_email=_str("from") or _str("from_email") or "",
-        text=_str("text") or _str("body") or "",
-        now=datetime.now(UTC),
         enrollment_id=_str("enrollment_id"),
-        provider_message_id=_str("message_id") or _str("id"),
     )
-    if result is None:
+    if enrollment is None or not text:
         return InboundWebhookOut(status="ignored", intent=None)
-    return InboundWebhookOut(status="ingested", intent=result[1])
+    message = await record_inbound(
+        session,
+        enrollment=enrollment,
+        text=text,
+        now=datetime.now(UTC),
+        provider_message_id=_idempotency_key(payload, thread_id=_str("thread_id"), text=text),
+    )
+    if message is None:
+        return InboundWebhookOut(status="duplicate", intent=None)
+    return InboundWebhookOut(status="queued", intent=None)
 
 
 # --- Unipile inbound (LinkedIn + email replies, account lifecycle) -----------
+
+
+def _is_own_message(payload: JsonObject) -> bool:
+    """Did this seat send the message the provider is telling us about?
+
+    Unipile pushes *every* message in a chat, including the ones we sent — so without this the
+    receiver records our own outreach as the candidate's reply: a fabricated inbound bubble, a
+    sequence stuck waiting on a reply that already "arrived", and at full autonomy an agent
+    answering its own message. `is_sender` is the provider's own flag for it.
+    """
+    for source in (payload.get("message"), payload):
+        if not isinstance(source, dict):
+            continue
+        flag = source.get("is_sender")
+        if isinstance(flag, bool):
+            return flag
+        if isinstance(flag, int):
+            return flag == 1
+        if isinstance(flag, str) and flag.strip().lower() in {"true", "1"}:
+            return True
+    return False
+
+
+def _idempotency_key(payload: JsonObject, *, thread_id: str | None, text: str) -> str | None:
+    """A stable id for this inbound event, so a redelivery is recognised and dropped.
+
+    Prefer the provider's own message id. When there isn't one, fall back to a digest of the
+    event's identifying parts *including the provider timestamp* — a redelivery hashes the same,
+    while a candidate genuinely sending "ok" twice does not (different timestamps). With neither
+    an id nor a timestamp the digest can't separate those two cases, so we return None and record
+    unconditionally: a rare duplicate bubble beats silently dropping a real reply.
+    """
+    message_id = _payload_str(payload.get("message"), "id", "message_id") or _payload_str(
+        payload, "message_id", "id"
+    )
+    if message_id:
+        return message_id
+    stamp = _payload_str(payload.get("message"), "timestamp", "date", "created_at") or _payload_str(
+        payload, "timestamp", "date", "created_at"
+    )
+    if not stamp:
+        return None
+    digest = sha256("\x00".join([thread_id or "", stamp, text]).encode()).hexdigest()
+    return f"sha256:{digest}"
 
 
 def _payload_str(obj: object, *keys: str) -> str | None:
@@ -540,49 +611,123 @@ def _payload_str(obj: object, *keys: str) -> str | None:
     return None
 
 
-async def _resolve_enrollment(
-    session: AsyncSession, *, external_id: str | None, sender_email: str | None
-) -> Enrollment | None:
-    """Map a Unipile event to an enrollment: chat/thread id we sent on, else sender email."""
-    if external_id:
-        msg = (
-            (
-                await session.execute(
-                    select(Message)
-                    .where(Message.external_id == external_id)
-                    .order_by(Message.created_at.desc())
-                    .limit(1)
-                )
+async def _seat_workspace_ids(session: AsyncSession, account_id: str | None) -> list[str] | None:
+    """Workspaces the seat that received this event can send from, or None when it's unknown.
+
+    Mirrors the access rules in `api/context.py`: the seat's owner reaches every workspace in an
+    organization where they are org_admin or compliance, plus the ones an explicit grant names.
+    `None` means we couldn't identify the seat at all — the caller then has to fall back to a
+    weaker rule rather than a wrong one.
+    """
+    if not account_id:
+        return None
+    org_wide = (
+        select(Membership.organization_id)
+        .join(Connection, Connection.user_id == Membership.user_id)
+        .where(Connection.external_id == account_id, Membership.role.in_(ORG_WIDE_ROLES))
+    )
+    granted = (
+        select(SpaceGrant.workspace_id)
+        .join(Connection, Connection.user_id == SpaceGrant.user_id)
+        .where(Connection.external_id == account_id)
+    )
+    rows = (
+        await session.execute(
+            select(Workspace.id).where(
+                or_(Workspace.organization_id.in_(org_wide), Workspace.id.in_(granted))
             )
+        )
+    ).scalars()
+    return list(dict.fromkeys(rows)) or None
+
+
+async def _resolve_enrollment(
+    session: AsyncSession,
+    *,
+    external_id: str | None,
+    sender_email: str | None,
+    account_id: str | None = None,
+) -> tuple[Enrollment, Channel] | None:
+    """Map a Unipile event to (enrollment, channel): the chat we sent on, else the sender address.
+
+    The channel comes from the outbound message the thread id matched, so a LinkedIn reply is
+    recorded as LinkedIn rather than defaulting to email.
+
+    Both lookups are scoped to the workspaces of the seat that received the event. Without that
+    scope the address fallback spans every tenant, and two customers working the same candidate
+    cross over — one of them silently receiving the other's reply.
+    """
+    scope = await _seat_workspace_ids(session, account_id)
+    if external_id:
+        stmt = select(Message).where(Message.external_id == external_id)
+        if scope is not None:
+            stmt = stmt.where(Message.workspace_id.in_(scope))
+        msg = (
+            (await session.execute(stmt.order_by(Message.created_at.desc()).limit(1)))
             .scalars()
             .first()
         )
         if msg is not None:
-            return await session.get(Enrollment, msg.enrollment_id)
+            enrollment = await session.get(Enrollment, msg.enrollment_id)
+            if enrollment is not None:
+                return enrollment, msg.channel
     if sender_email:
-        return (
-            (
-                await session.execute(
-                    select(Enrollment)
-                    .join(Contact, Enrollment.contact_id == Contact.id)
-                    .where(func.lower(Contact.email) == sender_email.strip().lower())
-                    .order_by(Enrollment.created_at.desc())
-                )
-            )
-            .scalars()
-            .first()
+        by_sender = (
+            select(Enrollment)
+            .join(Contact, Enrollment.contact_id == Contact.id)
+            .where(func.lower(Contact.email) == sender_email.strip().lower())
         )
+        if scope is not None:
+            by_sender = by_sender.where(Enrollment.workspace_id.in_(scope))
+        candidates = list(
+            (await session.execute(by_sender.order_by(Enrollment.created_at.desc())))
+            .scalars()
+            .all()
+        )
+        enrollment = _unambiguous(candidates, sender_email)
+        if enrollment is not None:
+            # No thread id to read a channel off: this arrived at the email receiver.
+            return enrollment, Channel.email
     return None
+
+
+def _unambiguous(candidates: list[Enrollment], sender_email: str) -> Enrollment | None:
+    """The newest candidate — unless they straddle workspaces, in which case there is no answer.
+
+    Guessing across a tenant boundary is the one outcome worse than dropping the reply: it shows
+    one customer's candidate reply inside another's inbox. Ambiguity here means the event carried
+    no seat we could scope by, so we log it loudly instead of picking.
+    """
+    if not candidates:
+        return None
+    workspaces = {e.workspace_id for e in candidates}
+    if len(workspaces) > 1:
+        logger.warning(
+            "inbound: %d enrollments across %d workspaces match sender %s — dropping, "
+            "no seat to disambiguate",
+            len(candidates),
+            len(workspaces),
+            sender_email,
+        )
+        return None
+    return candidates[0]
 
 
 @router.post("/webhooks/unipile", response_model=InboundWebhookOut)
 async def unipile_webhook(
     request: Request, session: Annotated[AsyncSession, Depends(get_session)]
 ) -> InboundWebhookOut:
-    """Public Unipile receiver (shared-secret): inbound messages → handle_reply, account events →
-    connection status. Prefers an HMAC signature (`X-Unipile-Signature`) over the raw body; falls
-    back to a shared token via the `X-Unipile-Token` header (or `?token=` for providers that can
-    only template the URL). Redelivered events are dropped by provider_message_id dedupe.
+    """Public Unipile receiver: inbound messages and account lifecycle events.
+
+    Prefers an HMAC signature (`X-Unipile-Signature`) over the raw body; falls back to a shared
+    token via the `X-Unipile-Token` header (or `?token=` for providers that can only template the
+    URL).
+
+    A reply is only *recorded* here — classification and the Outreach agent run on the worker
+    (`run_replies_due`). Unipile gets a fast ack, so it never times out and retries us into
+    answering the same candidate twice; the `provider_message_id` guard catches redeliveries that
+    happen anyway.
+
     """
     secret = get_settings().unipile_webhook_secret
     if not secret:
@@ -630,28 +775,29 @@ async def unipile_webhook(
     sender_email = _payload_str(payload.get("sender"), "email") or _payload_str(
         payload, "from", "from_email"
     )
-    provider_message_id = _payload_str(payload.get("message"), "id", "message_id") or _payload_str(
-        payload, "message_id", "id"
-    )
-    # LinkedIn events carry a chat id and no email; email events carry a sender address.
-    channel = Channel.linkedin if chat_id and not sender_email else Channel.email
     if not text:
         return InboundWebhookOut(status="ignored", intent=None)
-    if await already_ingested(session, provider_message_id=provider_message_id):
-        return InboundWebhookOut(status="duplicate", intent=None)
-    enrollment = await _resolve_enrollment(session, external_id=chat_id, sender_email=sender_email)
-    if enrollment is None:
+    if _is_own_message(payload):
+        # Our own outbound, echoed back by the provider. Recording it would invent a reply.
+        return InboundWebhookOut(status="own_message", intent=None)
+    resolved = await _resolve_enrollment(
+        session, external_id=chat_id, sender_email=sender_email, account_id=account_id
+    )
+    if resolved is None:
         return InboundWebhookOut(status="ignored", intent=None)
-    ws = await session.get(Workspace, enrollment.workspace_id)
-    if ws is None:
-        return InboundWebhookOut(status="ignored", intent=None)
-    kind = await handle_reply(
+    # The channel comes from `_resolve_enrollment`, which reads it off the outbound message the
+    # thread id matched (and falls back to email for an address match) — always a real Channel,
+    # so the old `matched_channel or payload_channel` fallback could never fire.
+    enrollment, matched_channel = resolved
+    message = await record_inbound(
         session,
         enrollment=enrollment,
         text=text,
         now=now,
-        organization_id=ws.organization_id,
-        channel=channel,
-        provider_message_id=provider_message_id,
+        channel=matched_channel,
+        provider_message_id=_idempotency_key(payload, thread_id=chat_id, text=text),
+        external_id=chat_id,
     )
-    return InboundWebhookOut(status="ingested", intent=kind)
+    if message is None:
+        return InboundWebhookOut(status="duplicate", intent=None)
+    return InboundWebhookOut(status="queued", intent=None)

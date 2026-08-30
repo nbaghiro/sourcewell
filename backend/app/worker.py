@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.outreach import handle_reply
 from app.agents.sourcing import deterministic_source, run_sourcing
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging, logger
@@ -25,9 +26,12 @@ from app.models import (
     Workspace,
 )
 from app.services.outreach.enrollment import tick
+from app.services.outreach.messaging import pending_inbound
 
 _POLL_SECONDS = 10
 _MAX_BACKOFF_SECONDS = 300
+_REPLY_LIMIT = 50
+_MAX_ROUTE_ATTEMPTS = 3
 _SOURCE_LIMIT = 20
 _SOURCE_INTERVAL_HOURS = 6
 _ACTIONABLE = (
@@ -61,6 +65,49 @@ async def run_due(session: AsyncSession, *, now: datetime, limit: int = 200) -> 
         except Exception:
             logger.exception("worker: tick failed for enrollment %s", enrollment.id)
     return {"processed": processed}
+
+
+async def run_replies_due(
+    session: AsyncSession, *, now: datetime, limit: int = _REPLY_LIMIT
+) -> dict[str, int]:
+    """Route inbound replies the provider receiver parked (`Message.processed_at IS NULL`).
+
+    The webhook deliberately only *records* the reply — classification and the Outreach agent (LLM
+    calls, and at full autonomy a real outbound send) run here. That keeps the provider's ack fast,
+    so it never times out and retries us into answering the same candidate twice.
+
+    A message that keeps failing is given up on after `_MAX_ROUTE_ATTEMPTS` rather than looping
+    forever; it stays visible on the thread either way, so nothing is lost — only the automation.
+    """
+    routed = 0
+    for message in await pending_inbound(session, limit=limit):
+        enrollment = await session.get(Enrollment, message.enrollment_id)
+        workspace = await session.get(Workspace, enrollment.workspace_id) if enrollment else None
+        if enrollment is None or workspace is None:
+            message.processed_at = now  # orphaned; nothing left to route it to
+            continue
+        # Book the attempt *before* the risky part and flush it: a savepoint rollback would
+        # otherwise erase the record that we tried, and a poison message would retry forever.
+        # Exhausting the attempts marks it done — the reply still shows on the thread, only the
+        # automation gives up.
+        message.attempts += 1
+        if message.attempts >= _MAX_ROUTE_ATTEMPTS:
+            message.processed_at = now
+        await session.flush()
+        try:
+            # Isolate each reply: one bad thread can't roll back the rest of the batch.
+            async with session.begin_nested():
+                await handle_reply(
+                    session,
+                    enrollment=enrollment,
+                    message=message,
+                    now=now,
+                    organization_id=workspace.organization_id,
+                )
+            routed += 1
+        except Exception:
+            logger.exception("worker: routing failed for inbound message %s", message.id)
+    return {"routed": routed}
 
 
 async def _tokens_today(session: AsyncSession, *, campaign_id: str, now: datetime) -> int:
@@ -158,13 +205,17 @@ async def _loop() -> None:
         try:
             async with SessionLocal() as session:
                 now = datetime.now(UTC)
+                # Replies first: a candidate waiting on an answer outranks the next touchpoint,
+                # and routing one can end the sequence outright (hand-off / opt-out).
+                replies = await run_replies_due(session, now=now)
                 sent = await run_due(session, now=now)
                 sourced = await run_source_due(session, now=now)
                 await session.commit()
             errors = 0
-            if sent["processed"] or sourced["sourced"]:
+            if replies["routed"] or sent["processed"] or sourced["sourced"]:
                 logger.info(
-                    "worker: ticked %s enrollment(s), sourced %s campaign(s)",
+                    "worker: routed %s reply(s), ticked %s enrollment(s), sourced %s campaign(s)",
+                    replies["routed"],
                     sent["processed"],
                     sourced["sourced"],
                 )

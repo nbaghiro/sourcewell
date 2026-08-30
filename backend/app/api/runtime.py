@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_org_admin
 from app.models import Enrollment
-from app.worker import run_due
+from app.worker import run_due, run_replies_due
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -20,9 +20,15 @@ class FastForwardOut(BaseModel):
 
 @router.post("/run-due")
 async def run_due_now(ctx: ContextDep, session: SessionDep) -> dict[str, int]:
-    """Process every enrollment whose next_run_at is due, once. Call repeatedly to step."""
+    """Step the engine once: route parked inbound replies, then tick every due enrollment.
+
+    Same order as the worker loop — a reply can end a sequence outright, so it's handled before
+    the next touchpoint fires. Call repeatedly to advance.
+    """
     require_org_admin(ctx)
-    return await run_due(session, now=datetime.now(UTC))
+    now = datetime.now(UTC)
+    replies = await run_replies_due(session, now=now)
+    return {**replies, **await run_due(session, now=now)}
 
 
 @router.post("/enrollments/{enrollment_id}/fast-forward", response_model=FastForwardOut)

@@ -97,7 +97,8 @@ async def test_unipile_webhook_linkedin_reply_maps_chat(
         },
     )
     assert resp.status_code == 200
-    assert resp.json()["status"] == "ingested"
+    # Recorded, not routed: the agent runs on the worker so Unipile gets a fast ack.
+    assert resp.json()["status"] == "queued"
     inbound = (
         (
             await db_session.execute(

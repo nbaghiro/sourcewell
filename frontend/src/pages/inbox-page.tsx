@@ -19,6 +19,7 @@ import {
   useApproveMessage,
   useApprovals,
   useConversation,
+  useConversationChannels,
   useDraftReply,
   useEditMessage,
   useHandoff,
@@ -26,9 +27,12 @@ import {
   useMarkRead,
   useOptOut,
   useSendReply,
+  type Channel,
+  type ChannelOption,
   type Conversation,
   type Message,
 } from "@/lib/api/queries";
+import { apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 /** One row in the unified message list — either an inbound conversation or an outbound draft. */
@@ -74,6 +78,50 @@ function summaryFor(state: string) {
     default:
       return "Outreach in progress.";
   }
+}
+
+/** The handle a channel would deliver to, shown next to the composer so the sender can see it. */
+function targetFor(channel: string, contact: Conversation["contact"]) {
+  return channel === "linkedin"
+    ? contact.linkedin_url?.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, "").replace(/\/+$/, "")
+    : contact.email;
+}
+
+/** Email ↔ LinkedIn segmented picker. An unreachable channel is disabled and says why. */
+function ChannelPicker({
+  options,
+  value,
+  onChange,
+}: {
+  options: ChannelOption[];
+  value: Channel;
+  onChange: (c: Channel) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-md border border-border bg-secondary/40 p-0.5">
+      {options.map((o) => {
+        const active = o.channel === value;
+        return (
+          <button
+            key={o.channel}
+            type="button"
+            disabled={!o.available}
+            title={o.reason ?? o.target ?? undefined}
+            onClick={() => onChange(o.channel as Channel)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors",
+              active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              !o.available && "cursor-not-allowed opacity-40 hover:text-muted-foreground",
+            )}
+            style={active && o.channel === "linkedin" ? { color: LI_BLUE } : undefined}
+          >
+            <ChannelIcon channel={o.channel} className="size-3.5" />
+            {o.channel === "linkedin" ? "LinkedIn" : "Email"}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function ChannelTag({ channel, detail }: { channel: string; detail?: string | null }) {
@@ -143,6 +191,8 @@ export function InboxPage() {
   const { data: approvalsData } = useApprovals();
   const [selected, setSelected] = React.useState<string | null>(null); // enrollment id
   const [draft, setDraft] = React.useState("");
+  const [subject, setSubject] = React.useState("");
+  const [channel, setChannel] = React.useState<Channel | null>(null); // null = the thread default
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<string>("all");
 
@@ -215,6 +265,7 @@ export function InboxPage() {
   // One thread view for both kinds: approvals load the same conversation, where the queued
   // draft renders in-thread as a recommended bubble to approve.
   const { data: conv } = useConversation(selected);
+  const { data: channelData } = useConversationChannels(selected);
   const aiDraft = () => selected && draftAI.mutate(selected, { onSuccess: (r) => setDraft(r.text) });
 
   // Keep a sensible selection: when the current row isn't in view, pick the first visible one.
@@ -229,19 +280,34 @@ export function InboxPage() {
   // Opening a conversation clears the composer and marks it read.
   React.useEffect(() => {
     setDraft("");
+    setSubject("");
+    setChannel(null);
     if (selected && selectedRow?.kind === "conversation") markRead.mutate(selected);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  const sendReply = (text: string, origin?: string) =>
-    selected &&
+  // The picked channel, falling back to the backend's default for this thread until one is picked.
+  const activeChannel = (channel ?? channelData?.default ?? "email") as Channel;
+
+  const sendReply = (text: string, origin?: string) => {
+    if (!selected) return;
     sendReplyM.mutate(
-      { id: selected, text, origin },
       {
-        onSuccess: () => setDraft(""),
-        onError: () => toast.error("Couldn't send — try again."),
+        id: selected,
+        text,
+        channel: activeChannel,
+        subject: activeChannel === "email" ? subject || undefined : undefined,
+        origin,
+      },
+      {
+        onSuccess: () => {
+          setDraft("");
+          setSubject("");
+        },
+        onError: (err) => toast.error(apiErrorMessage(err, "Couldn't send that message")),
       },
     );
+  };
   const handoff = () => selected && handoffM.mutate(selected);
   const optOut = () => selected && optOutM.mutate(selected);
 
@@ -331,7 +397,20 @@ export function InboxPage() {
             </div>
           ) : (
             <>
-              <Thread conv={conv} draft={draft} setDraft={setDraft} onSend={sendReply} busy={busy} onAiDraft={aiDraft} aiDrafting={draftAI.isPending} />
+              <Thread
+                conv={conv}
+                draft={draft}
+                setDraft={setDraft}
+                subject={subject}
+                setSubject={setSubject}
+                channel={activeChannel}
+                setChannel={setChannel}
+                channelOptions={channelData?.options ?? []}
+                onSend={sendReply}
+                busy={busy}
+                onAiDraft={aiDraft}
+                aiDrafting={draftAI.isPending}
+              />
               <ContextRail conv={conv} onHandoff={handoff} onOptOut={optOut} busy={busy} />
             </>
           )}
@@ -345,6 +424,11 @@ function Thread({
   conv,
   draft,
   setDraft,
+  subject,
+  setSubject,
+  channel,
+  setChannel,
+  channelOptions,
   onSend,
   busy,
   onAiDraft,
@@ -353,6 +437,11 @@ function Thread({
   conv: Conversation;
   draft: string;
   setDraft: (s: string) => void;
+  subject: string;
+  setSubject: (s: string) => void;
+  channel: Channel;
+  setChannel: (c: Channel) => void;
+  channelOptions: ChannelOption[];
   onSend: (text: string, origin?: string) => void;
   busy: boolean;
   onAiDraft: () => void;
@@ -363,13 +452,9 @@ function Thread({
   // awaiting_approval → the draft is a queued first touchpoint the user approves in-thread;
   // otherwise it's an AI-suggested reply to send.
   const isApproval = conv.enrollment.state === "awaiting_approval";
-  const channelLabel = conv.channel === "linkedin" ? "LinkedIn" : "Email";
-  const detail =
-    conv.channel === "linkedin"
-      ? conv.contact.linkedin_url
-          ?.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, "")
-          .replace(/\/+$/, "")
-      : conv.contact.email;
+  const channelLabel = channel === "linkedin" ? "LinkedIn" : "Email";
+  const detail = targetFor(channel, conv.contact);
+  const blocked = channelOptions.find((o) => o.channel === channel && !o.available);
 
   let lastDay = "";
   let lastChannel = "";
@@ -401,7 +486,7 @@ function Thread({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ChannelTag channel={conv.channel} detail={detail} />
+          <ChannelTag channel={conv.channel} detail={targetFor(conv.channel, conv.contact)} />
           <StateBadge state={conv.enrollment.state} />
         </div>
       </header>
@@ -463,7 +548,9 @@ function Thread({
 
       {/* composer — always visible; disabled while a queued draft awaits approval, enabled once sent */}
       <div className="border-t border-border px-4 py-3">
-        <div className="mb-2 flex flex-wrap gap-1.5">
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <ChannelPicker options={channelOptions} value={channel} onChange={setChannel} />
+          <span className="mx-1 h-4 w-px bg-border" />
           {QUICK.map((q) => (
             <button
               key={q.label}
@@ -481,6 +568,15 @@ function Thread({
             isApproval && "opacity-60",
           )}
         >
+          {/* LinkedIn messages have no subject line — the field only appears for email. */}
+          {channel === "email" && !isApproval && (
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Subject (optional)"
+              className="w-full border-b border-border bg-transparent px-3.5 py-2 text-sm font-medium text-foreground outline-none placeholder:font-normal placeholder:text-muted-foreground"
+            />
+          )}
           <textarea
             rows={2}
             value={draft}
@@ -489,22 +585,31 @@ function Thread({
             placeholder={
               isApproval
                 ? "Approve the recommended message to start the conversation…"
-                : `Reply via ${channelLabel}…`
+                : `Message via ${channelLabel}…`
             }
             className="w-full resize-none bg-transparent px-3.5 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
           />
-          <div className="flex items-center justify-between px-3 pb-2.5">
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ChannelIcon channel={conv.channel} className="size-3.5" /> via {channelLabel}
-              {detail && <span className="opacity-70">· {detail}</span>}
+          <div className="flex items-center justify-between gap-3 px-3 pb-2.5">
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <ChannelIcon channel={channel} className="size-3.5 shrink-0" /> via {channelLabel}
+              {blocked ? (
+                <span className="truncate text-destructive">· {blocked.reason}</span>
+              ) : (
+                detail && <span className="truncate opacity-70">· {detail}</span>
+              )}
             </span>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" disabled={aiDrafting || isApproval} onClick={onAiDraft}>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={aiDrafting || isApproval}
+                onClick={onAiDraft}
+              >
                 <Sparkles /> {aiDrafting ? "Drafting…" : "Draft with AI"}
               </Button>
               <Button
                 size="sm"
-                disabled={!draft.trim() || busy || isApproval}
+                disabled={!draft.trim() || busy || isApproval || !!blocked}
                 onClick={() => onSend(draft)}
               >
                 <Send /> Send
@@ -634,7 +739,11 @@ function Bubble({
               : "rounded-bl-sm border-border bg-secondary/40",
           )}
         >
-          {m.subject && <div className="mb-1 font-semibold">{m.subject}</div>}
+          {/* Only email has a subject line; a LinkedIn bubble showing one would be showing
+              something the transport never sent (older rows still carry it). */}
+          {m.subject && m.channel !== "linkedin" && (
+            <div className="mb-1 font-semibold">{m.subject}</div>
+          )}
           <p className="whitespace-pre-line">{m.body}</p>
         </div>
         <div

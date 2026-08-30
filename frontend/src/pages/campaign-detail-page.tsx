@@ -41,6 +41,7 @@ import {
 import { Segmented } from "@/components/ui/segmented";
 import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   useBulkApprove,
@@ -48,6 +49,7 @@ import {
   useCampaignEnrollments,
   useCampaignLifecycle,
   useCampaignRuns,
+  useConnections,
   useContacts,
   useDeleteCampaign,
   useDuplicateCampaign,
@@ -82,6 +84,10 @@ export function CampaignDetailPage() {
   const rankCampaign = useRankCampaign(id ?? "");
   const bulkApprove = useBulkApprove();
   const updateCampaign = useUpdateCampaign();
+  const { data: connections } = useConnections();
+  // Only a paid LinkedIn tier carries InMail credits; a free ("basic") seat cannot send one.
+  const linkedInSeat = (connections ?? []).find((c) => c.provider === "linkedin" && c.linked);
+  const canInmail = ["premium", "sales_nav", "recruiter"].includes(linkedInSeat?.seat_type ?? "");
   const sourceNow = useSourceNow();
 
   const [stage, setStage] = React.useState("all");
@@ -422,6 +428,36 @@ export function CampaignDetailPage() {
                   level={campaign.autonomy_level}
                   onChange={(patch) => updateCampaign.mutate({ id: campaign.id, patch })}
                 />
+                {campaign.sequence.some((step) => step.channel === "linkedin") && (
+                  <label className="flex items-start gap-3 rounded-lg border border-border p-3">
+                    <Switch
+                      checked={campaign.use_inmail}
+                      disabled={!canInmail}
+                      onCheckedChange={(use_inmail) =>
+                        updateCampaign.mutate({ id: campaign.id, patch: { use_inmail } })
+                      }
+                    />
+                    <span className="min-w-0">
+                      <span className="text-sm font-medium text-foreground">
+                        Send LinkedIn steps as InMail
+                      </span>
+                      <p className="text-xs text-muted-foreground">
+                        Reaches people you aren't connected to, and spends your seat's InMail
+                        credits. Costs 2 credits per send instead of 1. Follow-ups in a chat that's
+                        already open stay ordinary messages.
+                      </p>
+                      {/* LinkedIn rejects an InMail from a free seat outright, so the switch is
+                          only offered when a connected seat could actually carry one. */}
+                      {!canInmail && (
+                        <p className="mt-1 text-xs" style={{ color: "var(--warning)" }}>
+                          {linkedInSeat
+                            ? `Your connected LinkedIn account is a ${linkedInSeat.seat_type} seat, which has no InMail credits — Premium, Sales Navigator or Recruiter is required.`
+                            : "Connect a LinkedIn account in Settings to use InMail."}
+                        </p>
+                      )}
+                    </span>
+                  </label>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Daily send caps and connected channels are managed in{" "}
                   <Link to="/settings" className="font-medium text-primary hover:underline">

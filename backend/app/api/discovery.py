@@ -48,9 +48,17 @@ class PeopleSearchIn(Targeting):
     providers: list[str] = Field(default_factory=list)
 
 
+class ProviderFailureOut(BaseModel):
+    provider: str
+    message: str
+
+
 class PeopleSearchOut(BaseModel):
     results: list[PersonHit]
     providers: list[str]
+    # Providers that couldn't answer. Empty `results` with a failure here is a broken search, not
+    # an empty one — the client must be able to tell those apart.
+    errors: list[ProviderFailureOut] = []
 
 
 @router.post("/search", response_model=PeopleSearchOut)
@@ -61,13 +69,20 @@ async def search_people(
     providers = await build_providers_for_org(session, ctx.org_id)
     if body.providers:
         providers = [p for p in providers if p.key in body.providers]
-    results = await discovery.search_people(providers, body, limit=body.limit)
-    used = [p.key for p in providers if p.capabilities.search]
+    outcome = await discovery.search_people(providers, body, limit=body.limit)
+    failed = {f.provider for f in outcome.failures}
+    used = [p.key for p in providers if p.capabilities.search and p.key not in failed]
     for provider_key in used:
         await usage.record(
             session, organization_id=ctx.org_id, provider=provider_key, kind="search"
         )
-    return PeopleSearchOut(results=results, providers=used)
+    return PeopleSearchOut(
+        results=outcome.hits,
+        providers=used,
+        errors=[
+            ProviderFailureOut(provider=f.provider, message=f.message) for f in outcome.failures
+        ],
+    )
 
 
 class ParseIn(BaseModel):

@@ -7,6 +7,7 @@ import { CampaignComposer, toSteps, type Step } from "@/components/campaign-comp
 import { CampaignIntake, type IntakeResult } from "@/components/campaign-intake";
 import { PageLayout } from "@/components/page-layout";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { AutonomyDial } from "@/components/autonomy-dial";
 import { useContacts, useCreateCampaign, useDraftSequence } from "@/lib/api/queries";
 import { emptyTargeting, type Targeting } from "@/lib/targeting";
@@ -50,7 +51,10 @@ function CampaignBuilderInner() {
   const [authoredBy, setAuthoredBy] = React.useState<"agent" | "human">("human");
   const [criteria, setCriteria] = React.useState<Targeting>(emptyTargeting());
   const [steps, setSteps] = React.useState<Step[]>(DEFAULT_STEPS);
+  const [useInmail, setUseInmail] = React.useState(false);
   const saving = createCampaign.isPending;
+  // Only meaningful with a LinkedIn touchpoint — the flag does nothing to an email step.
+  const hasLinkedInStep = steps.some((s) => s.channel === "linkedin");
 
   function onIntakeComplete(r: IntakeResult) {
     setName(r.name || "New campaign");
@@ -89,6 +93,7 @@ function CampaignBuilderInner() {
         authored_by: authoredBy,
         objective: objective || null,
         seed_contact_ids: seedContactIds,
+        use_inmail: useInmail && hasLinkedInStep,
       },
       {
         onSuccess: (c) => {
@@ -147,6 +152,15 @@ function CampaignBuilderInner() {
             onChange={({ autonomy_level }) => setAutonomyLevel(autonomy_level)}
           />
         </span>
+        {hasLinkedInStep && (
+          <label
+            className="flex items-center gap-1.5"
+            title="InMail reaches people you aren't connected to, spends your LinkedIn InMail credits, and costs 2 credits per send instead of 1"
+          >
+            <span className="text-xs text-muted-foreground">InMail</span>
+            <Switch checked={useInmail} onCheckedChange={setUseInmail} />
+          </label>
+        )}
         <Button variant="ghost" size="sm" onClick={() => setPhase("brief")}>
           Start over
         </Button>

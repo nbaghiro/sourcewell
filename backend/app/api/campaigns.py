@@ -52,6 +52,9 @@ class CampaignIn(BaseModel):
     seed_contact_ids: list[str] = []
     from_email: str | None = None
     seat_id: str | None = None
+    # Send the LinkedIn touchpoints as InMail. Off by default: InMail spends the seat's finite
+    # LinkedIn credits and bills at a higher weight, so it is never the silent default.
+    use_inmail: bool = False
 
 
 class CampaignOut(BaseModel):
@@ -65,6 +68,7 @@ class CampaignOut(BaseModel):
     objective: str | None
     autonomy_level: AutonomyLevel
     authored_by: Authorship
+    use_inmail: bool
     field_owners: JsonObject
     next_source_at: str | None
     seat_id: str | None
@@ -129,6 +133,7 @@ def dump(c: Campaign) -> CampaignOut:
         objective=c.objective,
         autonomy_level=c.autonomy_level,
         authored_by=c.authored_by,
+        use_inmail=c.use_inmail,
         field_owners=c.field_owners,
         next_source_at=c.next_source_at.isoformat() if c.next_source_at else None,
         seat_id=c.seat_id,
@@ -171,6 +176,7 @@ async def create_campaign_endpoint(
         from_email=body.from_email,
         created_by_user_id=ctx.user_id,
         seat_id=body.seat_id,
+        use_inmail=body.use_inmail,
     )
     await audit.record(
         session,
@@ -241,6 +247,7 @@ class CampaignPatch(BaseModel):
     autonomy_level: AutonomyLevel | None = None
     objective: str | None = None
     from_email: str | None = None
+    use_inmail: bool | None = None
     status: CampaignStatus | None = None
     seat_id: str | None = None
 
@@ -259,6 +266,8 @@ async def update_campaign(
         campaign.sequence = [s.model_dump() for s in body.sequence]
     if body.autonomy_level is not None:
         campaign.autonomy_level = body.autonomy_level
+    if body.use_inmail is not None:
+        campaign.use_inmail = body.use_inmail
     if body.objective is not None:
         campaign.objective = body.objective
     if body.from_email is not None:
@@ -321,6 +330,7 @@ async def duplicate_campaign(campaign_id: str, ctx: ContextDep, session: Session
         sequence=list(src.sequence or []),
         seat_id=src.seat_id,
         created_by_user_id=ctx.user_id,
+        use_inmail=src.use_inmail,
         constraints=dict(src.constraints or {}),
         field_owners=dict(src.field_owners or {}),
     )

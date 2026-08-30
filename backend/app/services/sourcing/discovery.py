@@ -9,12 +9,14 @@
 
 import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ext.base import PersonHit, SourceProvider
+from app.core.logging import logger
+from app.ext.base import PersonHit, ProviderError, SourceProvider
 from app.models import Contact
 from app.targeting import Targeting, evaluate
 
@@ -51,24 +53,59 @@ def _cache_key(providers: Sequence[SourceProvider], targeting: Targeting, limit:
     return f"{','.join(sorted(p.key for p in providers))}|{limit}|{targeting.model_dump_json()}"
 
 
+@dataclass(frozen=True)
+class ProviderFailure:
+    """One provider that couldn't answer, and why — surfaced rather than counted as zero hits."""
+
+    provider: str
+    message: str
+
+
+@dataclass(frozen=True)
+class SearchOutcome:
+    """What a fan-out actually produced: the ranked hits, plus whoever failed producing them.
+
+    Both halves matter. An empty `hits` with a non-empty `failures` is a broken search; an empty
+    one with no failures genuinely means nobody matched.
+    """
+
+    hits: list[PersonHit]
+    failures: list[ProviderFailure]
+
+
 async def search_people(
     providers: Sequence[SourceProvider],
     targeting: Targeting,
     *,
     limit: int = 25,
     use_cache: bool = True,
-) -> list[PersonHit]:
-    """Live multi-provider search, deduped and fit-scored, ranked best-first (briefly cached)."""
+) -> SearchOutcome:
+    """Live multi-provider search, deduped and fit-scored, ranked best-first (briefly cached).
+
+    A provider that fails is recorded and skipped, never fatal: with several providers configured,
+    one revoked key must not take the whole search down. Only clean runs are cached — caching a
+    result that was short a provider would keep serving the gap for the TTL.
+    """
     key = _cache_key(providers, targeting, limit)
     if use_cache and (entry := _CACHE.get(key)) and (time.monotonic() - entry[0]) < _CACHE_TTL:
-        return entry[1]
+        return SearchOutcome(hits=entry[1], failures=[])
 
     seen: set[str] = set()
     out: list[PersonHit] = []
+    failures: list[ProviderFailure] = []
     for provider in providers:
         if not provider.capabilities.search:
             continue
-        page = await provider.search(targeting, limit=limit)
+        try:
+            page = await provider.search(targeting, limit=limit)
+        except ProviderError as exc:
+            logger.warning("search: provider %s failed (%s)", exc.provider, exc)
+            failures.append(ProviderFailure(provider=exc.provider, message=str(exc)))
+            continue
+        except Exception as exc:  # an adapter bug must not take the other providers down
+            logger.exception("search: provider %s raised", provider.key)
+            failures.append(ProviderFailure(provider=provider.key, message=str(exc) or "failed"))
+            continue
         for hit in page.hits:
             dk = dedupe_key(hit)
             if dk in seen:
@@ -78,11 +115,11 @@ async def search_people(
             out.append(hit)
     out.sort(key=lambda h: h.score, reverse=True)
 
-    if use_cache:
+    if use_cache and not failures:
         if len(_CACHE) >= _CACHE_MAX:
             _CACHE.pop(next(iter(_CACHE)))
         _CACHE[key] = (time.monotonic(), out)
-    return out
+    return SearchOutcome(hits=out, failures=failures)
 
 
 async def verify_hits(

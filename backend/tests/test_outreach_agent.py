@@ -55,6 +55,15 @@ async def _thread(
     return org, enr, contact
 
 
+async def _inbound(session: AsyncSession, enrollment: Enrollment, text: str) -> Message:
+    """Record the reply the way the receiver would, so the agent has a message to route."""
+    message = await messaging.record_inbound(
+        session, enrollment=enrollment, text=text, now=datetime.now(UTC)
+    )
+    assert message is not None
+    return message
+
+
 async def _outbound(session: AsyncSession, enrollment_id: str) -> list[Message]:
     rows = await session.execute(
         select(Message).where(
@@ -84,7 +93,7 @@ async def test_conversation_hands_off(db_session: AsyncSession) -> None:
         db_session,
         llm=llm,
         enrollment=enr,
-        inbound_text="Yes, I'm interested — let's talk!",
+        message=await _inbound(db_session, enr, "Yes, I'm interested — let's talk!"),
         organization_id=org.id,
         now=datetime.now(UTC),
     )
@@ -100,7 +109,7 @@ async def test_conversation_opts_out_and_suppresses(db_session: AsyncSession) ->
         db_session,
         llm=llm,
         enrollment=enr,
-        inbound_text="please unsubscribe me",
+        message=await _inbound(db_session, enr, "please unsubscribe me"),
         organization_id=org.id,
         now=datetime.now(UTC),
     )
@@ -123,7 +132,7 @@ async def test_conversation_reply_full_autonomy_sends(db_session: AsyncSession) 
         db_session,
         llm=llm,
         enrollment=enr,
-        inbound_text="Tell me more?",
+        message=await _inbound(db_session, enr, "Tell me more?"),
         organization_id=org.id,
         now=datetime.now(UTC),
     )
@@ -141,7 +150,7 @@ async def test_conversation_reply_assisted_queues_draft(db_session: AsyncSession
         db_session,
         llm=llm,
         enrollment=enr,
-        inbound_text="What's the comp?",
+        message=await _inbound(db_session, enr, "What's the comp?"),
         organization_id=org.id,
         now=datetime.now(UTC),
     )
@@ -159,7 +168,7 @@ async def test_handle_reply_deterministic_fallback(
     result = await handle_reply(
         db_session,
         enrollment=enr,
-        text="not interested, please remove me",
+        message=await _inbound(db_session, enr, "not interested, please remove me"),
         now=datetime.now(UTC),
         organization_id=org.id,
     )

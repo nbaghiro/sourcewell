@@ -52,13 +52,18 @@ async def test_seed_demo_builds_a_realistic_spread(db_session: AsyncSession) -> 
     assert enriched is not None and enriched.tags
 
     # Current-period activity drives the pooled credit meter; usage is derived correctly:
-    #   used = emails*1 + inmails*2 + sourced*1
+    #   used = emails*1 + linkedin_dms*1 + inmails*2 + sourced*1
+    # The seeded campaigns don't opt into InMail, so their LinkedIn sends are ordinary DMs and bill
+    # at the DM rate — they used to be counted as InMails and charged double.
     credits = summary["credits"]
     assert credits["emails"] == 600
-    assert credits["inmails"] == 100
+    assert credits["linkedin_dms"] == 100
+    assert credits["inmails"] == 0
     assert credits["sourced"] == 200
-    assert credits["used"] == credits["emails"] + credits["inmails"] * 2 + credits["sourced"]
-    assert credits["used"] == 1000
+    assert credits["used"] == (
+        credits["emails"] + credits["linkedin_dms"] + credits["inmails"] * 2 + credits["sourced"]
+    )
+    assert credits["used"] == 900
     # Demo starts on the free plan (200) → the seeded usage reads as over-limit until an upgrade.
     assert credits["allowance"] == 200
-    assert credits["pct"] == 500
+    assert credits["pct"] == 450

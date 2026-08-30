@@ -430,6 +430,10 @@ class Campaign(IdMixin, TimestampMixin, Base):
     created_by_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Send the LinkedIn touchpoints as InMail rather than a normal DM. InMail reaches people the
+    # seat isn't connected to, but spends the seat's finite InMail credits — so it's opt-in, and
+    # it bills at a higher weight (see services/billing/credits.py).
+    use_inmail: Mapped[bool] = mapped_column(default=False, server_default="false")
     # criteria: {"titles": [...], "skills": [...]}
     criteria: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
     # sequence: [{"channel": "email", "delay_days": 0, "subject": "...", "body": "..."}]
@@ -536,14 +540,29 @@ class Message(IdMixin, TimestampMixin, Base):
     origin: Mapped[str] = mapped_column(String(16), default="ai", server_default="ai")
     # Idempotency key sent to the provider so a retried send is de-duplicated (at-most-once).
     idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # The provider's own message id for an inbound event — de-duplicates redelivered webhooks.
-    provider_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # The provider's id for this *individual* message (inbound). The receiver's idempotency key;
+    # outbound rows and in-app replies leave it NULL.
+    provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Outbound LinkedIn only: this went out as an InMail rather than a DM. Stamped from what the
+    # transport actually did (a reply into an existing chat is never an InMail), because billing
+    # counts these at a higher weight and must not charge for a send that didn't happen.
+    is_inmail: Mapped[bool] = mapped_column(default=False, server_default="false")
+    # Inbound only: when the reply was routed (classified + state transitioned + agent run).
+    # NULL means a provider webhook recorded it and the worker still owes it a pass.
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
-        # Race-safe inbound dedupe: a redelivered webhook can't create a second row. Partial so the
-        # many outbound rows (provider_message_id IS NULL) are unconstrained.
+        # Race-safe inbound dedupe: a redelivered webhook can't create a second row, because the
+        # constraint (not just the preceding SELECT) rejects it. Partial, so the many outbound rows
+        # with a NULL id are unconstrained.
+        #
+        # Scoped to the workspace, not global: two workspaces can hold the same candidate and
+        # providers don't promise ids that never collide across accounts, so a global constraint
+        # made one tenant's recorded id shadow another's identical id and silently drop a real
+        # reply.
         Index(
-            "uq_message_provider_message_id",
+            "uq_message_workspace_provider_message_id",
+            "workspace_id",
             "provider_message_id",
             unique=True,
             postgresql_where=text("provider_message_id IS NOT NULL"),

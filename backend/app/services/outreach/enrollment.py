@@ -170,7 +170,9 @@ async def _draft_touchpoint(
         direction=MessageDirection.outbound,
         channel=channel,
         status=MessageStatus.draft,
-        subject=subject,
+        # LinkedIn carries no subject: the transport drops it, so keeping one would show the
+        # recruiter a subject line in the thread and the approval preview that is never sent.
+        subject=subject if channel == Channel.email else None,
         body=body,
     )
     session.add(message)
@@ -275,6 +277,9 @@ async def _send_touchpoint(
             sender=sender,
             unsubscribe_url=unsub,
             reply=is_reply,
+            # The campaign opts in; InMail is never the default. A basic/free seat has no InMail
+            # credits, so sending every cold touch as one would fail for most accounts.
+            inmail=campaign.use_inmail and message.channel == Channel.linkedin,
         )
         message.status = MessageStatus.sent
         message.sent_at = now
@@ -302,4 +307,7 @@ async def _send_touchpoint(
         _advance(enrollment, sequence, now)
         return
 
+    # `deliver_outbound` stamps the provider thread id and the sending seat onto the message
+    # itself — inbound replies map back to this thread through them, and the next touchpoint on
+    # this channel continues the same conversation.
     _advance(enrollment, sequence, now)

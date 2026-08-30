@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Ban,
   Check,
   ChevronDown,
@@ -74,6 +75,9 @@ export function FindPeoplePage() {
   const [targeting, setTargeting] = React.useState<Targeting>(emptyTargeting());
   const [enabled, setEnabled] = React.useState<Set<string>>(new Set());
   const [results, setResults] = React.useState<PersonHit[]>([]);
+  // Providers that couldn't answer. Kept apart from `results` so an empty list caused by a broken
+  // provider never renders as "no matches" — that read as a bad query when it was a bad key.
+  const [errors, setErrors] = React.useState<{ provider: string; message: string }[]>([]);
   const [used, setUsed] = React.useState<string[]>([]);
   const [searched, setSearched] = React.useState(false);
   const [picked, setPicked] = React.useState<Set<string>>(new Set());
@@ -149,8 +153,11 @@ export function FindPeoplePage() {
         onSuccess: (data) => {
           setResults(data.results);
           setUsed(data.providers);
+          setErrors(data.errors ?? []);
           setPicked(new Set());
           setSearched(true);
+          for (const e of data.errors ?? [])
+            toast.error(`${e.provider} search failed`, { description: e.message });
         },
         onError: () => toast.error("Search failed"),
       },
@@ -284,7 +291,15 @@ export function FindPeoplePage() {
     <div className="space-y-3">
       {searched && !search.isPending && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>{results.length} result{results.length === 1 ? "" : "s"}{used.length > 0 && <> · via {used.join(", ")}</>}</span>
+          <span>
+            {results.length} result{results.length === 1 ? "" : "s"}
+            {used.length > 0 && <> · via {used.join(", ")}</>}
+            {errors.length > 0 && (
+              <span className="text-[color:var(--warning)]" title={errors.map((e) => `${e.provider}: ${e.message}`).join("\n")}>
+                {" "}· {errors.map((e) => e.provider).join(", ")} unavailable
+              </span>
+            )}
+          </span>
           {results.length > 0 && (
             <button className="text-primary hover:underline" onClick={() => setPicked(new Set(results.map((h, i) => ({ h, k: hitKey(h, i) })).filter(({ h }) => !decorate(h).dup).map(({ k }) => k)))}>
               Select all
@@ -298,6 +313,12 @@ export function FindPeoplePage() {
         </div>
       ) : results.length > 0 ? (
         <div className={cols === 2 ? "grid gap-3 sm:grid-cols-2" : "space-y-3"}>{results.map(resultRow)}</div>
+      ) : errors.length > 0 ? (
+        <Hint
+          icon={<AlertTriangle className="size-6" />}
+          title={`${errors.map((e) => e.provider).join(", ")} couldn't be searched`}
+          body={`${errors.map((e) => e.message).join(" · ")} — this isn't an empty result, so widening your criteria won't help.`}
+        />
       ) : (
         <Hint icon={<UserSearch className="size-6" />} title="No matches" body="Try broadening the titles, skills, or locations." />
       )}

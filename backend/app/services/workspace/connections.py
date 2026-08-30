@@ -26,6 +26,7 @@ from app.models import (
     User,
     UserStatus,
 )
+from app.services.outreach.receiving import ensure_inbound_webhooks_quietly
 from app.services.workspace import tenancy
 
 
@@ -271,3 +272,6 @@ async def complete_linkedin_notify(session: AsyncSession, *, state: str, account
     attempt.account_id = account_id
     attempt.status = "ready"
     await session.flush()
+    # A brand-new deployment can take its first seat before it has ever booted with Unipile
+    # configured; re-assert the subscription here so that seat's replies are heard from the start.
+    await ensure_inbound_webhooks_quietly()

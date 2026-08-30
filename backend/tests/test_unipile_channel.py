@@ -42,10 +42,40 @@ async def test_linkedin_reply_posts_to_chat_thread() -> None:
     route = respx.post(f"{_DSN}/api/v1/chats/CHAT-1/messages").mock(
         return_value=httpx.Response(200, json={})
     )
-    await UnipileChannel("linkedin", "key", _DSN).reply(
+    assert await UnipileChannel("linkedin", "key", _DSN).reply(
         account_id="acct", thread_id="CHAT-1", body="following up"
     )
     assert route.called
+
+
+@respx.mock
+async def test_reply_reports_a_4xx_as_permanent() -> None:
+    """A rejected reply must not look retryable.
+
+    `reply` used a bare `raise_for_status()`, so a dead chat / a thread the seat can no longer post
+    to came back as a transient error: the send layer burned its whole retry budget on a message
+    that could never land, and never took the hard-failure path that fails and advances the
+    sequence. It now mirrors `send` — False for permanent, raise for 429/5xx.
+    """
+    respx.post(f"{_DSN}/api/v1/chats/DEAD/messages").mock(return_value=httpx.Response(404, json={}))
+    assert (
+        await UnipileChannel("linkedin", "key", _DSN).reply(
+            account_id="acct", thread_id="DEAD", body="hello?"
+        )
+        is False
+    )
+
+
+@respx.mock
+async def test_reply_still_raises_on_a_transient_failure() -> None:
+    """429 / 5xx keep raising, so the caller retries with backoff instead of giving up."""
+    respx.post(f"{_DSN}/api/v1/chats/CHAT-1/messages").mock(
+        return_value=httpx.Response(503, json={})
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        await UnipileChannel("linkedin", "key", _DSN).reply(
+            account_id="acct", thread_id="CHAT-1", body="hi"
+        )
 
 
 @respx.mock

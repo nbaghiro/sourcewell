@@ -35,7 +35,10 @@ export interface paths {
         put?: never;
         /**
          * Run Due Now
-         * @description Process every enrollment whose next_run_at is due, once. Call repeatedly to step.
+         * @description Step the engine once: route parked inbound replies, then tick every due enrollment.
+         *
+         *     Same order as the worker loop — a reply can end a sequence outright, so it's handled before
+         *     the next touchpoint fires. Call repeatedly to advance.
          */
         post: operations["run_due_now_admin_run_due_post"];
         delete?: never;
@@ -1123,6 +1126,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/inbox/{enrollment_id}/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Conversation Channels
+         * @description Which channels this conversation can be sent on, and which one the composer preselects.
+         */
+        get: operations["conversation_channels_inbox__enrollment_id__channels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inbox/{enrollment_id}/draft": {
         parameters: {
             query?: never;
@@ -1171,7 +1194,11 @@ export interface paths {
         put?: never;
         /**
          * Send Reply
-         * @description Send a manual outbound reply from the recruiter in this conversation.
+         * @description Send a manual outbound message from the recruiter — over email or LinkedIn.
+         *
+         *     `channel` picks the transport; omitted, the thread's existing channel is used. The message is
+         *     delivered before it is recorded, so a failure surfaces as an error rather than a phantom
+         *     "sent" bubble in the thread.
          */
         post: operations["send_reply_inbox__enrollment_id__reply_post"];
         delete?: never;
@@ -1827,29 +1854,10 @@ export interface paths {
          * @description System inbound from an email provider (HMAC-signed, no user session).
          *
          *     Threads to an enrollment by `enrollment_id` or by the sender's email. Payload (JSON):
-         *     `{"from": str, "text": str, "enrollment_id"?: str}`, signed in the `X-Signature` header.
+         *     `{"from": str, "text": str, "enrollment_id"?: str, "message_id"?: str}`, signed in the
+         *     `X-Signature` header. Like the Unipile receiver this only records — the worker routes it.
          */
         post: operations["inbound_webhook_webhooks_inbound_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/webhooks/reply": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reply Webhook
-         * @description In-app / authed reply (used by the inbox 'simulate reply' and QA).
-         */
-        post: operations["reply_webhook_webhooks_reply_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1887,10 +1895,16 @@ export interface paths {
         put?: never;
         /**
          * Unipile Webhook
-         * @description Public Unipile receiver (shared-secret): inbound messages → handle_reply, account events →
-         *     connection status. Prefers an HMAC signature (`X-Unipile-Signature`) over the raw body; falls
-         *     back to a shared token via the `X-Unipile-Token` header (or `?token=` for providers that can
-         *     only template the URL). Redelivered events are dropped by provider_message_id dedupe.
+         * @description Public Unipile receiver: inbound messages and account lifecycle events.
+         *
+         *     Prefers an HMAC signature (`X-Unipile-Signature`) over the raw body; falls back to a shared
+         *     token via the `X-Unipile-Token` header (or `?token=` for providers that can only template the
+         *     URL).
+         *
+         *     A reply is only *recorded* here — classification and the Outreach agent run on the worker
+         *     (`run_replies_due`). Unipile gets a fast ack, so it never times out and retries us into
+         *     answering the same candidate twice; the `provider_message_id` guard catches redeliveries that
+         *     happen anyway.
          */
         post: operations["unipile_webhook_webhooks_unipile_post"];
         delete?: never;
@@ -2249,6 +2263,11 @@ export interface components {
              * @default []
              */
             sequence: components["schemas"]["SequenceStep"][];
+            /**
+             * Use Inmail
+             * @default false
+             */
+            use_inmail: boolean;
         };
         /** CampaignOut */
         CampaignOut: {
@@ -2272,6 +2291,8 @@ export interface components {
             seat_id: string | null;
             sequence: components["schemas"]["JsonList"];
             status: components["schemas"]["CampaignStatus"];
+            /** Use Inmail */
+            use_inmail: boolean;
         };
         /** CampaignPatch */
         CampaignPatch: {
@@ -2288,6 +2309,8 @@ export interface components {
             /** Sequence */
             sequence?: components["schemas"]["SequenceStep"][] | null;
             status?: components["schemas"]["CampaignStatus"] | null;
+            /** Use Inmail */
+            use_inmail?: boolean | null;
         };
         /** CampaignRowOut */
         CampaignRowOut: {
@@ -2312,6 +2335,8 @@ export interface components {
             seat_id: string | null;
             sequence: components["schemas"]["JsonList"];
             status: components["schemas"]["CampaignStatus"];
+            /** Use Inmail */
+            use_inmail: boolean;
         };
         /** CampaignStatOut */
         CampaignStatOut: {
@@ -2340,6 +2365,20 @@ export interface components {
          * @enum {string}
          */
         Channel: "email" | "linkedin";
+        /**
+         * ChannelOptionOut
+         * @description One send option for the composer: can we reach this contact here, and if not why not.
+         */
+        ChannelOptionOut: {
+            /** Available */
+            available: boolean;
+            /** Channel */
+            channel: string;
+            /** Reason */
+            reason: string | null;
+            /** Target */
+            target: string | null;
+        };
         /** ChannelStatOut */
         ChannelStatOut: {
             /** Channel */
@@ -2350,6 +2389,13 @@ export interface components {
             reply_rate: number;
             /** Sent */
             sent: number;
+        };
+        /** ChannelsOut */
+        ChannelsOut: {
+            /** Default */
+            default: string;
+            /** Options */
+            options: components["schemas"]["ChannelOptionOut"][];
         };
         /** ChatIn */
         ChatIn: {
@@ -3324,6 +3370,11 @@ export interface components {
         };
         /** PeopleSearchOut */
         PeopleSearchOut: {
+            /**
+             * Errors
+             * @default []
+             */
+            errors: components["schemas"]["ProviderFailureOut"][];
             /** Providers */
             providers: string[];
             /** Results */
@@ -3402,6 +3453,13 @@ export interface components {
             /** Plan */
             plan: string;
         };
+        /** ProviderFailureOut */
+        ProviderFailureOut: {
+            /** Message */
+            message: string;
+            /** Provider */
+            provider: string;
+        };
         /** ProviderOut */
         ProviderOut: {
             /** Enrich */
@@ -3459,19 +3517,6 @@ export interface components {
             email: string;
             /** Status */
             status: string;
-        };
-        /** ReplyRequest */
-        ReplyRequest: {
-            /** Enrollment Id */
-            enrollment_id: string;
-            /** Text */
-            text: string;
-        };
-        /** ReplyWebhookOut */
-        ReplyWebhookOut: {
-            /** Intent */
-            intent: string;
-            message: components["schemas"]["MessageOut"];
         };
         /** ResendVerificationRequest */
         ResendVerificationRequest: {
@@ -3545,11 +3590,14 @@ export interface components {
         };
         /** SendRequest */
         SendRequest: {
+            channel?: components["schemas"]["Channel"] | null;
             /**
              * Origin
              * @default human
              */
             origin: string;
+            /** Subject */
+            subject?: string | null;
             /** Text */
             text: string;
         };
@@ -5814,6 +5862,37 @@ export interface operations {
             };
         };
     };
+    conversation_channels_inbox__enrollment_id__channels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enrollment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     draft_reply_endpoint_inbox__enrollment_id__draft_post: {
         parameters: {
             query?: never;
@@ -6987,39 +7066,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboundWebhookOut"];
-                };
-            };
-        };
-    };
-    reply_webhook_webhooks_reply_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReplyRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReplyWebhookOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

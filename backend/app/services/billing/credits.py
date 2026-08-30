@@ -1,11 +1,11 @@
 """Account-level usage credits — one monthly pool the three metered actions draw from.
 
-An account (organization) gets a monthly credit allowance by plan. Emails sent, LinkedIn InMails
-sent, and candidates sourced each consume credits at a weight. Usage is *derived* from the source
-rows (`Message.sent_at`, `Enrollment.created_at`) — a single source of truth, with no separate
-counter to drift. Enforcement is soft for now: we surface usage + how far over allowance, but
-overage is allowed (to be reconciled at billing). Swap `period_start` to the Stripe billing cycle
-once subscriptions land; everything else flows from the plan string on `Organization`.
+An account (organization) gets a monthly credit allowance by plan. Messages sent (email, LinkedIn
+DM, LinkedIn InMail) and candidates sourced each consume credits at a weight. Usage is *derived*
+from the source rows (`Message.sent_at`, `Enrollment.created_at`) — one source of truth, with no
+separate counter to drift. Enforcement is soft for now: we surface usage and how far over the
+allowance it is, but overage is allowed (reconciled at billing). Swap `period_start` to the Stripe
+billing cycle once subscriptions land; everything else flows from the plan on `Organization`.
 """
 
 from dataclasses import dataclass
@@ -16,9 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Channel, Enrollment, Message, MessageDirection, MessageStatus, Workspace
 
-# Credits one action consumes — tunable. InMails are scarcer (LinkedIn-limited); sourcing hits
-# paid people-data providers; email is cheap.
-CREDIT_WEIGHTS = {"email": 1, "inmail": 2, "sourced": 1}
+# Credits one action consumes — tunable. InMails are scarcer (they spend the seat's own finite
+# LinkedIn credits); sourcing hits paid people-data providers; an email or an ordinary LinkedIn DM
+# is cheap. A DM is *not* an InMail: only a send that actually went out with the InMail flag costs
+# the premium weight.
+CREDIT_WEIGHTS = {"email": 1, "linkedin": 1, "inmail": 2, "sourced": 1}
 
 # Monthly credit allowance by plan. "trial" is free-tier (not a Pro-level giveaway); demo / unknown
 # fall back to a generous default (so the seeded demo isn't throttled).
@@ -39,6 +41,7 @@ def period_start(now: datetime) -> datetime:
 @dataclass(frozen=True)
 class CreditStatus:
     emails: int  # emails sent this period
+    linkedin_dms: int  # ordinary LinkedIn messages sent this period
     inmails: int  # LinkedIn InMails sent this period
     sourced: int  # candidates sourced (enrollments created) this period
     used: int  # weighted credits consumed
@@ -69,7 +72,7 @@ async def credit_status(
     sent = (
         (
             await session.execute(
-                select(Message.channel, func.count())
+                select(Message.channel, Message.is_inmail, func.count())
                 .select_from(Message)
                 .join(Workspace, Message.workspace_id == Workspace.id)
                 .where(
@@ -78,15 +81,18 @@ async def credit_status(
                     Message.status == MessageStatus.sent,
                     Message.sent_at >= start,
                 )
-                .group_by(Message.channel)
+                .group_by(Message.channel, Message.is_inmail)
             )
         )
         .tuples()
         .all()
     )
-    by_channel: dict[Channel, int] = {ch: int(n) for ch, n in sent}
-    emails = by_channel.get(Channel.email, 0)
-    inmails = by_channel.get(Channel.linkedin, 0)
+    # Keyed on (channel, is_inmail): a LinkedIn row is an InMail only when the transport sent it
+    # as one. Everything on email is a plain message whatever the flag says.
+    by_kind: dict[tuple[Channel, bool], int] = {(ch, bool(im)): int(n) for ch, im, n in sent}
+    emails = sum(n for (ch, _), n in by_kind.items() if ch == Channel.email)
+    linkedin_dms = by_kind.get((Channel.linkedin, False), 0)
+    inmails = by_kind.get((Channel.linkedin, True), 0)
     sourced = int(
         (
             await session.execute(
@@ -102,11 +108,13 @@ async def credit_status(
     )
     used = (
         emails * CREDIT_WEIGHTS["email"]
+        + linkedin_dms * CREDIT_WEIGHTS["linkedin"]
         + inmails * CREDIT_WEIGHTS["inmail"]
         + sourced * CREDIT_WEIGHTS["sourced"]
     )
     return CreditStatus(
         emails=emails,
+        linkedin_dms=linkedin_dms,
         inmails=inmails,
         sourced=sourced,
         used=used,

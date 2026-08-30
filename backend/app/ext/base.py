@@ -95,6 +95,20 @@ class EmailVerdict(BaseModel):
     score: int = 0
 
 
+class ProviderError(RuntimeError):
+    """A provider call failed — as distinct from succeeding with nothing to show.
+
+    Search used to swallow every failure into an empty page, so a revoked key, a rate limit, or an
+    unconnected seat was indistinguishable from "nobody matched your criteria". The fan-out catches
+    this per provider, so one broken provider degrades its own results instead of the whole search.
+    """
+
+    def __init__(self, provider: str, message: str, *, status: int | None = None) -> None:
+        super().__init__(message)
+        self.provider = provider
+        self.status = status
+
+
 class SearchPage(BaseModel):
     hits: list[PersonHit] = []
     total: int | None = None

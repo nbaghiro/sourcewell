@@ -14,6 +14,7 @@ from app.ext.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,
+    ProviderError,
     SearchPage,
     json_body,
     json_list,
@@ -66,6 +67,18 @@ async def fetch_job_postings(*, organization_id: str) -> list[JsonObject]:
     return out
 
 
+def _why(resp: httpx.Response) -> str:
+    """A short, safe reason from a provider rejection — the status plus its own title if it gave
+    one. Never the whole body: these responses can echo request material back."""
+    detail = ""
+    try:
+        body = json_body(resp)
+        detail = opt_str(body.get("title")) or opt_str(body.get("detail")) or ""
+    except Exception:
+        detail = ""
+    return f"HTTP {resp.status_code}" + (f" — {detail[:120]}" if detail else "")
+
+
 class UnipileProvider:
     key = "linkedin"
     name = "LinkedIn (Unipile)"
@@ -103,7 +116,15 @@ class UnipileProvider:
         self, targeting: Targeting, *, limit: int = 25, cursor: str | None = None
     ) -> SearchPage:
         if not self._ready():
-            return SearchPage(hits=[], total=0)
+            # LinkedIn search runs *as* a member, so with no seat there is nothing to search with.
+            # Say so: returning an empty page here read as "nobody matched" for anyone who had
+            # never connected an account.
+            raise ProviderError(
+                self.key,
+                "no LinkedIn account connected — connect one in Settings → Connections"
+                if self._key and self._dsn
+                else "LinkedIn is not configured on this deployment",
+            )
         # Unipile LinkedIn search is keyword-based; fold the scorable/search facets we can express
         # (titles, skills, companies, technologies, seniorities, free text) into the keyword string.
         keywords = " ".join(
@@ -131,15 +152,18 @@ class UnipileProvider:
         params = {"account_id": self._account}
         if cursor:
             params["cursor"] = cursor
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(
-                f"{self._dsn}/api/v1/linkedin/search",
-                headers={"X-API-KEY": self._key, "accept": "application/json"},
-                params=params,
-                json=body,
-            )
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await client.post(
+                    f"{self._dsn}/api/v1/linkedin/search",
+                    headers={"X-API-KEY": self._key, "accept": "application/json"},
+                    params=params,
+                    json=body,
+                )
+        except Exception as exc:
+            raise ProviderError(self.key, f"LinkedIn search is unreachable ({exc})") from exc
         if resp.status_code >= 400:
-            return SearchPage(hits=[], total=0)
+            raise ProviderError(self.key, _why(resp), status=resp.status_code)
         data = json_body(resp)
         items = json_list(data.get("items")) or json_list(data.get("results"))
         hits = [self._normalize(r) for r in items]
@@ -228,14 +252,39 @@ class UnipileConnection:
             )
         return json_body(resp) if resp.status_code < 400 else None
 
-    async def register_webhooks(self, *, request_url: str, source: str) -> None:
+    async def register_webhooks(self, *, request_url: str, source: str) -> bool:
         """Subscribe the inbound receiver for a source (messaging | email | account)."""
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            await client.post(
+            resp = await client.post(
                 f"{self._dsn}/api/v1/webhooks",
                 headers=self._headers(),
                 json={"request_url": request_url, "source": source},
             )
+        return resp.status_code < 400
+
+    async def list_webhooks(self) -> list[tuple[str, str]] | None:
+        """Subscriptions already registered, as `(request_url, source)`.
+
+        `None` means we couldn't tell (unreachable / unexpected shape) — the caller then registers
+        blindly rather than skipping, since a duplicate subscription only costs a duplicate
+        delivery, which the receiver's idempotency key drops.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await client.get(f"{self._dsn}/api/v1/webhooks", headers=self._headers())
+        except Exception:
+            return None
+        if resp.status_code >= 400:
+            return None
+        data = json_body(resp)
+        items = json_list(data.get("items")) or json_list(data.get("webhooks"))
+        out: list[tuple[str, str]] = []
+        for it in items:
+            url = opt_str(it.get("request_url")) or opt_str(it.get("url"))
+            source = opt_str(it.get("source")) or opt_str(it.get("name"))
+            if url:
+                out.append((url, (source or "").lower()))
+        return out
 
 
 def unipile_connection() -> UnipileConnection | None:
@@ -246,12 +295,19 @@ def unipile_connection() -> UnipileConnection | None:
     return UnipileConnection(s.unipile_api_key, s.unipile_dsn)
 
 
+class UnipileError(RuntimeError):
+    """A Unipile call failed. Raised (never swallowed) so a send is never reported as delivered."""
+
+
 class UnipileChannel:
     """ChannelProvider role — send + reply on a channel (linkedin | email) from a seat.
 
     LinkedIn sends are multipart `POST /chats` (first touch → returns the chat id) and
     `POST /chats/{id}/messages` (reply); `attendees_ids` is the recipient's provider id, resolved
     from their public identifier. Email is `POST /emails`.
+
+    Every method raises `UnipileError` when the provider rejects the call — the send layer turns
+    that into a retry rather than marking an undelivered message as sent.
     """
 
     def __init__(self, channel: str, api_key: str, dsn: str) -> None:
@@ -306,7 +362,7 @@ class UnipileChannel:
         if self.channel == "linkedin":
             provider_id = await self._provider_id(account_id=account_id, identifier=to)
             if provider_id is None:
-                return None
+                return None  # not reachable from this seat — a permanent failure upstream
             fields = {
                 "account_id": account_id,
                 "attendees_ids": provider_id,
@@ -343,8 +399,15 @@ class UnipileChannel:
 
     async def reply(
         self, *, account_id: str, thread_id: str, body: str, idempotency_key: str | None = None
-    ) -> None:
-        """Reply into an existing thread (LinkedIn chat / email)."""
+    ) -> bool:
+        """Reply into an existing thread (LinkedIn chat / email). False = permanently rejected.
+
+        Same hard/soft split as `send`: 429 and 5xx raise (→ TransientSendError → backoff retry),
+        while a 4xx returns False for the caller to fail outright. A bare `raise_for_status()` here
+        made every permanent rejection — a deleted chat, a thread the seat can no longer post to —
+        look transient, so the send layer burned its whole retry budget on a message that could
+        never land, and never took the hard-failure path that suppresses and advances the sequence.
+        """
         if self.channel == "linkedin":
             url = f"{self._dsn}/api/v1/chats/{thread_id}/messages"
             fields = {"text": body}
@@ -355,7 +418,7 @@ class UnipileChannel:
             resp = await client.post(
                 url, headers=self._headers(idempotency_key), files=self._form(fields)
             )
-            resp.raise_for_status()  # surface transient failures so the caller retries
+        return not self._permanent(resp)
 
 
 def unipile_channel(channel: str) -> UnipileChannel | None:

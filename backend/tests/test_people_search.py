@@ -6,13 +6,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.core.crypto import seal, unseal
 from app.ext.apollo import ApolloProvider
-from app.ext.base import PersonHit
+from app.ext.base import (
+    EmailVerdict,
+    PersonHit,
+    ProviderCapabilities,
+    ProviderError,
+    SearchPage,
+)
 from app.ext.pdl import PDLProvider
 from app.ext.registry import (
     PROVIDER_CATALOG,
     build_providers,
     build_providers_for_org,
 )
+from app.ext.unipile import UnipileProvider
 from app.models import (
     Organization,
     ProviderCredential,
@@ -32,7 +39,7 @@ async def test_search_scores_ranks_and_dedupes() -> None:
         make_hit(9, "Mia Foster", "VP of Sales", "Quill", "EU", ["Enterprise"], provider="other"),
     ]
     providers = [FakeSourceProvider(), FakeSourceProvider(overlap, key="other")]
-    results = await discovery.search_people(providers, query, limit=12, use_cache=False)
+    results = (await discovery.search_people(providers, query, limit=12, use_cache=False)).hits
 
     # deduped across providers: 8 from the first + 1 genuinely new from the second
     assert len(results) == 9
@@ -58,9 +65,11 @@ async def test_import_normalizes_and_dedupes(db_session: AsyncSession) -> None:
     db_session.add(ws)
     await db_session.flush()
 
-    hits = await discovery.search_people(
-        [FakeSourceProvider()], Targeting(titles=["VP of Sales"]), limit=6, use_cache=False
-    )
+    hits = (
+        await discovery.search_people(
+            [FakeSourceProvider()], Targeting(titles=["VP of Sales"]), limit=6, use_cache=False
+        )
+    ).hits
     created = await discovery.import_hits(db_session, workspace_id=ws.id, hits=hits)
 
     assert len(created) == len(hits)
@@ -170,9 +179,11 @@ async def test_import_verifies_email_status(db_session: AsyncSession) -> None:
     await db_session.flush()
 
     providers = [FakeSourceProvider()]
-    hits = await discovery.search_people(
-        providers, Targeting(titles=["VP of Sales"]), limit=4, use_cache=False
-    )
+    hits = (
+        await discovery.search_people(
+            providers, Targeting(titles=["VP of Sales"]), limit=4, use_cache=False
+        )
+    ).hits
     await discovery.verify_hits(providers, hits)  # the verifier marks well-formed emails valid
     assert all(h.email_status == "valid" for h in hits if h.email)
 
@@ -189,3 +200,78 @@ async def test_usage_record_increments(db_session: AsyncSession) -> None:
     await usage.record(db_session, organization_id=org.id, provider="pdl", kind="search")
     rows = await usage.summary(db_session, org.id)
     assert rows and rows[0]["count"] == 2
+
+
+# --- failures are reported, not counted as zero results ----------------------
+
+
+class _Broken:
+    """A provider whose upstream is refusing it (revoked key, rate limit, no seat)."""
+
+    key = "linkedin"
+    name = "Broken"
+    capabilities = ProviderCapabilities(search=True)
+
+    async def search(
+        self, targeting: Targeting, *, limit: int = 25, cursor: str | None = None
+    ) -> SearchPage:
+        raise ProviderError(self.key, "HTTP 401 — Missing credentials", status=401)
+
+    async def enrich(self, **kwargs: object) -> None:
+        return None
+
+    async def verify_email(self, email: str) -> EmailVerdict:
+        return EmailVerdict(email=email)
+
+    async def verify_credentials(self) -> bool:
+        return False
+
+
+async def test_a_failing_provider_is_reported_not_silently_empty() -> None:
+    """The bug this replaces: a 4xx became an empty page, so a revoked key looked exactly like
+    'nobody matched'. Empty results with no failures must mean something different from empty
+    results with one."""
+    outcome = await discovery.search_people(
+        [_Broken()], Targeting(titles=["VP of Sales"]), use_cache=False
+    )
+    assert outcome.hits == []
+    assert [(f.provider, f.message) for f in outcome.failures] == [
+        ("linkedin", "HTTP 401 — Missing credentials")
+    ]
+
+
+async def test_a_genuinely_empty_search_reports_no_failures() -> None:
+    """The other half of the contract — otherwise the client can't tell the two apart."""
+    outcome = await discovery.search_people(
+        [FakeSourceProvider()], Targeting(titles=["VP of Sales"]), use_cache=False
+    )
+    assert outcome.hits and outcome.failures == []
+
+
+async def test_one_broken_provider_does_not_sink_the_others() -> None:
+    """Fan-out degrades to the providers that still work rather than failing the whole search."""
+    outcome = await discovery.search_people(
+        [_Broken(), FakeSourceProvider()], Targeting(titles=["VP of Sales"]), use_cache=False
+    )
+    assert outcome.hits, "the healthy provider's results still come back"
+    assert [f.provider for f in outcome.failures] == ["linkedin"]
+
+
+async def test_a_short_search_is_not_cached() -> None:
+    """Caching a run that lost a provider would keep serving the gap for the whole TTL."""
+    targeting = Targeting(titles=["Cache", "Guard"], keywords="not-cached")
+    first = await discovery.search_people([_Broken(), FakeSourceProvider()], targeting)
+    assert first.failures
+    second = await discovery.search_people([FakeSourceProvider()], targeting)
+    assert second.failures == []
+
+
+async def test_linkedin_search_without_a_seat_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The exact state that looked like 'no results': Unipile configured, no account connected."""
+    configured = Settings(unipile_api_key="key", unipile_dsn="https://api9.unipile.com:9999")
+    monkeypatch.setattr("app.ext.unipile.get_settings", lambda: configured)
+    provider = UnipileProvider("key")  # configured deployment, but no seat behind it
+
+    with pytest.raises(ProviderError) as caught:
+        await provider.search(Targeting(titles=["engineer"]))
+    assert "no LinkedIn account connected" in str(caught.value)

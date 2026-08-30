@@ -24,9 +24,15 @@ const COSTS: Cost[] = [
   { icon: Mail, label: "Email sent", credits: 1, desc: "Each outbound email your sequences send." },
   {
     icon: LinkedInIcon,
+    label: "LinkedIn message",
+    credits: 1,
+    desc: "Each ordinary LinkedIn message — to someone you're already connected to.",
+  },
+  {
+    icon: LinkedInIcon,
     label: "LinkedIn InMail",
     credits: 2,
-    desc: "Each InMail sent — LinkedIn caps these, so they cost more.",
+    desc: "Each InMail — it reaches people you aren't connected to and spends your LinkedIn InMail credits, so it costs more.",
   },
   {
     icon: UserPlus,
@@ -46,6 +52,7 @@ export function CreditMeter() {
   const remainingPct = Math.max(0, 100 - data.pct);
   const remaining = Math.max(0, data.allowance - data.used);
   const emails = data.breakdown.emails ?? 0;
+  const dms = data.breakdown.linkedin_dms ?? 0;
   const inmails = data.breakdown.inmails ?? 0;
   const sourced = data.breakdown.sourced ?? 0;
 
@@ -122,6 +129,7 @@ export function CreditMeter() {
         <div className="rounded-lg border border-border bg-secondary/30 p-3 text-xs">
           <div className="mb-1.5 font-semibold text-foreground">This period so far</div>
           <PeriodRow label="Emails" count={emails} credits={emails} />
+          <PeriodRow label="LinkedIn messages" count={dms} credits={dms} />
           <PeriodRow label="InMails" count={inmails} credits={inmails * 2} />
           <PeriodRow label="Sourced" count={sourced} credits={sourced} />
         </div>

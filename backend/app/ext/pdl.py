@@ -13,6 +13,7 @@ from app.ext.base import (
     EmailVerdict,
     PersonHit,
     ProviderCapabilities,
+    ProviderError,
     SearchPage,
     json_body,
     json_list,
@@ -139,12 +140,15 @@ class PDLProvider:
         body: JsonObject = {"query": self._es_query(targeting), "size": min(limit, 100)}
         if cursor:
             body["search_after"] = cursor
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(
-                f"{_BASE}/person/search", headers={"X-Api-Key": self._key}, json=body
-            )
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await client.post(
+                    f"{_BASE}/person/search", headers={"X-Api-Key": self._key}, json=body
+                )
+        except Exception as exc:
+            raise ProviderError(self.key, f"People Data Labs is unreachable ({exc})") from exc
         if resp.status_code >= 400:
-            return SearchPage(hits=[], total=0)
+            raise ProviderError(self.key, f"HTTP {resp.status_code}", status=resp.status_code)
         data = json_body(resp)
         hits = [self._normalize(rec) for rec in json_list(data.get("data"))]
         total = data.get("total")
