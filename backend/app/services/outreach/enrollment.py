@@ -24,6 +24,7 @@ from app.core.config import get_settings
 from app.core.db import new_id
 from app.core.types import JsonList
 from app.models import (
+    TERMINAL,
     AutonomyLevel,
     Campaign,
     Channel,
@@ -122,7 +123,9 @@ async def list_for_campaign(
 
 
 async def tick(session: AsyncSession, *, enrollment: Enrollment, now: datetime) -> None:
-    campaign = await session.get(Campaign, enrollment.campaign_id)
+    campaign = (
+        await session.get(Campaign, enrollment.campaign_id) if enrollment.campaign_id else None
+    )
     contact = await session.get(Contact, enrollment.contact_id)
     if campaign is None or contact is None:
         enrollment.state = EnrollmentState.completed
@@ -311,3 +314,39 @@ async def _send_touchpoint(
     # itself — inbound replies map back to this thread through them, and the next touchpoint on
     # this channel continues the same conversation.
     _advance(enrollment, sequence, now)
+
+
+async def close_for_opt_out(
+    session: AsyncSession, *, organization_id: str, email: str, now: datetime
+) -> int:
+    """End every live conversation with an address that has just opted out. Returns how many.
+
+    Clicking the unsubscribe link used to suppress the address and stop there, leaving the thread
+    reading "Awaiting reply" — so the clearest signal a candidate can send produced no visible
+    change, while a *guessed-at* keyword in a reply closed the conversation outright. The next
+    touchpoint would then be attempted anyway and refused at send time, failing the enrollment
+    instead of ending it cleanly.
+    """
+    rows = (
+        (
+            await session.execute(
+                select(Enrollment)
+                .join(Contact, Enrollment.contact_id == Contact.id)
+                .join(Workspace, Workspace.id == Enrollment.workspace_id)
+                .where(
+                    Workspace.organization_id == organization_id,
+                    func.lower(Contact.email) == email.strip().lower(),
+                    Enrollment.state.not_in(TERMINAL),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for enrollment in rows:
+        enrollment.state = EnrollmentState.opted_out
+        enrollment.outcome = "opted_out"
+        enrollment.next_run_at = None
+        enrollment.reply_pending = False
+    await session.flush()
+    return len(rows)

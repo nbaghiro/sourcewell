@@ -9,6 +9,7 @@ from app.api import messaging as messaging_api
 from app.core.config import Settings
 from app.models import (
     Campaign,
+    Connection,
     ConnectionProvider,
     ConnectionStatus,
     Contact,
@@ -17,6 +18,7 @@ from app.models import (
     Message,
     MessageDirection,
 )
+from app.services.workspace import notifications as notifications_service
 from app.services.workspace.connections import upsert_seat
 from tests.factories import make_org, make_user, make_workspace
 
@@ -149,3 +151,51 @@ async def test_unipile_webhook_account_credentials_flips_seat(
     assert resp.json()["status"] == "account_updated"
     await db_session.refresh(seat)
     assert seat.status == ConnectionStatus.needs_reauth
+
+
+@pytest.mark.db
+async def test_a_broken_seat_reaches_its_owner(db_session: AsyncSession) -> None:
+    """A disconnected seat used to surface only as a badge on a Settings tab nobody was looking
+    at, so outreach silently stopped and the recruiter found out days later. It now lands in their
+    notification feed, pointing at the page where they can fix it."""
+    org = await make_org(db_session, slug="seat-broken")
+    ws = await make_workspace(db_session, org=org)
+    user = await make_user(db_session, org=org)
+    db_session.add(
+        Connection(
+            organization_id=org.id,
+            user_id=user.id,
+            provider=ConnectionProvider.linkedin,
+            external_id="ACCT-DEAD",
+            status=ConnectionStatus.needs_reauth,
+        )
+    )
+    await db_session.flush()
+
+    feed = await notifications_service.build_feed(db_session, workspace_id=ws.id, user=user)
+    item = next(i for i in feed.items if i.type == "seat_needs_reauth")
+    assert "linkedin" in item.title
+    assert item.link == "/settings"  # not the inbox — there is nothing to do there
+
+
+@pytest.mark.db
+async def test_a_colleagues_broken_seat_is_not_your_problem(db_session: AsyncSession) -> None:
+    """Seats belong to a person, and it is the owner who has to reconnect. Settings shows the
+    org-wide view for an admin who wants it."""
+    org = await make_org(db_session, slug="seat-broken-other")
+    ws = await make_workspace(db_session, org=org)
+    mine = await make_user(db_session, org=org, email="mine@acme.com")
+    theirs = await make_user(db_session, org=org, email="theirs@acme.com")
+    db_session.add(
+        Connection(
+            organization_id=org.id,
+            user_id=theirs.id,
+            provider=ConnectionProvider.linkedin,
+            external_id="ACCT-THEIRS",
+            status=ConnectionStatus.needs_reauth,
+        )
+    )
+    await db_session.flush()
+
+    feed = await notifications_service.build_feed(db_session, workspace_id=ws.id, user=mine)
+    assert [i for i in feed.items if i.type == "seat_needs_reauth"] == []

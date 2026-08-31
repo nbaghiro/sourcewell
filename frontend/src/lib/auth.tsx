@@ -76,7 +76,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     void api<AuthOptions>("/auth/options")
       .then(setOptions)
-      .catch(() => setOptions({ google: false, microsoft: false }));
+      // A failure leaves this null rather than answering "nothing is configured". Those are
+      // different facts: null means *we couldn't ask*, and the login screen's optimistic default
+      // keeps the buttons up. Asserting false on any error meant a backend that was down or
+      // briefly unreachable silently removed Google and Microsoft from the sign-in screen —
+      // which reads as a configuration problem and sends you looking in the wrong place.
+      .catch(() => {});
   }, []);
 
   const refresh = React.useCallback(async () => {

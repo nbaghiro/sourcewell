@@ -132,7 +132,7 @@ class Settings(BaseSettings):
         return bool(self.workos_api_key and self.workos_client_id and self.session_cookie_password)
 
     @property
-    def linkedin_connect_enabled(self) -> bool:
+    def seat_connect_enabled(self) -> bool:
         """Connecting a LinkedIn sending seat (via Unipile hosted-auth) is available.
 
         The webhook secret counts: the wizard hands the connected account to us over the

@@ -1,6 +1,6 @@
 import { Inbox, Mail, PenLine, Search, Send, Sparkles } from "lucide-react";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { ChannelIcon, LinkedInIcon, LINKEDIN_BLUE as LI_BLUE } from "@/components/brand-icons";
@@ -8,7 +8,7 @@ import { clockTime as timeLabel, dayLabel, initials, shortAgo as relTime } from 
 import { EmptyState } from "@/components/empty-state";
 import { PageLayout } from "@/components/page-layout";
 import { ScoreBar } from "@/components/score-bar";
-import { StateBadge, STATE_MAP } from "@/components/state-badge";
+import { StateBadge, STATE_MAP, displayState } from "@/components/state-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   type Channel,
   type ChannelOption,
   type Conversation,
+  type InboxItem,
   type Message,
 } from "@/lib/api/queries";
 import { apiErrorMessage } from "@/lib/api/client";
@@ -48,8 +49,12 @@ interface Row {
   unread: boolean;
 }
 
+const rowState = (it: InboxItem) => displayState(it.state ?? "active", it.reply_pending);
+
 // Order the filter chips actionable-first; unknown states fall to the end.
 const STATE_ORDER = [
+  // A conversation you owe an answer to is the most actionable thing in the inbox.
+  "needs_reply",
   "awaiting_approval",
   "awaiting_reply",
   "neutral",
@@ -189,7 +194,10 @@ const QUICK = [
 export function InboxPage() {
   const { data: inboxData } = useInbox();
   const { data: approvalsData } = useApprovals();
-  const [selected, setSelected] = React.useState<string | null>(null); // enrollment id
+  // `?enrollment=` is how "Message <person>" arrives here from a contact page.
+  const [params] = useSearchParams();
+  const targeted = params.get("enrollment");
+  const [selected, setSelected] = React.useState<string | null>(targeted); // enrollment id
   const [draft, setDraft] = React.useState("");
   const [subject, setSubject] = React.useState("");
   const [channel, setChannel] = React.useState<Channel | null>(null); // null = the thread default
@@ -236,7 +244,7 @@ export function InboxPage() {
             channel: it.channel,
             preview: it.last_message.body,
             at: it.last_at,
-            state: it.state ?? "active",
+            state: rowState(it),
             unread: it.unread,
           }),
         ),
@@ -269,13 +277,29 @@ export function InboxPage() {
   const aiDraft = () => selected && draftAI.mutate(selected, { onSuccess: (r) => setDraft(r.text) });
 
   // Keep a sensible selection: when the current row isn't in view, pick the first visible one.
+  // Which thread was asked for by URL, and therefore must not be tidied away. A ref, not the
+  // parameter itself: clearing `?enrollment=` after honouring it flips this back to null, which
+  // re-arms the effect below and it replaces the selection with the first row — the very bug the
+  // parameter exists to prevent.
+  const pinned = React.useRef<string | null>(targeted);
+  React.useEffect(() => {
+    if (targeted && pinned.current !== targeted) {
+      pinned.current = targeted;
+      setSelected(targeted);
+    }
+  }, [targeted]);
+
+  // Keep a sensible selection: when the current row isn't in view, pick the first visible one.
+  // A pinned thread is exempt — a conversation with no messages yet isn't in the list at all, so
+  // "not in view" is its normal state rather than a sign the selection went stale.
   const visibleKeys = visible.map((r) => r.enrollmentId).join(",");
   React.useEffect(() => {
+    if (selected && pinned.current === selected) return;
     if (visible.length > 0 && !visible.some((r) => r.enrollmentId === selected)) {
       setSelected(visible[0].enrollmentId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleKeys]);
+  }, [visibleKeys, selected]);
 
   // Opening a conversation clears the composer and marks it read.
   React.useEffect(() => {
@@ -487,7 +511,7 @@ function Thread({
         </div>
         <div className="flex items-center gap-2">
           <ChannelTag channel={conv.channel} detail={targetFor(conv.channel, conv.contact)} />
-          <StateBadge state={conv.enrollment.state} />
+          <StateBadge state={conv.enrollment.state} replyPending={conv.enrollment.reply_pending} />
         </div>
       </header>
 
@@ -836,18 +860,31 @@ function ContextRail({
         </div>
       </div>
 
-      <Link
-        to={conv.campaign.id ? `/campaigns/${conv.campaign.id}` : "#"}
-        className="block rounded-lg border border-border bg-secondary/30 p-3 transition-colors hover:border-primary/40"
-      >
-        <div className="font-mono text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
-          Campaign
+      {/* A direct conversation has no campaign behind it — showing the card anyway rendered a
+          blank name and "Touchpoint 1 of 0", which reads like something failed to load. */}
+      {conv.campaign.id ? (
+        <Link
+          to={`/campaigns/${conv.campaign.id}`}
+          className="block rounded-lg border border-border bg-secondary/30 p-3 transition-colors hover:border-primary/40"
+        >
+          <div className="font-mono text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
+            Campaign
+          </div>
+          <div className="mt-0.5 text-sm font-semibold">{conv.campaign.name}</div>
+          <div className="text-xs text-muted-foreground">
+            Touchpoint {conv.enrollment.current_step + 1} of {conv.campaign.steps}
+          </div>
+        </Link>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border p-3">
+          <div className="font-mono text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
+            Direct message
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            Not part of a campaign — nothing sends automatically here.
+          </div>
         </div>
-        <div className="mt-0.5 text-sm font-semibold">{conv.campaign.name}</div>
-        <div className="text-xs text-muted-foreground">
-          Touchpoint {conv.enrollment.current_step + 1} of {conv.campaign.steps}
-        </div>
-      </Link>
+      )}
 
       <div
         className="rounded-lg border p-3"

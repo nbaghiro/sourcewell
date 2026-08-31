@@ -52,6 +52,7 @@ class DashboardApprovalData:
 class DashboardReplyData:
     contact_name: str
     snippet: str
+    reply_pending: bool
     state: str
 
 
@@ -105,11 +106,13 @@ async def workspace_dashboard(session: AsyncSession, *, workspace_id: str) -> Da
             await session.execute(
                 select(Enrollment.campaign_id, func.count())
                 .where(Enrollment.workspace_id == ws)
+                .where(Enrollment.campaign_id.is_not(None))
                 .group_by(Enrollment.campaign_id)
             )
         )
         .tuples()
         .all()
+        if cid is not None
     }
     awaiting_by: dict[str, int] = {
         cid: cnt
@@ -120,11 +123,13 @@ async def workspace_dashboard(session: AsyncSession, *, workspace_id: str) -> Da
                     Enrollment.workspace_id == ws,
                     Enrollment.state == EnrollmentState.awaiting_approval,
                 )
+                .where(Enrollment.campaign_id.is_not(None))
                 .group_by(Enrollment.campaign_id)
             )
         )
         .tuples()
         .all()
+        if cid is not None
     }
     replies_by: dict[str, int] = {
         cid: cnt
@@ -134,11 +139,13 @@ async def workspace_dashboard(session: AsyncSession, *, workspace_id: str) -> Da
                 .select_from(Message)
                 .join(Enrollment, Message.enrollment_id == Enrollment.id)
                 .where(Message.workspace_id == ws, Message.direction == MessageDirection.inbound)
+                .where(Enrollment.campaign_id.is_not(None))
                 .group_by(Enrollment.campaign_id)
             )
         )
         .tuples()
         .all()
+        if cid is not None
     }
     campaign_rows = (
         (
@@ -193,6 +200,7 @@ async def workspace_dashboard(session: AsyncSession, *, workspace_id: str) -> Da
             contact_name=ct.full_name,
             snippet=(m.body[:80] + "…") if len(m.body) > 80 else m.body,
             state=e.state.value,
+            reply_pending=e.reply_pending,
         )
         for m, e, ct in (
             await session.execute(

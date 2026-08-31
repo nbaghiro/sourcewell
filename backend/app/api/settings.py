@@ -23,7 +23,7 @@ from app.ext.registry import PROVIDER_CATALOG, build_one
 from app.models import (
     Campaign,
     Connection,
-    ConnectionStatus,
+    ConnectionProvider,
     Contact,
     Enrollment,
     Membership,
@@ -243,31 +243,37 @@ async def update_workspace_settings(
 
 
 class ConnectLinkOut(BaseModel):
-    """The hosted-auth wizard to redirect to, or null when LinkedIn connect isn't configured."""
+    """The hosted-auth wizard to redirect to, or null when seat connect isn't configured."""
 
     url: str | None
 
 
-@router.post("/connections/linkedin/link", response_model=ConnectLinkOut)
-async def linkedin_connect_link(ctx: ContextDep, session: SessionDep) -> ConnectLinkOut:
-    """Start connecting *this* user's LinkedIn sending seat (Unipile hosted auth).
+@router.post("/connections/{provider}/link", response_model=ConnectLinkOut)
+async def connect_link(
+    provider: ConnectionProvider, ctx: ContextDep, session: SessionDep
+) -> ConnectLinkOut:
+    """Start connecting *this* user's sending seat for a provider (Unipile hosted auth).
 
     Returns the wizard URL for the client to redirect to; Unipile's notify webhook attaches the
     resulting account to the user, which is what the messaging layer sends from. `null` means
-    Unipile isn't configured — the caller falls back to the local stub connect.
+    Unipile isn't configured on this deployment, and the caller says so rather than pretending.
     """
     return ConnectLinkOut(
-        url=await connections_service.start_linkedin_connect(session, user_id=ctx.user_id)
+        url=await connections_service.start_seat_connect(
+            session, user_id=ctx.user_id, provider=provider
+        )
     )
 
 
-@router.post("/connections/linkedin/notify")
-async def linkedin_notify(request: Request, session: SessionDep) -> dict[str, str]:
+@router.post("/connections/notify")
+async def seat_connect_notify(request: Request, session: SessionDep) -> dict[str, str]:
     """Unipile's server-side notify hop: attach the connected seat to the user who started it.
 
     Public and token-gated (the shared secret rides in the query string, which is all the wizard
-    link lets us template). Not a sign-in: the wizard is only ever opened by someone already
-    signed in, and an attempt naming no user is ignored.
+    link lets us template). Provider-agnostic: which kind of account came back is recorded on the
+    attempt the `state` token names, because this payload carries only an account id. Not a
+    sign-in — the wizard is only ever opened by someone already signed in, and an attempt naming
+    no user is ignored.
     """
     secret = get_settings().unipile_webhook_secret
     token = request.query_params.get("token") or ""
@@ -281,27 +287,25 @@ async def linkedin_notify(request: Request, session: SessionDep) -> dict[str, st
     account_id = payload.get("account_id")
     state = payload.get("name")  # the state token we set as `name` on the hosted-auth link
     if isinstance(account_id, str) and isinstance(state, str):
-        await connections_service.complete_linkedin_notify(
-            session, state=state, account_id=account_id
-        )
+        await connections_service.complete_seat_connect(session, state=state, account_id=account_id)
     return {"status": "ok"}
 
 
 @router.post("/connections/{connection_id}/disconnect", response_model=StatusIdOut)
 async def disconnect(connection_id: str, ctx: ContextDep, session: SessionDep) -> StatusIdOut:
+    """Drop the seat here *and* at Unipile.
+
+    Deleting only our row left the provider account live: still billed, still pushing inbound
+    webhooks for a seat nobody in the app knows about. The local row goes either way — a user must
+    be able to remove a seat when the provider is unreachable — but a failed remote delete is
+    logged rather than swallowed, because it costs money until someone notices.
+    """
     conn = await _owned_connection(session, ctx.org_id, connection_id)
+    if conn.external_id:
+        await connections_service.forget_account(conn.external_id)
     await session.delete(conn)
     await session.flush()
     return StatusIdOut(status="disconnected", id=connection_id)
-
-
-@router.post("/connections/{connection_id}/reauth", response_model=ConnectionOut)
-async def reauth(connection_id: str, ctx: ContextDep, session: SessionDep) -> ConnectionOut:
-    conn = await _owned_connection(session, ctx.org_id, connection_id)
-    conn.status = ConnectionStatus.ok
-    await session.flush()
-    user = await session.get(User, conn.user_id)
-    return _dump_connection(conn, user.email if user else "")
 
 
 # ---- member management (org admin only) ----
@@ -542,7 +546,7 @@ class ExportCampaign(BaseModel):
 
 class ExportEnrollment(BaseModel):
     id: str
-    campaign_id: str
+    campaign_id: str | None
     contact_id: str
     state: str
     score: int

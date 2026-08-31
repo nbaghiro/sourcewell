@@ -61,6 +61,10 @@ class SpaceRole(enum.StrEnum):
     member = "member"
 
 
+# Org roles that reach every workspace in their organization without an explicit grant.
+ORG_WIDE_ROLES = {MembershipRole.org_admin, MembershipRole.compliance}
+
+
 class ConnectionProvider(enum.StrEnum):
     gmail = "gmail"
     graph = "graph"
@@ -285,6 +289,14 @@ class LoginAttempt(IdMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | ready
     user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # What the wizard was opened for. The notify hop carries only an account id and the state
+    # token, so this row is the only record of *which kind* of seat is coming back — and a Gmail
+    # mailbox must not be written as a LinkedIn profile.
+    provider: Mapped[ConnectionProvider] = mapped_column(
+        sa_enum(ConnectionProvider),
+        default=ConnectionProvider.linkedin,
+        server_default=ConnectionProvider.linkedin.value,
+    )
 
 
 class Membership(IdMixin, TimestampMixin, Base):
@@ -472,8 +484,11 @@ class Enrollment(IdMixin, TimestampMixin, Base):
     workspace_id: Mapped[str] = mapped_column(
         ForeignKey("workspace.id", ondelete="CASCADE"), index=True
     )
-    campaign_id: Mapped[str] = mapped_column(
-        ForeignKey("campaign.id", ondelete="CASCADE"), index=True
+    # Null for a *direct* conversation — a recruiter messaging someone one-to-one rather than
+    # through a sequence. Those have no steps to advance and no agent behind them, so the worker
+    # never ticks them (`next_run_at` stays null); everything else about a thread is the same.
+    campaign_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign.id", ondelete="CASCADE"), nullable=True, index=True
     )
     contact_id: Mapped[str] = mapped_column(
         ForeignKey("contact.id", ondelete="CASCADE"), index=True

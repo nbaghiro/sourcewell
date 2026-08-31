@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.db import new_id
+from app.core.logging import logger
 from app.ext.unipile import unipile_connection
 from app.models import (
     Connection,
@@ -213,29 +214,45 @@ async def home_org_id(session: AsyncSession, *, user_id: str) -> str | None:
 # a LinkedIn `member_urn` and an email address.
 
 
-async def start_linkedin_connect(session: AsyncSession, *, user_id: str) -> str | None:
-    """Wizard link for a signed-in user connecting their LinkedIn sending seat.
+# Our provider → Unipile's own name for it in the hosted-auth wizard.
+_UNIPILE_PROVIDERS = {
+    ConnectionProvider.linkedin: "LINKEDIN",
+    ConnectionProvider.gmail: "GOOGLE",
+    ConnectionProvider.graph: "OUTLOOK",
+}
+
+
+async def start_seat_connect(
+    session: AsyncSession, *, user_id: str, provider: ConnectionProvider
+) -> str | None:
+    """Wizard link for a signed-in user connecting a sending seat. None if unavailable.
 
     Mints no session and creates no user: the notify hop attaches the connected Unipile account to
-    `user_id`, which is what the messaging layer resolves a sender from.
+    `user_id`, which is what the messaging layer resolves a sender from. The wizard is pinned to
+    the one provider asked for, and that provider is recorded on the attempt — the notify hop
+    carries only an account id, so this row is the only thing that knows a Gmail mailbox is coming
+    back rather than a LinkedIn profile.
+
+    Before this, the wizard was hardcoded to LinkedIn and there was no way to connect an email
+    seat at all: `resolve_channel_seat` found nothing for email in every org, so per-recruiter
+    mail fell back to a single global account or to dev SMTP.
     """
     s = get_settings()
     conn = unipile_connection()
     # Gate on the whole flow, not just the API client: starting a wizard whose notify hop is
     # disabled would strand the user on a wizard that can never report back.
-    if conn is None or not s.linkedin_connect_enabled:
+    if conn is None or not s.seat_connect_enabled:
         return None
     await _purge_stale_attempts(session)
     state = new_id()
-    session.add(LoginAttempt(state=state, status="pending", user_id=user_id))
+    session.add(LoginAttempt(state=state, status="pending", user_id=user_id, provider=provider))
     await session.flush()
-    notify = (
-        f"{s.api_base_url}/settings/connections/linkedin/notify?token={s.unipile_webhook_secret}"
-    )
+    notify = f"{s.api_base_url}/settings/connections/notify?token={s.unipile_webhook_secret}"
     return await conn.create_link(
         user_ref=state,
         notify_url=notify,
-        redirect_url=f"{s.frontend_url}/settings?connected=linkedin",
+        redirect_url=f"{s.frontend_url}/settings?connected={provider.value}",
+        providers=[_UNIPILE_PROVIDERS[provider]],
     )
 
 
@@ -246,8 +263,12 @@ async def _purge_stale_attempts(session: AsyncSession) -> None:
     await session.execute(delete(LoginAttempt).where(LoginAttempt.created_at < cutoff))
 
 
-async def complete_linkedin_notify(session: AsyncSession, *, state: str, account_id: str) -> None:
-    """Unipile notify: bind the connected LinkedIn account to the user who started the wizard."""
+async def complete_seat_connect(session: AsyncSession, *, state: str, account_id: str) -> None:
+    """Unipile notify: bind the connected account to the user whose wizard this was.
+
+    The provider comes off the attempt, not the payload — the wizard was pinned to it, so it is
+    what actually got connected. Only LinkedIn has a tier to read; a mailbox is simply `email`.
+    """
     attempt = (
         await session.execute(select(LoginAttempt).where(LoginAttempt.state == state))
     ).scalar_one_or_none()
@@ -259,15 +280,20 @@ async def complete_linkedin_notify(session: AsyncSession, *, state: str, account
     org_id = await home_org_id(session, user_id=user.id)
     if org_id is None:
         return
-    conn = unipile_connection()
-    profile = await conn.profile(account_id=account_id) if conn is not None else None
+    if attempt.provider is ConnectionProvider.linkedin:
+        conn = unipile_connection()
+        profile = await conn.profile(account_id=account_id) if conn is not None else None
+        seat_type = seat_type_from_profile(profile)
+    else:
+        # A mailbox has no LinkedIn tier to read: it can send, or it isn't connected.
+        seat_type = SeatType.email
     await upsert_seat(
         session,
         organization_id=org_id,
         user_id=user.id,
-        provider=ConnectionProvider.linkedin,
+        provider=attempt.provider,
         account_id=account_id,
-        seat_type=seat_type_from_profile(profile),
+        seat_type=seat_type,
     )
     attempt.account_id = account_id
     attempt.status = "ready"
@@ -275,3 +301,15 @@ async def complete_linkedin_notify(session: AsyncSession, *, state: str, account
     # A brand-new deployment can take its first seat before it has ever booted with Unipile
     # configured; re-assert the subscription here so that seat's replies are heard from the start.
     await ensure_inbound_webhooks_quietly()
+
+
+async def forget_account(account_id: str) -> None:
+    """Tell Unipile to drop a connected account. Fail-soft: the local seat goes regardless."""
+    conn = unipile_connection()
+    if conn is None:
+        return
+    if not await conn.delete_account(account_id=account_id):
+        logger.warning(
+            "unipile: could not delete account %s — it stays connected (and billed) there",
+            account_id,
+        )

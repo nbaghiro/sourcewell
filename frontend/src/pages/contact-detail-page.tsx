@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { type ContactActivity, type ContactDetail, useCampaigns, useContact, useDeleteContact, useEnrollContact, useForgetContact, useUpdateContact } from "@/lib/api/queries";
+import { type ContactActivity, type ContactDetail, useCampaigns, useContact, useDeleteContact, useEnrollContact, useForgetContact, useOpenConversation, useUpdateContact } from "@/lib/api/queries";
 import { cn } from "@/lib/utils";
 
 function shortDate(iso?: string | null): string {
@@ -37,6 +37,16 @@ export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: c, isLoading: loading } = useContact(id ?? "");
+  const openConv = useOpenConversation();
+
+  /** Open the thread with this person — the existing one, or a fresh direct conversation.
+   *  Navigating to a bare `/inbox` used to land on whoever was first in the list. */
+  function messageContact(contactId: string) {
+    openConv.mutate(contactId, {
+      onSuccess: ({ enrollment_id }) => navigate(`/inbox?enrollment=${enrollment_id}`),
+      onError: () => toast.error("Couldn't open that conversation"),
+    });
+  }
 
   return (
     <PageLayout>
@@ -58,16 +68,22 @@ export function ContactDetailPage() {
               style={{ background: "linear-gradient(110deg, var(--sidebar), var(--sidebar-active) 55%, var(--score-from))" }}
             />
             <div className="px-6 pb-6">
-              <div className="-mt-12 flex flex-wrap items-end gap-4">
-                <Avatar className="size-24 rounded-2xl shadow-sm ring-4 ring-card">
+              {/* Only the name rides the band. It used to sit in one column with the title and the
+                  contact details, and a multi-line block crossing a hard colour boundary always
+                  leaves *something* at the fold — here it was the white name, half of it on white
+                  card. `pb-14` lifts it clear while the avatar still straddles; everything below
+                  is dark-on-card text in normal flow. */}
+              <div className="-mt-12 flex items-end gap-4">
+                <Avatar className="size-24 shrink-0 rounded-2xl shadow-sm ring-4 ring-card">
                   {c.avatar_url && <AvatarImage src={c.avatar_url} alt={c.full_name} />}
                   <AvatarFallback className="rounded-2xl text-2xl">{initials(c.full_name)}</AvatarFallback>
                 </Avatar>
-                <div className="flex flex-1 flex-wrap items-end justify-between gap-3 pb-1">
+                <h1 className="min-w-0 flex-1 truncate pb-14 font-display text-2xl font-bold tracking-tight text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.35)]">
+                  {c.full_name}
+                </h1>
+              </div>
+              <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h1 className="font-display text-2xl font-bold tracking-tight text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.35)]">
-                      {c.full_name}
-                    </h1>
                     <p className="text-sm text-muted-foreground">
                       {c.title}
                       {c.company ? ` · ${c.company}` : ""}
@@ -104,14 +120,13 @@ export function ContactDetailPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex shrink-0 gap-2">
                     <EditContactDialog contact={c} />
                     <AddToCampaignDialog contactId={c.id} />
-                    <Button size="sm" onClick={() => navigate("/inbox")}>
+                    <Button size="sm" disabled={openConv.isPending} onClick={() => messageContact(c.id)}>
                       <MessageSquare /> Message
                     </Button>
                   </div>
-                </div>
               </div>
               {(c.skills.length > 0 || c.tags.length > 0) && (
                 <div className="mt-4 flex flex-wrap items-center gap-1.5">
@@ -177,7 +192,7 @@ export function ContactDetailPage() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-semibold text-foreground">{e.campaign_name}</span>
-                        <StateBadge state={e.state} />
+                        <StateBadge state={e.state} replyPending={e.reply_pending} />
                       </div>
                       <div className="mt-2">
                         <ScoreBar value={e.score} />

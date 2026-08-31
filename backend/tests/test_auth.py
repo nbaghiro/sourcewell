@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.crypto import hash_password
-from app.models import User
+from app.models import ConnectionProvider, User
 from app.services.workspace import auth
 from app.services.workspace import connections as connections_service
 from tests.factories import make_org, make_user
@@ -70,12 +70,17 @@ async def test_seat_connect_requires_the_whole_flow_to_be_configured(
     org = await make_org(db_session, slug="li-halfcfg")
     user = await make_user(db_session, org=org)
     # no webhook secret → refused
-    assert await connections_service.start_linkedin_connect(db_session, user_id=user.id) is None
+    assert (
+        await connections_service.start_seat_connect(
+            db_session, user_id=user.id, provider=ConnectionProvider.linkedin
+        )
+        is None
+    )
 
 
 def test_linkedin_connect_is_off_without_a_webhook_secret() -> None:
     half = Settings(unipile_api_key="k", unipile_dsn=_DSN, session_cookie_password="c" * 44)
-    assert half.linkedin_connect_enabled is False
+    assert half.seat_connect_enabled is False
     # ...and it is not a sign-in provider, so it can't stand in for one.
     assert half.auth_enabled is False
     whole = Settings(
@@ -84,7 +89,7 @@ def test_linkedin_connect_is_off_without_a_webhook_secret() -> None:
         unipile_webhook_secret="s",
         session_cookie_password="c" * 44,
     )
-    assert whole.linkedin_connect_enabled is True
+    assert whole.seat_connect_enabled is True
 
 
 # --- the notify webhook boundary (HTTP) --------------------------------------

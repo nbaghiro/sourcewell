@@ -363,6 +363,18 @@ export function useConversationChannels(id: string | null) {
   });
 }
 
+/** The thread to open for a contact — an existing one, or a new direct conversation. */
+export function useOpenConversation() {
+  return useMutation({
+    mutationFn: async (contactId: string) =>
+      unwrap(
+        await client.POST("/contacts/{contact_id}/conversation", {
+          params: { path: { contact_id: contactId } },
+        }),
+      ),
+  });
+}
+
 export function useSendReply() {
   const qc = useQueryClient();
   return useMutation({
@@ -803,10 +815,18 @@ export function useUpdateWorkspaceSettings() {
   });
 }
 
-/** Start connecting a real LinkedIn sending seat (Unipile hosted auth). */
-export function useLinkedInConnectLink() {
+/** The channel seats a recruiter can send from — LinkedIn, or a mailbox. */
+export type SeatProvider = S["ConnectionProvider"];
+
+/** Start connecting a real sending seat via Unipile's hosted-auth wizard. */
+export function useConnectSeat() {
   return useMutation({
-    mutationFn: async () => unwrap(await client.POST("/settings/connections/linkedin/link")),
+    mutationFn: async (provider: SeatProvider) =>
+      unwrap(
+        await client.POST("/settings/connections/{provider}/link", {
+          params: { path: { provider } },
+        }),
+      ),
   });
 }
 
@@ -815,15 +835,6 @@ export function useDisconnect() {
   return useMutation({
     mutationFn: async (id: string) =>
       unwrap(await client.POST("/settings/connections/{connection_id}/disconnect", { params: { path: { connection_id: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["connections"] }),
-  });
-}
-
-export function useReauth() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) =>
-      unwrap(await client.POST("/settings/connections/{connection_id}/reauth", { params: { path: { connection_id: id } } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["connections"] }),
   });
 }

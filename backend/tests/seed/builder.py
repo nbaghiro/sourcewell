@@ -258,13 +258,17 @@ async def _seed_team(
         users[name] = user
     await session.flush()
 
+    # Seats, deliberately with no `external_id`: that field means "a real provider account is
+    # authorised behind this", and the app takes it at its word — `deliver_outbound` sends to
+    # whatever account id it finds. Seeding fake ones meant a demo install with real Unipile keys
+    # posted to Unipile with an account that doesn't exist and every send failed. Unlinked seats
+    # show honestly as "can't send" in Settings, and email falls through to SMTP (Mailpit).
     session.add_all(
         [
             Connection(
                 organization_id=org.id,
                 user_id=admin.id,
                 provider=ConnectionProvider.gmail,
-                external_id="recruiter@acme.com",
                 seat_type=SeatType.email,
                 status=ConnectionStatus.ok,
                 capabilities={"send": True},
@@ -281,7 +285,6 @@ async def _seed_team(
                 organization_id=org.id,
                 user_id=users["Riley Walsh"].id,
                 provider=ConnectionProvider.linkedin,
-                external_id="riley-li",
                 seat_type=SeatType.sales_nav,
                 status=ConnectionStatus.ok,
                 capabilities={"daily_cap": 100},
@@ -290,7 +293,6 @@ async def _seed_team(
                 organization_id=org.id,
                 user_id=users["Dana Okafor"].id,
                 provider=ConnectionProvider.graph,
-                external_id="dana@acme.demo",
                 seat_type=SeatType.email,
                 status=ConnectionStatus.ok,
                 capabilities={"send": True},

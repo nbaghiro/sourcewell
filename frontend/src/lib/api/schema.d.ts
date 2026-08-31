@@ -941,6 +941,30 @@ export interface paths {
         patch: operations["update_contact_contacts__contact_id__patch"];
         trace?: never;
     };
+    "/contacts/{contact_id}/conversation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Conversation
+         * @description The conversation to open when a recruiter clicks Message on a person.
+         *
+         *     Returns the existing thread with them if there is one, and otherwise opens a direct
+         *     conversation — no campaign, no sequence. The client then navigates to it by id, which is what
+         *     keeps "Message Lee" from landing on whoever happened to be at the top of the inbox.
+         */
+        post: operations["open_conversation_contacts__contact_id__conversation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/contacts/{contact_id}/forget": {
         parameters: {
             query?: never;
@@ -1497,7 +1521,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/settings/connections/linkedin/link": {
+    "/settings/connections/notify": {
         parameters: {
             query?: never;
             header?: never;
@@ -1507,38 +1531,16 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Linkedin Connect Link
-         * @description Start connecting *this* user's LinkedIn sending seat (Unipile hosted auth).
-         *
-         *     Returns the wizard URL for the client to redirect to; Unipile's notify webhook attaches the
-         *     resulting account to the user, which is what the messaging layer sends from. `null` means
-         *     Unipile isn't configured — the caller falls back to the local stub connect.
-         */
-        post: operations["linkedin_connect_link_settings_connections_linkedin_link_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/settings/connections/linkedin/notify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Linkedin Notify
+         * Seat Connect Notify
          * @description Unipile's server-side notify hop: attach the connected seat to the user who started it.
          *
          *     Public and token-gated (the shared secret rides in the query string, which is all the wizard
-         *     link lets us template). Not a sign-in: the wizard is only ever opened by someone already
-         *     signed in, and an attempt naming no user is ignored.
+         *     link lets us template). Provider-agnostic: which kind of account came back is recorded on the
+         *     attempt the `state` token names, because this payload carries only an account id. Not a
+         *     sign-in — the wizard is only ever opened by someone already signed in, and an attempt naming
+         *     no user is ignored.
          */
-        post: operations["linkedin_notify_settings_connections_linkedin_notify_post"];
+        post: operations["seat_connect_notify_settings_connections_notify_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1554,7 +1556,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Disconnect */
+        /**
+         * Disconnect
+         * @description Drop the seat here *and* at Unipile.
+         *
+         *     Deleting only our row left the provider account live: still billed, still pushing inbound
+         *     webhooks for a seat nobody in the app knows about. The local row goes either way — a user must
+         *     be able to remove a seat when the provider is unreachable — but a failed remote delete is
+         *     logged rather than swallowed, because it costs money until someone notices.
+         */
         post: operations["disconnect_settings_connections__connection_id__disconnect_post"];
         delete?: never;
         options?: never;
@@ -1562,7 +1572,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/settings/connections/{connection_id}/reauth": {
+    "/settings/connections/{provider}/link": {
         parameters: {
             query?: never;
             header?: never;
@@ -1571,8 +1581,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reauth */
-        post: operations["reauth_settings_connections__connection_id__reauth_post"];
+        /**
+         * Connect Link
+         * @description Start connecting *this* user's sending seat for a provider (Unipile hosted auth).
+         *
+         *     Returns the wizard URL for the client to redirect to; Unipile's notify webhook attaches the
+         *     resulting account to the user, which is what the messaging layer sends from. `null` means
+         *     Unipile isn't configured on this deployment, and the caller says so rather than pretending.
+         */
+        post: operations["connect_link_settings_connections__provider__link_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2430,7 +2447,7 @@ export interface components {
         };
         /**
          * ConnectLinkOut
-         * @description The hosted-auth wizard to redirect to, or null when LinkedIn connect isn't configured.
+         * @description The hosted-auth wizard to redirect to, or null when seat connect isn't configured.
          */
         ConnectLinkOut: {
             /** Url */
@@ -2446,15 +2463,22 @@ export interface components {
             id: string;
             /** Linked */
             linked: boolean;
-            /** Provider */
-            provider: string;
-            /** Seat Type */
-            seat_type: string;
-            /** Status */
-            status: string;
+            provider: components["schemas"]["ConnectionProvider"];
+            seat_type: components["schemas"]["SeatType"];
+            status: components["schemas"]["ConnectionStatus"];
             /** User Email */
             user_email: string;
         };
+        /**
+         * ConnectionProvider
+         * @enum {string}
+         */
+        ConnectionProvider: "gmail" | "graph" | "linkedin";
+        /**
+         * ConnectionStatus
+         * @enum {string}
+         */
+        ConnectionStatus: "ok" | "needs_reauth" | "paused";
         /** ContactActivityOut */
         ContactActivityOut: {
             /** Body */
@@ -2518,13 +2542,15 @@ export interface components {
         /** ContactEnrollmentOut */
         ContactEnrollmentOut: {
             /** Campaign Id */
-            campaign_id: string;
+            campaign_id: string | null;
             /** Campaign Name */
             campaign_name: string;
             /** Current Step */
             current_step: number;
             /** Id */
             id: string;
+            /** Reply Pending */
+            reply_pending: boolean;
             /** Score */
             score: number;
             state: components["schemas"]["EnrollmentState"];
@@ -2673,6 +2699,8 @@ export interface components {
             id: string;
             /** Outcome */
             outcome: string | null;
+            /** Reply Pending */
+            reply_pending: boolean;
             /** Score */
             score: number;
             state: components["schemas"]["EnrollmentState"];
@@ -2685,6 +2713,14 @@ export interface components {
             enrollment: components["schemas"]["ConvEnrollment"];
             /** Messages */
             messages: components["schemas"]["MessageOut"][];
+        };
+        /**
+         * ConversationRefOut
+         * @description Which thread to open for a contact.
+         */
+        ConversationRefOut: {
+            /** Enrollment Id */
+            enrollment_id: string;
         };
         /** DashboardApproval */
         DashboardApproval: {
@@ -2724,6 +2760,8 @@ export interface components {
         DashboardReply: {
             /** Contact Name */
             contact_name: string;
+            /** Reply Pending */
+            reply_pending: boolean;
             /** Snippet */
             snippet: string;
             /** State */
@@ -2860,7 +2898,7 @@ export interface components {
         /** EnrollmentOut */
         EnrollmentOut: {
             /** Campaign Id */
-            campaign_id: string;
+            campaign_id: string | null;
             /** Contact Id */
             contact_id: string;
             /** Current Step */
@@ -2871,6 +2909,8 @@ export interface components {
             next_run_at: string | null;
             /** Outcome */
             outcome: string | null;
+            /** Reply Pending */
+            reply_pending: boolean;
             /** Score */
             score: number;
             /** Score Rationale */
@@ -2880,7 +2920,7 @@ export interface components {
         /** EnrollmentRowOut */
         EnrollmentRowOut: {
             /** Campaign Id */
-            campaign_id: string;
+            campaign_id: string | null;
             /** Contact Avatar */
             contact_avatar: string | null;
             /** Contact Company */
@@ -2899,6 +2939,8 @@ export interface components {
             next_run_at: string | null;
             /** Outcome */
             outcome: string | null;
+            /** Reply Pending */
+            reply_pending: boolean;
             /** Score */
             score: number;
             /** Score Rationale */
@@ -2955,7 +2997,7 @@ export interface components {
         /** ExportEnrollment */
         ExportEnrollment: {
             /** Campaign Id */
-            campaign_id: string;
+            campaign_id: string | null;
             /** Contact Id */
             contact_id: string;
             /** Id */
@@ -3076,6 +3118,8 @@ export interface components {
             message_count: number;
             /** Outcome */
             outcome: string | null;
+            /** Reply Pending */
+            reply_pending: boolean;
             state: components["schemas"]["EnrollmentState"] | null;
             /** Unread */
             unread: boolean;
@@ -3241,6 +3285,8 @@ export interface components {
             enrollment_id: string;
             /** Id */
             id: string;
+            /** Link */
+            link: string;
             /** Title */
             title: string;
             /** Type */
@@ -3588,6 +3634,11 @@ export interface components {
             /** Conversations */
             conversations: components["schemas"]["SearchConversation"][];
         };
+        /**
+         * SeatType
+         * @enum {string}
+         */
+        SeatType: "email" | "basic" | "premium" | "sales_nav" | "recruiter";
         /** SendRequest */
         SendRequest: {
             channel?: components["schemas"]["Channel"] | null;
@@ -5581,6 +5632,37 @@ export interface operations {
             };
         };
     };
+    open_conversation_contacts__contact_id__conversation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationRefOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     forget_contact_contacts__contact_id__forget_post: {
         parameters: {
             query?: never;
@@ -6436,27 +6518,7 @@ export interface operations {
             };
         };
     };
-    linkedin_connect_link_settings_connections_linkedin_link_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConnectLinkOut"];
-                };
-            };
-        };
-    };
-    linkedin_notify_settings_connections_linkedin_notify_post: {
+    seat_connect_notify_settings_connections_notify_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6509,12 +6571,12 @@ export interface operations {
             };
         };
     };
-    reauth_settings_connections__connection_id__reauth_post: {
+    connect_link_settings_connections__provider__link_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                connection_id: string;
+                provider: components["schemas"]["ConnectionProvider"];
             };
             cookie?: never;
         };
@@ -6526,7 +6588,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConnectionOut"];
+                    "application/json": components["schemas"]["ConnectLinkOut"];
                 };
             };
             /** @description Validation Error */

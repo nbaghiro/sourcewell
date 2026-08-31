@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.context import ORG_WIDE_ROLES, ContextDep, SessionDep
+from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core.config import get_settings
 from app.core.crypto import verify_hmac
@@ -19,6 +19,7 @@ from app.core.db import get_session
 from app.core.logging import logger
 from app.core.types import JsonObject
 from app.models import (
+    ORG_WIDE_ROLES,
     Campaign,
     Channel,
     Connection,
@@ -40,12 +41,14 @@ from app.services.outreach.messaging import (
     channel_availability,
     draft_reply_text,
     list_thread,
+    open_direct_conversation,
     record_inbound,
     resolve_channel,
     resolve_inbound_enrollment,
     send_conversation_message,
     summarize_thread,
 )
+from app.services.outreach.receiving import strip_quoted_reply
 
 router = APIRouter(tags=["messaging"])
 
@@ -112,6 +115,11 @@ class InboxItemOut(BaseModel):
     contact_avatar: str | None
     state: EnrollmentState | None
     outcome: str | None
+    # They answered and it wasn't a clear yes or no, so the ball is with the recruiter. Its own
+    # flag rather than a state because the enrollment is still mid-sequence: `state` stays
+    # `awaiting_reply` (what the next touchpoint is gated on), which alone reads as "waiting
+    # on them" long after they've written back.
+    reply_pending: bool
     channel: Channel
     message_count: int
     unread: bool
@@ -125,6 +133,8 @@ class ConvEnrollment(BaseModel):
     score: int
     current_step: int
     outcome: str | None
+    # See `InboxItemOut.reply_pending` — the recruiter owes this conversation an answer.
+    reply_pending: bool
 
 
 class ConvContact(BaseModel):
@@ -319,6 +329,7 @@ async def inbox(ctx: ContextDep, session: SessionDep) -> list[InboxItemOut]:
                 contact_avatar=contact.avatar_url if contact else None,
                 state=enrollment.state if enrollment else None,
                 outcome=enrollment.outcome if enrollment else None,
+                reply_pending=bool(enrollment and enrollment.reply_pending),
                 channel=messages[0].channel,  # the channel the outreach started on
                 message_count=len(messages),
                 unread=has_unread,
@@ -330,6 +341,30 @@ async def inbox(ctx: ContextDep, session: SessionDep) -> list[InboxItemOut]:
     return items
 
 
+class ConversationRefOut(BaseModel):
+    """Which thread to open for a contact."""
+
+    enrollment_id: str
+
+
+@router.post("/contacts/{contact_id}/conversation", response_model=ConversationRefOut)
+async def open_conversation(
+    contact_id: str, ctx: ContextDep, session: SessionDep
+) -> ConversationRefOut:
+    """The conversation to open when a recruiter clicks Message on a person.
+
+    Returns the existing thread with them if there is one, and otherwise opens a direct
+    conversation — no campaign, no sequence. The client then navigates to it by id, which is what
+    keeps "Message Lee" from landing on whoever happened to be at the top of the inbox.
+    """
+    ws = require_workspace(ctx)
+    contact = await session.get(Contact, contact_id)
+    if contact is None or contact.workspace_id != ws:
+        raise HTTPException(status_code=404, detail="contact not found")
+    enrollment = await open_direct_conversation(session, workspace_id=ws, contact=contact)
+    return ConversationRefOut(enrollment_id=enrollment.id)
+
+
 @router.get("/inbox/{enrollment_id}", response_model=ConversationOut)
 async def conversation(enrollment_id: str, ctx: ContextDep, session: SessionDep) -> ConversationOut:
     """Full conversation for the messenger: contact profile, campaign, state, channel, messages."""
@@ -338,7 +373,9 @@ async def conversation(enrollment_id: str, ctx: ContextDep, session: SessionDep)
     if enrollment is None or enrollment.workspace_id != ws:
         raise HTTPException(status_code=404, detail="conversation not found")
     contact = await session.get(Contact, enrollment.contact_id)
-    campaign = await session.get(Campaign, enrollment.campaign_id)
+    campaign = (
+        await session.get(Campaign, enrollment.campaign_id) if enrollment.campaign_id else None
+    )
     messages = await list_thread(session, workspace_id=ws, enrollment_id=enrollment_id)
     # Primary channel = the channel of the most recent message.
     channel = messages[-1].channel if messages else Channel.email
@@ -349,6 +386,7 @@ async def conversation(enrollment_id: str, ctx: ContextDep, session: SessionDep)
             score=enrollment.score,
             current_step=enrollment.current_step,
             outcome=enrollment.outcome,
+            reply_pending=enrollment.reply_pending,
         ),
         contact=ConvContact(
             id=contact.id if contact else None,
@@ -381,7 +419,9 @@ async def conversation_channels(
     contact = await session.get(Contact, enrollment.contact_id)
     if contact is None:
         raise HTTPException(status_code=404, detail="contact not found")
-    campaign = await session.get(Campaign, enrollment.campaign_id)
+    campaign = (
+        await session.get(Campaign, enrollment.campaign_id) if enrollment.campaign_id else None
+    )
     if campaign is None:
         raise HTTPException(status_code=404, detail="campaign not found")
     options = await channel_availability(session, campaign=campaign, contact=contact)
@@ -414,7 +454,9 @@ async def send_reply(
     contact = await session.get(Contact, enrollment.contact_id)
     if contact is None:
         raise HTTPException(status_code=404, detail="contact not found")
-    campaign = await session.get(Campaign, enrollment.campaign_id)
+    campaign = (
+        await session.get(Campaign, enrollment.campaign_id) if enrollment.campaign_id else None
+    )
     if campaign is None:
         raise HTTPException(status_code=404, detail="campaign not found")
     channel = body.channel or await resolve_channel(
@@ -713,6 +755,18 @@ def _unambiguous(candidates: list[Enrollment], sender_email: str) -> Enrollment 
     return candidates[0]
 
 
+def _drop(why: str, payload: JsonObject) -> InboundWebhookOut:
+    """Log an inbound event we couldn't place, and report it as ignored.
+
+    A dropped reply is otherwise completely silent — the provider gets its 200 and the recruiter
+    never learns the candidate wrote back. The payload's *keys* go in the log, not its contents:
+    enough to see that a field we expected is named something else, without copying message
+    bodies or addresses into the logs.
+    """
+    logger.warning("inbound: dropping an event — %s; payload keys=%s", why, sorted(payload))
+    return InboundWebhookOut(status="ignored", intent=None)
+
+
 @router.post("/webhooks/unipile", response_model=InboundWebhookOut)
 async def unipile_webhook(
     request: Request, session: Annotated[AsyncSession, Depends(get_session)]
@@ -762,21 +816,43 @@ async def unipile_webhook(
             .scalars()
             .first()
         )
-        if seat is not None:
+        if seat is not None and seat.status is not ConnectionStatus.needs_reauth:
             seat.status = ConnectionStatus.needs_reauth
             await session.flush()
+            # The seat owner sees this in their notification feed; the audit trail is what tells
+            # an admin *when* a channel went quiet, which is otherwise invisible after the fact.
+            await audit.record(
+                session,
+                org_id=seat.organization_id,
+                workspace_id=None,
+                actor_user_id=seat.user_id,
+                action="connection.needs_reauth",
+                summary=f"{seat.provider.value} seat disconnected at the provider",
+                target_type="connection",
+                target_id=seat.id,
+            )
         return InboundWebhookOut(status="account_updated", intent=None)
 
     # Inbound message: text + the chat/thread id (LinkedIn) or sender (email).
-    text = _payload_str(payload.get("message"), "text", "body") or _payload_str(
-        payload, "text", "body", "message"
+    # `body_plain` first — an email carries both, and `body` is the HTML part: recording that puts
+    # markup on the thread and feeds tags to the reply classifier.
+    text = (
+        _payload_str(payload.get("message"), "text", "body")
+        or _payload_str(payload, "body_plain")
+        or _payload_str(payload, "text", "body", "message")
     )
     chat_id = _payload_str(payload, "chat_id", "chat", "thread_id")
-    sender_email = _payload_str(payload.get("sender"), "email") or _payload_str(
-        payload, "from", "from_email"
+    # Unipile names the sender differently per channel: an email carries `from_attendee`
+    # (`{display_name, identifier}`), a chat message a `sender`. Reading only the chat shape meant
+    # every email reply resolved to nobody and was dropped — with a 200 back to the provider, so
+    # it looked delivered from both ends.
+    sender_email = (
+        _payload_str(payload.get("from_attendee"), "identifier", "email")
+        or _payload_str(payload.get("sender"), "email", "identifier")
+        or _payload_str(payload, "from", "from_email")
     )
     if not text:
-        return InboundWebhookOut(status="ignored", intent=None)
+        return _drop("no text in the event", payload)
     if _is_own_message(payload):
         # Our own outbound, echoed back by the provider. Recording it would invent a reply.
         return InboundWebhookOut(status="own_message", intent=None)
@@ -784,7 +860,7 @@ async def unipile_webhook(
         session, external_id=chat_id, sender_email=sender_email, account_id=account_id
     )
     if resolved is None:
-        return InboundWebhookOut(status="ignored", intent=None)
+        return _drop(f"no thread matched (chat_id={chat_id!r}, sender={sender_email!r})", payload)
     # The channel comes from `_resolve_enrollment`, which reads it off the outbound message the
     # thread id matched (and falls back to email for an address match) — always a real Channel,
     # so the old `matched_channel or payload_channel` fallback could never fire.
@@ -792,7 +868,9 @@ async def unipile_webhook(
     message = await record_inbound(
         session,
         enrollment=enrollment,
-        text=text,
+        # Email only: a LinkedIn DM has no quoted history, and a chat message that happens to
+        # start a line with ">" would be truncated for nothing.
+        text=strip_quoted_reply(text) if matched_channel is Channel.email else text,
         now=now,
         channel=matched_channel,
         provider_message_id=_idempotency_key(payload, thread_id=chat_id, text=text),

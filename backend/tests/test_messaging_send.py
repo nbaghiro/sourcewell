@@ -732,3 +732,85 @@ async def test_a_paid_seat_may_send_an_inmail(
     await enr_service.tick(db_session, enrollment=enr, now=now)
 
     assert _sent_as_inmail(chats.calls[0].request)
+
+
+# --- "Message this person" opens *their* thread ---------------------------------
+
+
+@pytest.mark.db
+async def test_messaging_a_contact_with_no_history_opens_an_empty_thread(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The bug: Message navigated to a bare `/inbox`, which auto-selects the first row — so it
+    opened a conversation with whoever happened to be at the top of the list, not the person
+    whose page you were on."""
+    h, _eid = await _api_thread(db_client, "open-fresh")
+    fresh = await db_client.post(
+        "/contacts/import",
+        json={"contacts": [{"full_name": "Nina Ray", "email": "nina@x.com"}]},
+        headers=h,
+    )
+    assert fresh.status_code == 200, fresh.text
+    contact_id = fresh.json()["contacts"][0]["id"]
+
+    opened = await db_client.post(f"/contacts/{contact_id}/conversation", headers=h)
+    assert opened.status_code == 200, opened.text
+    eid = opened.json()["enrollment_id"]
+
+    conv = await db_client.get(f"/inbox/{eid}", headers=h)
+    assert conv.status_code == 200
+    body = conv.json()
+    assert body["contact"]["id"] == contact_id  # *their* thread
+    assert body["messages"] == []  # ...and it's empty, as it should be
+    assert body["campaign"]["id"] is None  # direct: no sequence behind it
+
+    # An enrollment with no messages isn't in the inbox list, so opening one and walking away
+    # leaves nothing behind.
+    listed = (await db_client.get("/inbox", headers=h)).json()
+    assert eid not in [it["enrollment_id"] for it in listed]
+
+
+@pytest.mark.db
+async def test_messaging_the_same_person_twice_reuses_one_thread(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Otherwise every click of Message forks another thread with the same person, and half the
+    conversation ends up in each."""
+    h, _eid = await _api_thread(db_client, "open-twice")
+    made = await db_client.post(
+        "/contacts/import",
+        json={"contacts": [{"full_name": "Nina Ray", "email": "nina2@x.com"}]},
+        headers=h,
+    )
+    contact_id = made.json()["contacts"][0]["id"]
+
+    first = (await db_client.post(f"/contacts/{contact_id}/conversation", headers=h)).json()
+    again = (await db_client.post(f"/contacts/{contact_id}/conversation", headers=h)).json()
+    assert first["enrollment_id"] == again["enrollment_id"]
+
+
+@pytest.mark.db
+async def test_messaging_someone_already_in_a_campaign_opens_that_thread(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """ "Talk to this person" means the conversation they're already in — splitting it across a
+    campaign thread and a direct one is how half of it goes missing."""
+    h, eid = await _api_thread(db_client, "open-existing")
+    enr = await db_session.get(Enrollment, eid)
+    assert enr is not None
+
+    opened = await db_client.post(f"/contacts/{enr.contact_id}/conversation", headers=h)
+    assert opened.json()["enrollment_id"] == eid
+
+
+@pytest.mark.db
+async def test_a_contact_from_another_workspace_is_not_reachable(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    h_a, _ = await _api_thread(db_client, "open-tenant-a")
+    _h_b, eid_b = await _api_thread(db_client, "open-tenant-b")
+    enr_b = await db_session.get(Enrollment, eid_b)
+    assert enr_b is not None
+
+    r = await db_client.post(f"/contacts/{enr_b.contact_id}/conversation", headers=h_a)
+    assert r.status_code == 404

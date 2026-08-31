@@ -196,7 +196,9 @@ async def run_conversation(
     key. Re-recording here would duplicate the bubble on every worker retry.
     """
     inbound_text = message.body
-    campaign = await session.get(Campaign, enrollment.campaign_id)
+    campaign = (
+        await session.get(Campaign, enrollment.campaign_id) if enrollment.campaign_id else None
+    )
     contact = await session.get(Contact, enrollment.contact_id)
     if campaign is None or contact is None:
         raise ValueError("enrollment is missing its campaign or contact")

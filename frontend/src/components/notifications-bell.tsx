@@ -1,4 +1,4 @@
-import { Bell, CheckCircle2 } from "lucide-react";
+import { Bell, CheckCircle2, PlugZap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -59,11 +59,18 @@ export function NotificationsBell() {
           <div className="px-3 py-6 text-center text-sm text-muted-foreground">You're all caught up.</div>
         ) : (
           items.map((n) => (
-            <DropdownMenuItem key={n.id} onClick={() => navigate("/inbox")} className="gap-3">
-              <Avatar className="size-7">
-                {n.contact_avatar && <AvatarImage src={n.contact_avatar} alt="" />}
-                <AvatarFallback className="text-[0.6rem]">{initials(n.contact_name)}</AvatarFallback>
-              </Avatar>
+            <DropdownMenuItem key={n.id} onClick={() => navigate(n.link)} className="gap-3">
+              {/* Not every notification is about a person — a broken seat has no face. */}
+              {n.contact_name ? (
+                <Avatar className="size-7">
+                  {n.contact_avatar && <AvatarImage src={n.contact_avatar} alt="" />}
+                  <AvatarFallback className="text-[0.6rem]">{initials(n.contact_name)}</AvatarFallback>
+                </Avatar>
+              ) : (
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground">
+                  <PlugZap className="size-3.5" />
+                </span>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-foreground">{n.title}</div>
                 <div className="truncate text-xs text-muted-foreground">{n.body}</div>

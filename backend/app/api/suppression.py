@@ -1,5 +1,6 @@
 """Suppression list HTTP layer: admin CRUD endpoints + the public signed unsubscribe link."""
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,7 @@ from app.api.guards import require_org_admin, require_workspace
 from app.core.db import get_session
 from app.models import Suppression, SuppressionReason
 from app.services.insights import audit
+from app.services.outreach.enrollment import close_for_opt_out
 from app.services.sourcing.suppression import (
     list_for_org,
     parse_unsubscribe,
@@ -121,6 +123,11 @@ async def unsubscribe(
     await suppress(
         session, organization_id=org_id, email=email, reason=SuppressionReason.unsubscribed
     )
+    # Suppressing the address blocks future sends; this ends the conversations already open with
+    # them, so the recruiter sees "Opted out" rather than a thread that still reads as waiting on
+    # a reply — and so the next touchpoint stops being scheduled at all rather than being
+    # attempted and refused.
+    await close_for_opt_out(session, organization_id=org_id, email=email, now=datetime.now(UTC))
     return HTMLResponse(
         "<!doctype html><html><head><meta charset='utf-8'><title>Unsubscribed</title>"
         "<style>body{font-family:system-ui;background:#f3f1ea;color:#122019;display:grid;"

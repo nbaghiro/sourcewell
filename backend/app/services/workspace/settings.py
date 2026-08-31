@@ -13,15 +13,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ext.registry import ProviderSpec
 from app.models import (
     Connection,
+    ConnectionProvider,
+    ConnectionStatus,
     ProviderCredential,
+    SeatType,
 )
 
 
 class ConnectionOut(BaseModel):
     id: str
-    provider: str
-    status: str
-    seat_type: str
+    # The real enums, not `str`: the generated client then gets literal unions, so a caller can't
+    # index the provider/status lookup tables with a value the API never returns.
+    provider: ConnectionProvider
+    status: ConnectionStatus
+    seat_type: SeatType
     user_email: str
     external_id: str | None
     display_name: str | None
@@ -45,9 +50,9 @@ def _dump_connection(c: Connection, email: str) -> ConnectionOut:
     raw_name = (c.capabilities or {}).get("display_name")
     return ConnectionOut(
         id=c.id,
-        provider=c.provider.value,
-        status=c.status.value,
-        seat_type=c.seat_type.value,
+        provider=c.provider,
+        status=c.status,
+        seat_type=c.seat_type,
         user_email=email,
         external_id=c.external_id,
         display_name=raw_name if isinstance(raw_name, str) else None,

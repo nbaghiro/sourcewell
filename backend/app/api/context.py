@@ -16,13 +16,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
-from app.models import Membership, MembershipRole, SpaceGrant, User, Workspace
+from app.models import ORG_WIDE_ROLES, Membership, MembershipRole, SpaceGrant, User, Workspace
 from app.services.workspace import auth
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-
-# Org roles that reach every workspace in their organization without an explicit grant.
-ORG_WIDE_ROLES = {MembershipRole.org_admin, MembershipRole.compliance}
 
 
 @dataclass(frozen=True)

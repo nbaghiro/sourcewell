@@ -144,11 +144,13 @@ async def workspace_analytics(session: AsyncSession, *, workspace_id: str) -> An
             await session.execute(
                 select(Enrollment.campaign_id, func.count())
                 .where(Enrollment.workspace_id == ws)
+                .where(Enrollment.campaign_id.is_not(None))
                 .group_by(Enrollment.campaign_id)
             )
         )
         .tuples()
         .all()
+        if cid is not None
     }
     replied_by_c: dict[str, int] = {
         cid: cnt
@@ -158,11 +160,13 @@ async def workspace_analytics(session: AsyncSession, *, workspace_id: str) -> An
                 .select_from(Message)
                 .join(Enrollment, Message.enrollment_id == Enrollment.id)
                 .where(Message.workspace_id == ws, Message.direction == MessageDirection.inbound)
+                .where(Enrollment.campaign_id.is_not(None))
                 .group_by(Enrollment.campaign_id)
             )
         )
         .tuples()
         .all()
+        if cid is not None
     }
     handed_by_c: dict[str, int] = {
         cid: cnt
@@ -172,11 +176,13 @@ async def workspace_analytics(session: AsyncSession, *, workspace_id: str) -> An
                 .where(
                     Enrollment.workspace_id == ws, Enrollment.state == EnrollmentState.handed_off
                 )
+                .where(Enrollment.campaign_id.is_not(None))
                 .group_by(Enrollment.campaign_id)
             )
         )
         .tuples()
         .all()
+        if cid is not None
     }
     campaign_rows = (
         (

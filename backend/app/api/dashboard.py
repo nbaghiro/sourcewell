@@ -40,6 +40,7 @@ class DashboardApproval(BaseModel):
 class DashboardReply(BaseModel):
     contact_name: str
     snippet: str
+    reply_pending: bool
     state: str
 
 
@@ -89,6 +90,7 @@ async def summary(ctx: ContextDep, session: SessionDep) -> DashboardSummary:
             DashboardReply(
                 contact_name=r.contact_name,
                 snippet=r.snippet,
+                reply_pending=r.reply_pending,
                 state=r.state,
             )
             for r in data.recent_replies

@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -23,8 +24,10 @@ from app.models import (
 )
 from app.services.outreach import enrollment as enr_service
 from app.services.outreach import governor
+from app.services.outreach import messaging as msg_service
 from app.services.outreach.messaging import TransientSendError
 from app.services.sourcing import suppression
+from tests.factories import make_org, make_workspace
 
 
 async def _setup(
@@ -210,3 +213,97 @@ async def test_workspace_suppression_stays_in_its_workspace(db_session: AsyncSes
     assert not await suppression.is_suppressed(
         db_session, organization_id=org.id, email=contact.email, workspace_id=ws.id
     )
+
+
+# --- only a real decline counts as an opt-out ----------------------------------
+
+
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [
+        # The one that cost real candidates: "stop" was matched as a substring.
+        ("I'll stop by Thursday if that works", "neutral"),
+        ("stopped by your careers page — looks great", "neutral"),
+        ("Sounds good, let's talk", "interested"),
+        ("What's the salary range?", "neutral"),
+        # ...and the genuine opt-outs still land.
+        ("STOP", "opted_out"),
+        ("stop.", "opted_out"),
+        ("Not interested, thanks", "opted_out"),
+        ("please remove me from your list", "opted_out"),
+        ("how do I unsubscribe?", "opted_out"),
+    ],
+)
+def test_only_a_real_decline_counts_as_an_opt_out(reply: str, expected: str) -> None:
+    """An opt-out permanently suppresses the address and the recruiter can't undo it from the
+    thread, so a false positive silently costs a candidate."""
+    assert msg_service.classify_reply(reply) == expected
+
+
+@pytest.mark.db
+async def test_clicking_unsubscribe_also_ends_the_conversation(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The clearest signal a candidate can send used to produce the *weakest* result: the address
+    was suppressed, but the thread still read "Awaiting reply" and the next touchpoint was still
+    scheduled — only to be refused at send time, failing the enrollment instead of ending it."""
+    org = await make_org(db_session, slug="opt-unsub")
+    ws = await make_workspace(db_session, org=org)
+    campaign = Campaign(workspace_id=ws.id, name="C", criteria={}, sequence=[])
+    contact = Contact(
+        workspace_id=ws.id, full_name="Lee", email="lee@example.com", skills=[], tags=[]
+    )
+    db_session.add_all([campaign, contact])
+    await db_session.flush()
+    enr = Enrollment(
+        workspace_id=ws.id,
+        campaign_id=campaign.id,
+        contact_id=contact.id,
+        state=EnrollmentState.awaiting_reply,
+        next_run_at=datetime.now(UTC),
+    )
+    db_session.add(enr)
+    await db_session.flush()
+
+    token = suppression.unsubscribe_token(org.id, "lee@example.com")
+    r = await db_client.get(f"/unsubscribe?token={token}")
+    assert r.status_code == 200
+
+    await db_session.refresh(enr)
+    assert enr.state == EnrollmentState.opted_out
+    assert enr.outcome == "opted_out"
+    assert enr.next_run_at is None  # nothing further is even attempted
+    # The unsubscribe token names an organization, not a workspace, so the entry is org-wide.
+    assert await suppression.is_suppressed(
+        db_session, organization_id=org.id, email="lee@example.com", workspace_id=ws.id
+    )
+
+
+@pytest.mark.db
+async def test_unsubscribing_leaves_other_tenants_alone(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The token names one organization; the same person may be talking to another customer."""
+    theirs = await make_org(db_session, slug="opt-theirs")
+    ours = await make_org(db_session, slug="opt-ours")
+    other_ws = await make_workspace(db_session, org=theirs)
+    campaign = Campaign(workspace_id=other_ws.id, name="C", criteria={}, sequence=[])
+    contact = Contact(
+        workspace_id=other_ws.id, full_name="Lee", email="lee@example.com", skills=[], tags=[]
+    )
+    db_session.add_all([campaign, contact])
+    await db_session.flush()
+    enr = Enrollment(
+        workspace_id=other_ws.id,
+        campaign_id=campaign.id,
+        contact_id=contact.id,
+        state=EnrollmentState.awaiting_reply,
+    )
+    db_session.add(enr)
+    await db_session.flush()
+
+    token = suppression.unsubscribe_token(ours.id, "lee@example.com")
+    assert (await db_client.get(f"/unsubscribe?token={token}")).status_code == 200
+
+    await db_session.refresh(enr)
+    assert enr.state == EnrollmentState.awaiting_reply  # untouched

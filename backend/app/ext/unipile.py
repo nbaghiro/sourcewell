@@ -222,11 +222,18 @@ class UnipileConnection:
     def _headers(self) -> dict[str, str]:
         return {"X-API-KEY": self._key, "accept": "application/json"}
 
-    async def create_link(self, *, user_ref: str, notify_url: str, redirect_url: str) -> str | None:
-        """Create a hosted-auth wizard link to connect a LinkedIn seat. Returns the URL."""
+    async def create_link(
+        self, *, user_ref: str, notify_url: str, redirect_url: str, providers: list[str]
+    ) -> str | None:
+        """Create a hosted-auth wizard link to connect a seat. Returns the URL.
+
+        `providers` are Unipile's own names (LINKEDIN, GOOGLE, OUTLOOK). Passing exactly one pins
+        the wizard to that account type, so what comes back is what the caller asked for — which
+        is what lets the notify hop trust the provider recorded on the attempt.
+        """
         body: JsonObject = {
             "type": "create",
-            "providers": ["LINKEDIN"],
+            "providers": providers,
             "api_url": self._dsn,
             # Unipile wants exactly YYYY-MM-DDTHH:MM:SS.sssZ — not isoformat's offset.
             "expiresOn": (datetime.now(UTC) + timedelta(hours=1)).strftime(
@@ -251,6 +258,48 @@ class UnipileConnection:
                 params={"account_id": account_id},
             )
         return json_body(resp) if resp.status_code < 400 else None
+
+    async def list_messages(self, *, account_id: str, since: datetime) -> list[JsonObject] | None:
+        """Messages this account received since `since`, for the backfill sweep.
+
+        `None` means we could not read them — unreachable, rejected, or a shape we don't
+        recognise — which the caller logs rather than treating as "nothing arrived". That
+        distinction is the whole point: a sweep that silently returns empty is worse than no
+        sweep, because it looks like proof there is nothing to recover.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await client.get(
+                    f"{self._dsn}/api/v1/messages",
+                    headers=self._headers(),
+                    params={
+                        "account_id": account_id,
+                        "after": since.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                        "limit": 100,
+                    },
+                )
+        except Exception:
+            return None
+        if resp.status_code >= 400:
+            return None
+        data = json_body(resp)
+        for key in ("items", "messages"):
+            if isinstance(data.get(key), list):
+                # A recognised shape — an empty list here genuinely means "nothing arrived".
+                return json_list(data.get(key))
+        return None  # parsed, but not a shape we know how to read
+
+    async def delete_account(self, *, account_id: str) -> bool:
+        """Disconnect an account at Unipile. False when the call failed (never raises)."""
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await client.delete(
+                    f"{self._dsn}/api/v1/accounts/{account_id}", headers=self._headers()
+                )
+        except Exception:
+            return False
+        # A 404 means it is already gone, which is the outcome we wanted.
+        return resp.status_code < 400 or resp.status_code == 404
 
     async def register_webhooks(self, *, request_url: str, source: str) -> bool:
         """Subscribe the inbound receiver for a source (messaging | email | account)."""
@@ -395,7 +444,18 @@ class UnipileChannel:
                 headers=self._headers(idempotency_key),
                 files=self._form(email_fields),
             )
-        return None if self._permanent(resp) else opt_str(json_body(resp).get("id"))
+        if self._permanent(resp):
+            return None
+        # A sent email comes back as `{"object": "EmailSent", "tracking_id": …, "provider_id": …}`
+        # — there is no `id`. Reading one anyway returned None, so nothing was ever stored on
+        # `Message.external_id` and no email reply could be threaded back to its conversation.
+        data = json_body(resp)
+        return (
+            opt_str(data.get("id"))
+            or opt_str(data.get("tracking_id"))
+            or opt_str(data.get("provider_id"))
+            or ""
+        )
 
     async def reply(
         self, *, account_id: str, thread_id: str, body: str, idempotency_key: str | None = None

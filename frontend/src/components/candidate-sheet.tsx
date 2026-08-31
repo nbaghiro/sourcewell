@@ -47,7 +47,7 @@ export function CandidateSheet({
                 <span className="truncate font-display text-[0.95rem] font-semibold">
                   {enrollment.contact_name}
                 </span>
-                <StateBadge state={enrollment.state} />
+                <StateBadge state={enrollment.state} replyPending={enrollment.reply_pending} />
               </div>
               <div className="truncate text-xs text-muted-foreground">
                 {[enrollment.contact_title, contact?.company].filter(Boolean).join(" · ")}
@@ -137,7 +137,8 @@ export function CandidateSheet({
             )}
             {messages.length > 0 && (
               <Button variant="outline" className="w-full" asChild>
-                <Link to="/inbox">
+                {/* This thread, not whichever one the inbox happens to open on. */}
+                <Link to={`/inbox?enrollment=${enrollment.id}`}>
                   Open in Inbox <ArrowRight />
                 </Link>
               </Button>

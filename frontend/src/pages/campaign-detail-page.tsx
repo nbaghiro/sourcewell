@@ -361,7 +361,7 @@ export function CampaignDetailPage() {
                           <ScoreBar value={e.score} />
                         </TableCell>
                         <TableCell>
-                          <StateBadge state={e.state} />
+                          <StateBadge state={e.state} replyPending={e.reply_pending} />
                         </TableCell>
                         <TableCell className="max-w-xs text-xs text-muted-foreground">
                           {proposed ? (

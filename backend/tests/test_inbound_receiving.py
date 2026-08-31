@@ -27,6 +27,7 @@ from app.models import (
     MessageStatus,
 )
 from app.services.outreach import messaging as msg_service
+from app.services.outreach import receiving
 from tests.factories import make_org, make_workspace
 
 _SECRET = "shh"
@@ -238,3 +239,120 @@ async def test_synchronous_ingest_records_and_routes_in_one_call(db_session: Asy
     assert intent == "interested"
     assert message.processed_at is not None
     assert enr.state == EnrollmentState.handed_off
+
+
+# --- the shapes Unipile actually sends -----------------------------------------
+
+# Verbatim from a live GOOGLE_OAUTH account: an email reply names its sender in `from_attendee`,
+# carries the text in `body_plain` (`body` is the HTML part), and has no `sender`/`from` key at
+# all. We only looked for the chat shape, so every email reply resolved to nobody and was dropped
+# — with a 200 back to the provider, so it looked delivered from both ends.
+_REAL_EMAIL_EVENT: dict[str, object] = {
+    "object": "Email",
+    "kind": "2_full",
+    "type": "GOOGLE_OAUTH",
+    "account_id": "ACCT-MAIL",
+    "date": "2026-08-31T13:22:11.000Z",
+    "from_attendee": {
+        "display_name": "Lee Park",
+        "identifier": "lee@example.com",
+        "identifier_type": "EMAIL_ADDRESS",
+    },
+    "subject": "Re:",
+    "body": "<div>Lets try it out</div>",
+    "body_plain": "Lets try it out",
+    "message_id": "<2CE29E53-2E68@icloud.com>",
+    "thread_id": "THREAD-9",
+}
+
+
+@pytest.mark.db
+async def test_a_real_email_reply_is_matched_by_its_sender(
+    db_client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_secret(monkeypatch)
+    enr = await _thread(db_session, slug="rx-real-email", chat_id="SOMETHING-ELSE")
+
+    r = await db_client.post(f"/webhooks/unipile?token={_SECRET}", json=_REAL_EMAIL_EVENT)
+    assert r.json()["status"] == "queued", r.text
+
+    rows = await _inbound_rows(db_session, enr.id)
+    # ...and the plain part, not the HTML: markup on the thread also feeds tags to the classifier.
+    assert [m.body for m in rows] == ["Lets try it out"]
+
+
+@pytest.mark.db
+async def test_an_unplaceable_event_is_reported_not_swallowed(
+    db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A dropped reply used to be entirely silent: the provider got its 200 and the recruiter
+    never learned the candidate had written back."""
+    _with_secret(monkeypatch)
+    with caplog.at_level("WARNING"):
+        r = await db_client.post(
+            f"/webhooks/unipile?token={_SECRET}",
+            json={"body_plain": "hello?", "from_attendee": {"identifier": "nobody@nowhere.io"}},
+        )
+    assert r.json()["status"] == "ignored"
+    assert any("dropping an event" in rec.getMessage() for rec in caplog.records)
+
+
+# --- a reply is what they wrote, not the whole conversation quoted back ---------
+
+
+@pytest.mark.parametrize(
+    ("client", "raw", "expected"),
+    [
+        (
+            # Verbatim from a live reply, Cyrillic and all: the attribution is localised, which is
+            # why the stripper keys off the quote marker rather than matching "wrote:" in English.
+            "apple mail",
+            "Lets try it out\r\n\r\n> 31 авг. 2026 г., в 15:14, "  # noqa: RUF001
+            "rauljan7@gmail.com написал(а):\r\n>\r\n> anything else there?",  # noqa: RUF001
+            "Lets try it out",
+        ),
+        (
+            "gmail",  # attribution sits above the quote, unquoted
+            "Sounds good, let's talk Thursday.\n\n"
+            "On Mon, Aug 31, 2026 at 3:14 PM Raul <rauljan7@gmail.com> wrote:\n"
+            "> anything else there?\n> --\n> Unsubscribe: https://x/y",
+            "Sounds good, let's talk Thursday.",
+        ),
+        (
+            "outlook",
+            "Yes please.\n\n-----Original Message-----\nFrom: Raul\nSent: Monday\n",
+            "Yes please.",
+        ),
+        ("no quote at all", "What's the salary range?", "What's the salary range?"),
+        (
+            # Must not eat real content.
+            "a colon that isn't an attribution",
+            "Here's my question:\nWhat's the range?",
+            "Here's my question:\nWhat's the range?",
+        ),
+    ],
+)
+def test_quoted_history_is_stripped_from_a_reply(client: str, raw: str, expected: str) -> None:
+    """Stored whole, the quote shows the thread to itself twice — and, worse, `classify_reply`
+    reads *our own* previous message, footer included, as part of what the candidate said."""
+    assert receiving.strip_quoted_reply(raw) == expected, client
+
+
+def test_a_reply_that_is_only_a_quote_keeps_its_text() -> None:
+    """A noisy message on the thread is recoverable; an empty one is not."""
+    assert receiving.strip_quoted_reply("> nothing but quote") == "> nothing but quote"
+
+
+@pytest.mark.db
+async def test_a_linkedin_reply_is_left_alone(
+    db_client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Chat has no quoted history, so a DM that happens to start a line with ">" must survive."""
+    _with_secret(monkeypatch)
+    enr = await _thread(db_session, slug="rx-li-quote", chat_id="CHAT-Q")
+    dm = "> this is how I'd phrase it\nthoughts?"
+    r = await db_client.post(
+        f"/webhooks/unipile?token={_SECRET}", json=_event("CHAT-Q", dm, message_id="M-Q")
+    )
+    assert r.json()["status"] == "queued"
+    assert [m.body for m in await _inbound_rows(db_session, enr.id)] == [dm]

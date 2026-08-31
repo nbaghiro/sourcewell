@@ -40,13 +40,12 @@ import {
   useOpenBillingPortal,
   useStartCheckout,
   useConnections,
-  useLinkedInConnectLink,
+  useConnectSeat,
   useDataProviders,
   useDeleteDataProvider,
   useDisconnect,
   useInviteMember,
   useMembers,
-  useReauth,
   useRemoveMember,
   useRemoveSuppression,
   useSaveDataProvider,
@@ -55,6 +54,7 @@ import {
   useUpdateWorkspaceSettings,
   useVerifyDataProvider,
   useWorkspaceSettings,
+  type SeatProvider,
 } from "@/lib/api/queries";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -265,24 +265,41 @@ function UsageStat({ label, weight, value }: { label: string; weight: string; va
   );
 }
 
+/** The seats a recruiter can add, in the order they're offered. Each opens the same hosted-auth
+ *  wizard pinned to that provider. */
+const CONNECTABLE: { provider: SeatProvider; title: string; blurb: string }[] = [
+  {
+    provider: "linkedin",
+    title: "LinkedIn · per-recruiter",
+    blurb: "Connect another seat via Unipile (~150/day)",
+  },
+  {
+    provider: "gmail",
+    title: "Gmail · per-recruiter",
+    blurb: "Send and receive from your own Google mailbox",
+  },
+  {
+    provider: "graph",
+    title: "Microsoft · per-recruiter",
+    blurb: "Send and receive from your own Outlook mailbox",
+  },
+];
+
 function ConnectionsTab() {
   const { data: connections } = useConnections();
-  const connectLink = useLinkedInConnectLink();
+  const connectSeat = useConnectSeat();
   const disconnect = useDisconnect();
-  const reauth = useReauth();
-  const busy =
-    connectLink.isPending || disconnect.isPending || reauth.isPending;
+  const busy = connectSeat.isPending || disconnect.isPending;
 
-  // Real LinkedIn seats come back from Unipile's hosted-auth wizard, so connecting means
-  // leaving the app.
   /** Send the recruiter to Unipile's hosted-auth wizard — the only way a real seat is created.
    *  There is deliberately no fallback: marking a seat "connected" without an account behind it
    *  is what made Settings claim LinkedIn was live when nothing had been authorised. */
-  async function connectLinkedIn() {
+  async function connect(provider: SeatProvider) {
+    const label = PROVIDER[provider]?.label ?? provider;
     try {
-      const { url } = await connectLink.mutateAsync();
+      const { url } = await connectSeat.mutateAsync(provider);
       if (!url) {
-        toast.error("LinkedIn isn't configured on this deployment", {
+        toast.error("Connections aren't configured on this deployment", {
           description:
             "Unipile needs an API key, a DSN and a webhook secret before seats can be connected.",
         });
@@ -290,7 +307,7 @@ function ConnectionsTab() {
       }
       window.location.href = url;
     } catch {
-      toast.error("Couldn't start the LinkedIn connection");
+      toast.error(`Couldn't start the ${label} connection`);
     }
   }
 
@@ -327,30 +344,28 @@ function ConnectionsTab() {
                     <Button variant="outline" size="sm" disabled={busy} onClick={() => disconnect.mutate(c.id, { onSuccess: () => toast.success("Disconnected") })}>
                       Disconnect
                     </Button>
-                  ) : c.provider === "linkedin" ? (
-                    <Button variant="outline" size="sm" disabled={busy} onClick={connectLinkedIn}>
-                      {c.linked ? "Reconnect" : "Finish connecting"}
-                    </Button>
                   ) : (
-                    <Button variant="outline" size="sm" disabled={busy} onClick={() => reauth.mutate(c.id, { onSuccess: () => toast.success("Reconnected") })}>
-                      Reconnect
+                    <Button variant="outline" size="sm" disabled={busy} onClick={() => void connect(c.provider)}>
+                      {c.linked ? "Reconnect" : "Finish connecting"}
                     </Button>
                   )}
                 </div>
               );
             })}
-            <div className="flex items-center gap-4 pt-4">
-              <div className="grid size-10 place-items-center rounded-lg border border-dashed border-border text-muted-foreground">
-                <LinkedInIcon className="size-5" />
+            {CONNECTABLE.map((seat) => (
+              <div key={seat.provider} className="flex items-center gap-4 pt-4">
+                <div className="grid size-10 place-items-center rounded-lg border border-dashed border-border text-muted-foreground">
+                  {PROVIDER[seat.provider]?.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-foreground">{seat.title}</div>
+                  <div className="text-xs text-muted-foreground">{seat.blurb}</div>
+                </div>
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => void connect(seat.provider)}>
+                  Connect
+                </Button>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-foreground">LinkedIn · per-recruiter</div>
-                <div className="text-xs text-muted-foreground">Connect another seat via Unipile (~150/day)</div>
-              </div>
-              <Button variant="outline" size="sm" disabled={busy} onClick={connectLinkedIn}>
-                Connect
-              </Button>
-            </div>
+            ))}
           </>
         )}
       </CardContent>

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.ext.unipile import UnipileConnection
-from app.models import ConnectionProvider, LoginAttempt, SeatType, User
+from app.models import Connection, ConnectionProvider, LoginAttempt, SeatType, User
 from app.services.workspace import connections as connections_service
 from app.services.workspace.connections import user_seat
 from tests.factories import make_org, make_user
@@ -34,12 +34,15 @@ async def test_create_link_returns_wizard_url() -> None:
         return_value=httpx.Response(200, json={"object": "HostedAuthURL", "url": "https://wizard"})
     )
     url = await UnipileConnection("key", _DSN).create_link(
-        user_ref="u1", notify_url="https://n", redirect_url="https://r"
+        user_ref="u1", notify_url="https://n", redirect_url="https://r", providers=["GOOGLE"]
     )
     assert url == "https://wizard"
     body = json.loads(route.calls.last.request.content)
     # Unipile rejects anything but YYYY-MM-DDTHH:MM:SS.sssZ
     assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$", body["expiresOn"])
+    # The wizard is pinned to the one provider asked for, so what comes back is what the attempt
+    # recorded — that is what lets the notify hop trust it.
+    assert body["providers"] == ["GOOGLE"]
 
 
 @respx.mock
@@ -75,7 +78,7 @@ async def test_seat_connect_binds_the_account_to_the_signed_in_user(
     users_before = len((await db_session.execute(select(User))).scalars().all())
 
     monkeypatch.setattr(connections_service, "unipile_connection", lambda: None)
-    await connections_service.complete_linkedin_notify(
+    await connections_service.complete_seat_connect(
         db_session, state="ST-1", account_id="ACCT-SEAT"
     )
 
@@ -100,7 +103,7 @@ async def test_notify_ignores_an_attempt_that_names_no_user(
     users_before = len((await db_session.execute(select(User))).scalars().all())
 
     monkeypatch.setattr(connections_service, "unipile_connection", lambda: None)
-    await connections_service.complete_linkedin_notify(
+    await connections_service.complete_seat_connect(
         db_session, state="ST-ORPHAN", account_id="ACCT-X"
     )
 
@@ -123,14 +126,12 @@ async def test_notify_endpoint_is_token_gated(
     )
     body = {"account_id": "acct-1", "name": "some-state"}
 
+    assert (await db_client.post("/settings/connections/notify", json=body)).status_code == 401
     assert (
-        await db_client.post("/settings/connections/linkedin/notify", json=body)
+        await db_client.post("/settings/connections/notify?token=wrong", json=body)
     ).status_code == 401
     assert (
-        await db_client.post("/settings/connections/linkedin/notify?token=wrong", json=body)
-    ).status_code == 401
-    assert (
-        await db_client.post("/settings/connections/linkedin/notify?token=s3cret", json=body)
+        await db_client.post("/settings/connections/notify?token=s3cret", json=body)
     ).status_code == 200  # accepted; unknown state is a no-op
 
 
@@ -138,9 +139,44 @@ async def test_notify_endpoint_is_token_gated(
 async def test_notify_is_disabled_when_no_secret_is_configured(db_client: AsyncClient) -> None:
     """A blank secret must not mean "any token passes"."""
     r = await db_client.post(
-        "/settings/connections/linkedin/notify?token=", json={"account_id": "a", "name": "b"}
+        "/settings/connections/notify?token=", json={"account_id": "a", "name": "b"}
     )
     assert r.status_code == 401
+
+
+@pytest.mark.db
+async def test_an_email_wizard_writes_an_email_seat(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The notify payload carries only an account id, so the provider has to come off the attempt.
+
+    Reading it from anywhere else would write a Gmail mailbox as a LinkedIn profile — and the send
+    path resolves a seat *by provider*, so that seat would then be picked to carry LinkedIn
+    messages it cannot send.
+    """
+    org = await make_org(db_session, slug="seat-email")
+    user = await make_user(db_session, org=org, email="rec@example.com")
+    db_session.add(
+        LoginAttempt(
+            state="ST-MAIL", status="pending", user_id=user.id, provider=ConnectionProvider.gmail
+        )
+    )
+    await db_session.flush()
+
+    monkeypatch.setattr(connections_service, "unipile_connection", lambda: None)
+    await connections_service.complete_seat_connect(
+        db_session, state="ST-MAIL", account_id="ACCT-GMAIL"
+    )
+
+    seat = (
+        (await db_session.execute(select(Connection).where(Connection.user_id == user.id)))
+        .scalars()
+        .one()
+    )
+    assert seat.provider is ConnectionProvider.gmail
+    assert seat.external_id == "ACCT-GMAIL"
+    # A mailbox has no LinkedIn tier to read; it can send, or it isn't connected.
+    assert seat.seat_type is SeatType.email
 
 
 # --- seat tier ---------------------------------------------------------------

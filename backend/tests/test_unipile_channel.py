@@ -87,6 +87,57 @@ async def test_email_send_posts_to_emails() -> None:
     assert email_id == "EM-1"
 
 
+@respx.mock
+async def test_a_sent_email_is_not_mistaken_for_a_rejection() -> None:
+    """Unipile's real answer, verbatim from a live account — note there is no `id`.
+
+    Reading one anyway produced None, and the send layer treats None as *rejected*. So a mail that
+    Gmail had already delivered surfaced to the recruiter as "the email provider rejected this
+    recipient", the message was never written to the thread, and retrying sent it again.
+    """
+    respx.post(f"{_DSN}/api/v1/emails").mock(
+        return_value=httpx.Response(
+            201,
+            json={
+                "object": "EmailSent",
+                "tracking_id": "EB-WoDQcRxeeBLZZ9XjxMA",
+                "provider_id": "1a057f08ddca0190",
+                "provider_immutable_id": None,
+            },
+        )
+    )
+    sent = await UnipileChannel("email", "key", _DSN).send(
+        account_id="acct", to="lee@example.com", subject="Hi", body="hello"
+    )
+    assert sent == "EB-WoDQcRxeeBLZZ9XjxMA"  # accepted, and threadable
+
+
+@respx.mock
+async def test_an_accepted_email_with_no_usable_id_still_counts_as_sent() -> None:
+    """ "I have nothing to thread a reply on" is not "it was refused"."""
+    respx.post(f"{_DSN}/api/v1/emails").mock(
+        return_value=httpx.Response(201, json={"object": "EmailSent"})
+    )
+    sent = await UnipileChannel("email", "key", _DSN).send(
+        account_id="acct", to="lee@example.com", subject="Hi", body="hello"
+    )
+    assert sent == ""  # falsy, but emphatically not None
+    assert sent is not None
+
+
+@respx.mock
+async def test_a_refused_email_is_still_a_rejection() -> None:
+    respx.post(f"{_DSN}/api/v1/emails").mock(
+        return_value=httpx.Response(400, json={"title": "invalid recipient"})
+    )
+    assert (
+        await UnipileChannel("email", "key", _DSN).send(
+            account_id="acct", to="nope", subject="Hi", body="hello"
+        )
+        is None
+    )
+
+
 # --- the reply-mapping model fields ------------------------------------------
 
 

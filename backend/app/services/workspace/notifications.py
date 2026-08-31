@@ -1,7 +1,8 @@
 """Notification feed (service layer): synthesize a lightweight feed from recent activity.
 
 There's no separate notifications table; the feed is composed from recent inbound replies, recent
-hand-offs, the count of drafts waiting on approval, and the user's last-seen marker (for unread).
+hand-offs, seats that need reconnecting, the count of drafts waiting on approval, and the user's
+last-seen marker (for unread).
 HTTP endpoints + response schemas live in `app/api/notifications.py`.
 """
 
@@ -12,6 +13,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
+    Connection,
+    ConnectionStatus,
     Contact,
     Enrollment,
     EnrollmentState,
@@ -19,6 +22,7 @@ from app.models import (
     MessageDirection,
     MessageStatus,
     User,
+    Workspace,
 )
 
 
@@ -32,6 +36,10 @@ class FeedItem:
     contact_avatar: str | None
     enrollment_id: str
     created_at: str | None
+    # Where clicking it goes. Everything used to be assumed to be a conversation and route to the
+    # inbox; a broken seat is fixed in Settings, and sending the user to an inbox they can't act
+    # in is how a notification becomes noise.
+    link: str = "/inbox"
 
 
 @dataclass(frozen=True)
@@ -107,6 +115,41 @@ async def build_feed(session: AsyncSession, *, workspace_id: str, user: User | N
                 created_at=e.updated_at.isoformat() if e.updated_at else None,
             )
         )
+
+    # Seats of this user's that the provider has told us are broken. Until this existed, a
+    # disconnected mailbox or a restricted LinkedIn surfaced only as a badge on a Settings tab
+    # nobody was looking at — so outreach silently stopped going out and the recruiter found out
+    # days later. Their own seats only: it is the owner who has to go and reconnect.
+    if user is not None:
+        broken = (
+            (
+                await session.execute(
+                    select(Connection)
+                    .join(Workspace, Workspace.organization_id == Connection.organization_id)
+                    .where(
+                        Workspace.id == workspace_id,
+                        Connection.user_id == user.id,
+                        Connection.status == ConnectionStatus.needs_reauth,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for conn in broken:
+            items.append(
+                FeedItem(
+                    id=conn.id,
+                    type="seat_needs_reauth",
+                    title=f"Reconnect your {conn.provider.value} account",
+                    body="Nothing can be sent from it until you do.",
+                    contact_name="",
+                    contact_avatar=None,
+                    enrollment_id="",
+                    created_at=conn.updated_at.isoformat() if conn.updated_at else None,
+                    link="/settings",
+                )
+            )
 
     items.sort(key=lambda i: i.created_at or "", reverse=True)
     items = items[:10]

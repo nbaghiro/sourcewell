@@ -7,6 +7,7 @@ see `deliver_outbound`.
 """
 
 import asyncio
+import re
 import smtplib
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,6 +26,7 @@ from app.core.logging import logger
 from app.core.types import JsonList, JsonObject
 from app.ext.unipile import unipile_channel
 from app.models import (
+    TERMINAL,
     Campaign,
     Channel,
     Connection,
@@ -137,6 +139,23 @@ async def _last_thread_ref(session: AsyncSession, *, enrollment_id: str) -> str 
     )
 
 
+def with_unsubscribe(body: str, unsubscribe_url: str | None) -> str:
+    """Append the opt-out line an outbound email has to carry, if there is one to carry.
+
+    `List-Unsubscribe` is what mail clients surface as a button, but we only control the MIME on
+    the SMTP path — through a provider we hand over a body, not a message. A line in the body is
+    the mechanism that survives every transport, and the one a recipient can actually find. Mail
+    sent through Unipile went out with neither: the header was set only by the dev SMTP path, and
+    the unsubscribe URL was computed, threaded all the way down here, and dropped on the floor.
+
+    Appended at send time and never written back to `Message.body`: this is transport boilerplate,
+    like a signature, and the thread should show what the recruiter actually wrote.
+    """
+    if not unsubscribe_url:
+        return body
+    return f"{body}\n\n—\nNot interested? Unsubscribe: {unsubscribe_url}"
+
+
 def _send_sync(
     host: str,
     port: int,
@@ -157,6 +176,9 @@ def _send_sync(
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = in_reply_to
     if unsubscribe_url:
+        # One-click unsubscribe (RFC 8058) — the header a mail client renders as a button. Only
+        # this path can set it: through a provider we hand over a body, not a MIME message, so
+        # there the opt-out rides in the body instead (`with_unsubscribe`).
         msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     msg.set_content(body)
@@ -247,6 +269,9 @@ async def deliver_outbound(
         return
 
     # Email: real ESP via Unipile when configured, else SMTP (dev/Mailpit) with threading headers.
+    # Both carry the same body — the opt-out line is added here, above the transport split, so it
+    # can't go missing from one of them again.
+    body = with_unsubscribe(message.body, unsubscribe_url)
     if provider is not None and account_id and not s.email_dry_run:
         if seat is not None and seat.status != ConnectionStatus.ok:
             raise PermanentSendError("email seat needs reauthentication")
@@ -255,7 +280,7 @@ async def deliver_outbound(
                 if not await provider.reply(
                     account_id=account_id,
                     thread_id=thread_ref,
-                    body=message.body,
+                    body=body,
                     idempotency_key=message.idempotency_key,
                 ):
                     raise PermanentSendError("the email provider rejected this reply")
@@ -265,15 +290,15 @@ async def deliver_outbound(
                     account_id=account_id,
                     to=target,
                     subject=message.subject,
-                    body=message.body,
+                    body=body,
                     idempotency_key=message.idempotency_key,
                 )
                 if mid is None:
-                    # `send` returns None only for a permanent rejection (a transient one raises
-                    # out of `_permanent`). Recording the message anyway stamped it `sent` with no
-                    # provider id behind it — a thread bubble for mail that was never accepted.
-                    raise PermanentSendError("the email provider rejected this recipient")
-                message.external_id = mid
+                    # None means the provider *refused* it — a transient failure raises out of
+                    # `_permanent` instead. An accepted send with no id to thread on comes back as
+                    # "", which is not a failure: the mail left, we just can't chain a reply to it.
+                    raise PermanentSendError("the email provider rejected this message")
+                message.external_id = mid or None
         except PermanentSendError:
             raise
         except Exception as exc:
@@ -290,7 +315,7 @@ async def deliver_outbound(
                 sender,
                 target,
                 message.subject or "",
-                message.body,
+                body,
                 message_id,
                 thread_ref,
                 unsubscribe_url,
@@ -330,16 +355,28 @@ def write_message(contact: Contact, step: JsonObject) -> tuple[str, str]:
     return subject, body
 
 
-_OPT_OUT = ("not interested", "no thanks", "unsubscribe", "stop", "remove me", "leave me alone")
+# Phrases that mean "don't contact me" wherever they appear. Matched on word boundaries, not as
+# raw substrings: an opt-out permanently suppresses the address and the recruiter cannot undo it
+# from the thread, so a false positive silently costs a real candidate.
+_OPT_OUT = ("not interested", "no thanks", "remove me", "leave me alone", "unsubscribe")
+# "stop" only counts as the *whole* message — the SMS convention. As a substring it fired on
+# "I'll stop by Thursday" and "stopped by your careers page", which are the opposite of an opt-out.
+_OPT_OUT_ALONE = ("stop",)
 _INTERESTED = ("interested", "sounds good", "let's talk", "lets talk", "happy to", "tell me more")
+
+
+def _mentions(text: str, phrases: tuple[str, ...]) -> bool:
+    return any(re.search(rf"\b{re.escape(p)}\b", text) for p in phrases)
 
 
 def classify_reply(text: str) -> str:
     """Classify an inbound reply: 'opted_out' | 'interested' | 'neutral'."""
     t = text.lower()
-    if any(k in t for k in _OPT_OUT):
+    if t.strip(" \t\r\n.!?") in _OPT_OUT_ALONE:
         return "opted_out"
-    if any(k in t for k in _INTERESTED):
+    if _mentions(t, _OPT_OUT):
+        return "opted_out"
+    if _mentions(t, _INTERESTED):
         return "interested"
     return "neutral"
 
@@ -688,6 +725,49 @@ async def send_conversation_message(
     enrollment.reply_pending = False
     await session.flush()
     return message
+
+
+async def open_direct_conversation(
+    session: AsyncSession, *, workspace_id: str, contact: Contact
+) -> Enrollment:
+    """The thread for messaging this contact one-to-one — reusing one if it already exists.
+
+    Find-or-create, so "Message" is idempotent: clicking it twice lands in the same conversation
+    rather than forking a second thread with the same person. An existing *campaign* thread wins
+    over making a direct one — the recruiter means "talk to this person", and splitting that
+    across two threads is how half a conversation goes missing.
+
+    The row is created before anything is sent, and an enrollment with no messages never appears
+    in the inbox list (that list is built from messages), so opening a conversation and walking
+    away leaves nothing behind to clean up.
+    """
+    existing = (
+        (
+            await session.execute(
+                select(Enrollment)
+                .where(
+                    Enrollment.workspace_id == workspace_id,
+                    Enrollment.contact_id == contact.id,
+                    Enrollment.state.not_in(TERMINAL),
+                )
+                .order_by(Enrollment.campaign_id.is_(None), Enrollment.created_at.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if existing is not None:
+        return existing
+    enrollment = Enrollment(
+        workspace_id=workspace_id,
+        campaign_id=None,  # direct: no sequence, so the worker never ticks it
+        contact_id=contact.id,
+        state=EnrollmentState.active,
+    )
+    session.add(enrollment)
+    await session.flush()
+    return enrollment
 
 
 async def approve_message(

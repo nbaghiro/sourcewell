@@ -90,7 +90,8 @@ class CampaignRowOut(CampaignOut):
 
 class EnrollmentOut(BaseModel):
     id: str
-    campaign_id: str
+    # Null on a direct conversation — a one-to-one thread with no sequence behind it.
+    campaign_id: str | None
     contact_id: str
     state: EnrollmentState
     score: int
@@ -98,6 +99,11 @@ class EnrollmentOut(BaseModel):
     current_step: int
     next_run_at: str | None
     outcome: str | None
+    # They answered and it wasn't a clear yes or no, so the ball is with the recruiter. Its own
+    # flag rather than a state because the enrollment is still mid-sequence: `state` stays
+    # `awaiting_reply` (what the next touchpoint is gated on), which alone reads as "waiting
+    # on them" long after they've written back.
+    reply_pending: bool
 
 
 class EnrollmentRowOut(EnrollmentOut):
@@ -152,6 +158,7 @@ def dump_enrollment(e: Enrollment) -> EnrollmentOut:
         current_step=e.current_step,
         next_run_at=e.next_run_at.isoformat() if e.next_run_at else None,
         outcome=e.outcome,
+        reply_pending=e.reply_pending,
     )
 
 
@@ -218,7 +225,8 @@ async def list_campaigns_endpoint(ctx: ContextDep, session: SessionDep) -> list[
     )
     by_campaign: dict[str, dict[EnrollmentState, int]] = {}
     for cid, state, cnt in rows:
-        by_campaign.setdefault(cid, {})[state] = int(cnt)
+        if cid is not None:  # direct conversations belong to no campaign
+            by_campaign.setdefault(cid, {})[state] = int(cnt)
 
     def counts_for(cid: str) -> CampaignCounts:
         d = by_campaign.get(cid, {})

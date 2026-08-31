@@ -81,11 +81,15 @@ class ImportOut(BaseModel):
 
 class ContactEnrollmentOut(BaseModel):
     id: str
-    campaign_id: str
+    # Null (and the name blank) on a direct conversation — no sequence behind it.
+    campaign_id: str | None
     campaign_name: str
     state: EnrollmentState
     score: int
     current_step: int
+    # They answered and it wasn't a clear yes or no, so the recruiter owes them one — see
+    # `campaigns.EnrollmentOut.reply_pending`.
+    reply_pending: bool
 
 
 class ContactActivityOut(BaseModel):
@@ -282,6 +286,7 @@ async def get_contact(contact_id: str, ctx: ContextDep, session: SessionDep) -> 
             state=e.state,
             score=e.score,
             current_step=e.current_step,
+            reply_pending=e.reply_pending,
         )
         for e, c in rows
     ]

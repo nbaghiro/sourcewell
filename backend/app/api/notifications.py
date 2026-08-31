@@ -24,6 +24,8 @@ class NotificationItem(BaseModel):
     contact_avatar: str | None
     enrollment_id: str
     created_at: str | None
+    # Where clicking it should go — not every notification is a conversation.
+    link: str
 
 
 class NotificationsOut(BaseModel):
@@ -52,6 +54,7 @@ async def notifications(ctx: ContextDep, session: SessionDep) -> NotificationsOu
                 contact_avatar=i.contact_avatar,
                 enrollment_id=i.enrollment_id,
                 created_at=i.created_at,
+                link=i.link,
             )
             for i in feed.items
         ],

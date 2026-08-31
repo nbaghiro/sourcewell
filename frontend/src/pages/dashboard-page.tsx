@@ -115,7 +115,7 @@ export function DashboardPage() {
                         <div className="text-sm font-semibold text-foreground">{r.contact_name}</div>
                         <div className="truncate text-xs text-muted-foreground">{r.snippet}</div>
                       </div>
-                      <StateBadge state={r.state} />
+                      <StateBadge state={r.state} replyPending={r.reply_pending} />
                     </div>
                   ))}
                 </CardContent>

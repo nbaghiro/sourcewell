@@ -7,6 +7,7 @@ engine by hand. Rate-limiting (`can_send_now`) is send-policy — see `services/
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from time import monotonic
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,7 @@ from app.models import (
 )
 from app.services.outreach.enrollment import tick
 from app.services.outreach.messaging import pending_inbound
+from app.services.outreach.receiving import ensure_inbound_webhooks_quietly, sweep_inbound
 
 _POLL_SECONDS = 10
 _MAX_BACKOFF_SECONDS = 300
@@ -199,8 +201,14 @@ async def run_source_due(
     return {"sourced": sourced}
 
 
+# How often to re-assert the inbound subscriptions and sweep for messages the webhook never
+# delivered. Far slower than the main tick: both are safety nets, not the delivery path.
+_INBOUND_SWEEP_SECONDS = 15 * 60
+
+
 async def _loop() -> None:
     errors = 0
+    last_sweep = 0.0
     while True:
         try:
             async with SessionLocal() as session:
@@ -210,6 +218,13 @@ async def _loop() -> None:
                 replies = await run_replies_due(session, now=now)
                 sent = await run_due(session, now=now)
                 sourced = await run_source_due(session, now=now)
+                # Periodically make sure the wire is still connected, and pick up anything that
+                # came in while it wasn't. A lapsed subscription is silent by nature: without
+                # this, replies simply stop arriving and nothing says so.
+                if monotonic() - last_sweep >= _INBOUND_SWEEP_SECONDS:
+                    last_sweep = monotonic()
+                    await ensure_inbound_webhooks_quietly()
+                    await sweep_inbound(session, now=now)
                 await session.commit()
             errors = 0
             if replies["routed"] or sent["processed"] or sourced["sourced"]:
