@@ -4,7 +4,7 @@ Mirrors the client-side in-memory demo (frontend/src/lib/api/demo/) so a backend
 renders identically: Recruiting + Enterprise Sales + Partnerships, each with enriched contacts,
 campaign lifecycle (active/paused/draft/done), enrollments scored via the real Evaluator, deep
 multi-channel threads, queued (scheduled) sends, and a generated audit trail. Reusable from the seed
-CLI (`python -m app.demo.seed`) and from test fixtures.
+CLI (`make seed`, i.e. `python -m tests.seed`) and from test fixtures.
 """
 
 # ruff: noqa: RUF001

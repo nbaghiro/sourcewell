@@ -66,8 +66,8 @@ export function VerifyEmailPage() {
 
           {linkInvalid ? (
             <p className="mb-7 mt-2 text-sm leading-relaxed text-muted-foreground">
-              Confirmation links are single-use and expire after 24 hours. Send yourself a fresh
-              one and it'll sign you straight in.
+              Confirmation links expire after 24 hours. Send yourself a fresh one and it'll sign
+              you straight in.
             </p>
           ) : (
             <p className="mb-7 mt-2 text-sm leading-relaxed text-muted-foreground">

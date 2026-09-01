@@ -142,10 +142,20 @@ async def provision_user(
     ).scalar_one_or_none()
     if existing is not None:
         return existing
+    # Addresses are stored lowercase (see `auth.normalize_email`, which every other lookup goes
+    # through). Postgres compares `varchar` case-sensitively, so a provider answering with mixed
+    # case would miss the row below *and* slip past the unique index — forking a second account
+    # and a second org off an address that already had both.
+    email = email.strip().lower() if email else None
     now = datetime.now(UTC)
-    # A teammate whose account already exists locally — an invited seat, or an address that signed
-    # up with a password — links their OAuth identity to it rather than getting a second org of
-    # their own. An address is global and unique, so there is exactly one row it can belong to.
+    # A teammate whose account already exists locally — a pending invite, or an address that
+    # signed up with a password — links their OAuth identity to it rather than getting a second
+    # org of their own. An address is global and unique, so there is exactly one row it can
+    # belong to.
+    #
+    # For a pending invite this *is* the acceptance: the provider proves the mailbox exactly as
+    # clicking the emailed link does, so the seat is activated here rather than held until that
+    # link is used. `auth.accept_invite` is the other door onto the same transition.
     #
     # A disabled row is handed back untouched rather than linked or re-activated: `/auth/callback`
     # is what refuses to mint it a session, so that check lives there for every sign-in path.
@@ -245,7 +255,7 @@ async def start_seat_connect(
         return None
     await _purge_stale_attempts(session)
     state = new_id()
-    session.add(LoginAttempt(state=state, status="pending", user_id=user_id, provider=provider))
+    session.add(LoginAttempt(state=state, user_id=user_id, provider=provider))
     await session.flush()
     notify = f"{s.api_base_url}/settings/connections/notify?token={s.unipile_webhook_secret}"
     return await conn.create_link(
@@ -295,8 +305,6 @@ async def complete_seat_connect(session: AsyncSession, *, state: str, account_id
         account_id=account_id,
         seat_type=seat_type,
     )
-    attempt.account_id = account_id
-    attempt.status = "ready"
     await session.flush()
     # A brand-new deployment can take its first seat before it has ever booted with Unipile
     # configured; re-assert the subscription here so that seat's replies are heard from the start.

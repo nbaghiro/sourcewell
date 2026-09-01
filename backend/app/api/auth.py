@@ -8,7 +8,7 @@ here — it is a sending seat connected from Settings, so both its routes live i
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
@@ -50,45 +50,69 @@ OAuthProvider = Literal["google", "microsoft"]
 async def login(provider: OAuthProvider) -> RedirectResponse:
     """Start a Google or Microsoft sign-in, brokered by WorkOS.
 
-    Each button names its provider outright; see `workos_login_url` for why that matters.
+    Each button names its provider outright; see `workos_login_url` for why that matters. The
+    round-trip also carries a `state` nonce, minted here and parked in a short-lived cookie:
+    `callback` refuses any code that doesn't come back with the nonce it handed this browser.
     """
-    url = auth_service.workos_login_url(provider)
-    return _login_error("provider_unavailable") if url is None else RedirectResponse(url)
+    # Minted before the URL so the same value reaches the provider and the cookie.
+    state = auth_service.new_oauth_state()
+    url = auth_service.workos_login_url(provider, state=state)
+    if url is None:
+        return _login_error("provider_unavailable")
+    redirect = RedirectResponse(url)
+    auth_service.set_oauth_state_cookie(redirect, state)
+    return redirect
 
 
 class AuthOptions(BaseModel):
-    """Which OAuth buttons this deployment can actually offer, so the login screen doesn't render
-    one that dead-ends.
+    """Whether this deployment can offer the Google / Microsoft buttons, so the login screen
+    doesn't render one that dead-ends.
 
-    Only the brokered providers are here. Email+password needs no configuration, so it is always
-    available and the form is unconditional; LinkedIn is a sending seat connected from Settings,
-    never a way in.
+    One flag rather than one per provider: both are brokered by the same WorkOS application and
+    turned on by the same two keys, so they are available or unavailable together. Split it if a
+    deployment ever gets one without the other. Email+password needs no configuration at all, so
+    the form is unconditional; LinkedIn is a sending seat connected from Settings, never a way in.
     """
 
-    google: bool
-    microsoft: bool
+    oauth: bool
 
 
 @router.get("/options", response_model=AuthOptions)
 async def options() -> AuthOptions:
     """Which sign-in methods are available, so the login screen renders the right buttons."""
-    enabled = get_settings().workos_enabled
-    return AuthOptions(google=enabled, microsoft=enabled)
+    return AuthOptions(oauth=get_settings().workos_enabled)
 
 
 @router.get("/callback")
-async def callback(session: SessionDep, code: str | None = None) -> RedirectResponse:
-    """The OAuth callback: exchange WorkOS's `code` and mint the session."""
+async def callback(
+    request: Request, session: SessionDep, code: str | None = None, state: str | None = None
+) -> RedirectResponse:
+    """The OAuth callback: check the round-trip's own nonce, exchange WorkOS's `code`, mint the
+    session.
+
+    The `state` check is what makes it safe for this to be a bare GET that mints a session.
+    Without it an attacker could run a sign-in of their own, hold the resulting `code`, and
+    navigate someone else's browser here with it: the victim ends up signed into the *attacker's*
+    account, and every candidate they source afterwards lands in the attacker's org.
+    """
     settings = get_settings()
+
+    def done(response: RedirectResponse) -> RedirectResponse:
+        """Every exit spends the nonce — it is good for one round-trip, however that ends."""
+        auth_service.clear_oauth_state_cookie(response)
+        return response
+
+    if not auth_service.oauth_state_matches(request, state):
+        return done(_login_error("auth_failed"))
     user_id = await auth_service.complete_workos_login(session, code=code) if code else None
     user = await session.get(User, user_id) if user_id else None
     if user is None:
-        return _login_error("auth_failed")
+        return done(_login_error("auth_failed"))
     # A disabled account must stay out however it signs in. `password_login` refuses one already;
     # without this an admin's revocation was undone by a single OAuth round-trip, because
     # provisioning happily returns (and re-activates) the existing user.
     if user.status is UserStatus.disabled:
-        return _login_error("account_disabled")
+        return done(_login_error("account_disabled"))
     # A returning user goes straight in; a first-time OAuth user is signed in but still owes the
     # signup profile the provider couldn't give us, so they land on the form. Either way the
     # session is minted here — the form is posted as an authenticated request.
@@ -97,7 +121,7 @@ async def callback(session: SessionDep, code: str | None = None) -> RedirectResp
     )
     redirect = RedirectResponse(destination)
     auth_service.set_session_cookie(redirect, auth_service.mint_session_for(user))
-    return redirect
+    return done(redirect)
 
 
 class PasswordLoginRequest(BaseModel):
@@ -192,6 +216,11 @@ class SignupProfile(BaseModel):
         if v is None or not v.strip():
             return None
         v = v.strip()
+        # The scheme is checked outright rather than left to `removeprefix`, which is a no-op when
+        # the prefix is absent — so a bare `image/png;base64,...` used to satisfy every line below
+        # and be stored as an avatar the browser then resolved as a relative URL.
+        if not v.startswith("data:"):
+            raise ValueError("Upload a profile photo (PNG, JPG, WebP or GIF)")
         prefix, _, payload = v.partition(",")
         media_type = prefix.removeprefix("data:").split(";")[0].lower()
         if media_type not in AVATAR_TYPES or "base64" not in prefix or not payload:
@@ -221,6 +250,10 @@ class AccountSignupRequest(SignupProfile):
     def _strong_enough(cls, v: str) -> str:
         if len(v) < auth_service.MIN_PASSWORD_LEN:
             raise ValueError(f"Use at least {auth_service.MIN_PASSWORD_LEN} characters")
+        # An upper bound as well as a lower one: scrypt hashes whatever arrives, at 64 MB a call,
+        # before anything else in the request is looked at.
+        if len(v) > auth_service.MAX_PASSWORD_LEN:
+            raise ValueError(f"Keep this under {auth_service.MAX_PASSWORD_LEN} characters")
         return v
 
 
@@ -386,6 +419,10 @@ class ResetPasswordRequest(BaseModel):
     def _strong_enough(cls, v: str) -> str:
         if len(v) < auth_service.MIN_PASSWORD_LEN:
             raise ValueError(f"Use at least {auth_service.MIN_PASSWORD_LEN} characters")
+        # An upper bound as well as a lower one: scrypt hashes whatever arrives, at 64 MB a call,
+        # before anything else in the request is looked at.
+        if len(v) > auth_service.MAX_PASSWORD_LEN:
+            raise ValueError(f"Keep this under {auth_service.MAX_PASSWORD_LEN} characters")
         return v
 
 

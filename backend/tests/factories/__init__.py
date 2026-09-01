@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from httpx import AsyncClient, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import new_id
@@ -15,6 +16,7 @@ from app.models import (
     Workspace,
     WorkspaceKind,
 )
+from app.services.workspace import auth as auth_service
 
 
 async def make_org(session: AsyncSession, *, name: str = "Org", slug: str = "org") -> Organization:
@@ -100,3 +102,15 @@ async def make_workspace_member(
     await make_membership(session, user=user, org=org, role=MembershipRole.member)
     await make_space_grant(session, user=user, workspace=workspace)
     return user
+
+
+async def oauth_callback(client: AsyncClient, *, code: str = "any") -> Response:
+    """Drive `/auth/callback` the way a browser that actually started the flow does.
+
+    The endpoint refuses a code that arrives without the `state` nonce `/auth/login/{provider}`
+    parked in a cookie — that check is what stops an attacker aiming their own code at someone
+    else's browser — so every test that exercises the callback has to carry one.
+    """
+    state = auth_service.new_oauth_state()
+    client.cookies.set(auth_service.OAUTH_STATE_COOKIE, state)
+    return await client.get(f"/auth/callback?code={code}&state={state}")

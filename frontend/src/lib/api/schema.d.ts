@@ -348,7 +348,13 @@ export interface paths {
         };
         /**
          * Callback
-         * @description The OAuth callback: exchange WorkOS's `code` and mint the session.
+         * @description The OAuth callback: check the round-trip's own nonce, exchange WorkOS's `code`, mint the
+         *     session.
+         *
+         *     The `state` check is what makes it safe for this to be a bare GET that mints a session.
+         *     Without it an attacker could run a sign-in of their own, hold the resulting `code`, and
+         *     navigate someone else's browser here with it: the victim ends up signed into the *attacker's*
+         *     account, and every candidate they source afterwards lands in the attacker's org.
          */
         get: operations["callback_auth_callback_get"];
         put?: never;
@@ -418,7 +424,9 @@ export interface paths {
          * Login
          * @description Start a Google or Microsoft sign-in, brokered by WorkOS.
          *
-         *     Each button names its provider outright; see `workos_login_url` for why that matters.
+         *     Each button names its provider outright; see `workos_login_url` for why that matters. The
+         *     round-trip also carries a `state` nonce, minted here and parked in a short-lived cookie:
+         *     `callback` refuses any code that doesn't come back with the nonce it handed this browser.
          */
         get: operations["login_auth_login__provider__get"];
         put?: never;
@@ -2179,18 +2187,17 @@ export interface components {
         };
         /**
          * AuthOptions
-         * @description Which OAuth buttons this deployment can actually offer, so the login screen doesn't render
-         *     one that dead-ends.
+         * @description Whether this deployment can offer the Google / Microsoft buttons, so the login screen
+         *     doesn't render one that dead-ends.
          *
-         *     Only the brokered providers are here. Email+password needs no configuration, so it is always
-         *     available and the form is unconditional; LinkedIn is a sending seat connected from Settings,
-         *     never a way in.
+         *     One flag rather than one per provider: both are brokered by the same WorkOS application and
+         *     turned on by the same two keys, so they are available or unavailable together. Split it if a
+         *     deployment ever gets one without the other. Email+password needs no configuration at all, so
+         *     the form is unconditional; LinkedIn is a sending seat connected from Settings, never a way in.
          */
         AuthOptions: {
-            /** Google */
-            google: boolean;
-            /** Microsoft */
-            microsoft: boolean;
+            /** Oauth */
+            oauth: boolean;
         };
         /**
          * Authorship
@@ -4532,6 +4539,7 @@ export interface operations {
         parameters: {
             query?: {
                 code?: string | null;
+                state?: string | null;
             };
             header?: never;
             path?: never;

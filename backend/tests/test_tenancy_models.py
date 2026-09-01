@@ -54,4 +54,4 @@ async def test_tenancy_round_trip(db_session: AsyncSession) -> None:
     assert grant.workspace_id == ws.id
     assert grant.role == SpaceRole.member
     assert conn.provider == ConnectionProvider.gmail
-    assert conn.daily_sent == 0
+    assert conn.seat_type == SeatType.email

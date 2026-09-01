@@ -12,6 +12,8 @@ type S = components["schemas"];
 export type Workspace = S["WorkspaceSummary"];
 export type Me = S["MeResponse"];
 export type OrgSummary = S["OrgSummary"];
+/** `oauth` is a single flag: Google and Microsoft are brokered by the same WorkOS app and are
+ * configured together, so they are offered or withheld together. */
 export type AuthOptions = S["AuthOptions"];
 /** `email_sent` is false when the mail hop failed — the UI then surfaces a resend. */
 export type SignupResult = S["AccountSignupResponse"];
@@ -40,7 +42,7 @@ interface AuthContextValue {
   completeProfile: (profile: SignupProfile) => Promise<void>;
   /** Re-send the confirmation link. Always resolves — the API never says who has an account. */
   resendVerification: (email: string) => Promise<void>;
-  /** Which sign-in providers this deployment actually has configured. */
+  /** Whether this deployment has the OAuth buttons configured. Null while unknown. */
   options: AuthOptions | null;
   /** Mail a password-reset link. Always resolves, whether or not the address has an account. */
   forgotPassword: (email: string) => Promise<void>;
@@ -72,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [me, setMe] = React.useState<Me | null>(null);
   const [options, setOptions] = React.useState<AuthOptions | null>(null);
 
-  // Which providers are configured — the login screen only offers buttons that work.
+  // Whether the OAuth buttons are configured — the login screen only offers ones that work.
   React.useEffect(() => {
     void api<AuthOptions>("/auth/options")
       .then(setOptions)

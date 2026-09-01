@@ -17,13 +17,16 @@ with no provider configured (see `Settings.header_auth_enabled`).
 
 import hmac
 import re
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from hashlib import sha256
+from typing import Literal
 
 from fastapi import HTTPException, Request, Response
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from workos import WorkOSClient
 
@@ -82,7 +85,76 @@ async def complete_workos_login(session: AsyncSession, *, code: str) -> str | No
     first = getattr(wos_user, "first_name", None) or ""
     last = getattr(wos_user, "last_name", None) or ""
     name = f"{first} {last}".strip() or wos_user.email
-    return (await provision_user(session, subject=wos_user.id, name=name, email=wos_user.email)).id
+    # Normalised here, at the one place a provider-supplied address enters the system. Addresses
+    # are stored lowercase, and Postgres compares `varchar` case-sensitively, so a provider that
+    # answers `Mei.Tanaka@northwind.com` used to miss the row `mei@...` signed up with *and* slip
+    # past the unique index — handing the same person a duplicate account and a second, empty org
+    # while their real workspace stayed invisible.
+    email = normalize_email(wos_user.email) if wos_user.email else None
+    return (await provision_user(session, subject=wos_user.id, name=name, email=email)).id
+
+
+# --- the OAuth round-trip's CSRF nonce ---------------------------------------
+#
+# `/auth/callback` is a bare GET that mints a session, so on its own it is a login-CSRF gadget:
+# an attacker runs a sign-in of their own, holds the resulting `code`, and navigates someone
+# else's browser to the callback with it. The victim lands in the *attacker's* account, and every
+# candidate they source afterwards is sourced into the attacker's org. The nonce below is what
+# ties a callback to the browser that actually started the flow.
+
+OAUTH_STATE_COOKIE = "sw_oauth_state"
+OAUTH_STATE_TTL_SECONDS = 600  # one sign-in round-trip, not a session
+
+
+def _oauth_state_samesite() -> Literal["lax", "none"]:
+    """SameSite for the nonce cookie, which is *not* simply the session cookie's setting.
+
+    `strict` would be self-defeating: the callback is a cross-site top-level navigation from the
+    provider, and a strict cookie is not sent on one — the nonce would never come back and every
+    sign-in would fail closed.
+    """
+    return "none" if get_settings().cookie_samesite == "none" else "lax"
+
+
+def new_oauth_state() -> str:
+    """Mint the nonce for one sign-in round-trip. It goes in the authorization URL *and* the
+    cookie, so it has to be generated before either."""
+    return secrets.token_urlsafe(24)
+
+
+def set_oauth_state_cookie(response: Response, state: str) -> None:
+    s = get_settings()
+    response.set_cookie(
+        key=OAUTH_STATE_COOKIE,
+        value=state,
+        httponly=True,
+        secure=s.cookie_secure,
+        samesite=_oauth_state_samesite(),
+        path="/",
+        max_age=OAUTH_STATE_TTL_SECONDS,
+    )
+
+
+def oauth_state_matches(request: Request, state: str | None) -> bool:
+    """Whether a callback's `state` is the nonce this browser was handed. Absent on either side
+    is a failure, not a pass — that is the whole point."""
+    expected = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not expected or not state:
+        return False
+    return hmac.compare_digest(expected, state)
+
+
+def clear_oauth_state_cookie(response: Response) -> None:
+    """Spend the nonce. Every exit from the callback does this, success or not — a nonce that
+    survives its round-trip is replayable."""
+    s = get_settings()
+    response.delete_cookie(
+        key=OAUTH_STATE_COOKIE,
+        path="/",
+        httponly=True,
+        secure=s.cookie_secure,
+        samesite=_oauth_state_samesite(),
+    )
 
 
 # --- the sealed session ------------------------------------------------------
@@ -91,13 +163,10 @@ async def complete_workos_login(session: AsyncSession, *, code: str) -> str | No
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 14  # matches the cookie's own max-age
 
 
-def mint_session(user_id: str, *, epoch: int = 0) -> str:
-    """Seal a local user id (and its session epoch) into the session-cookie value."""
-    return seal(f"{user_id}|{epoch}")
-
-
 def mint_session_for(user: User) -> str:
-    return mint_session(user.id, epoch=user.session_epoch)
+    """Seal a user's id and their session epoch into the session-cookie value. The epoch is what
+    lets a password reset retire every outstanding cookie at once (see `_session_user_id`)."""
+    return seal(f"{user.id}|{user.session_epoch}")
 
 
 async def _session_user_id(session: AsyncSession, sealed: str) -> str | None:
@@ -128,7 +197,22 @@ def set_session_cookie(response: Response, sealed: str) -> None:
 
 
 def clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(key=get_settings().session_cookie_name, path="/")
+    """Delete the session cookie — with the same attributes it was set with.
+
+    Starlette's `delete_cookie` defaults to `secure=False, samesite="lax"`, and a browser drops a
+    deletion whose attributes don't fit the context it arrives in. Under COOKIE_SAMESITE=none (the
+    HTTPS-tunnel setup, where the frontend and this API are genuinely cross-site) logout answered
+    200, cleared nothing, and the client's hard navigation to /login walked straight back into the
+    app on the cookie that was still there.
+    """
+    s = get_settings()
+    response.delete_cookie(
+        key=s.session_cookie_name,
+        path="/",
+        httponly=True,
+        secure=s.cookie_secure,
+        samesite=s.cookie_samesite,
+    )
 
 
 # --- request → user id -------------------------------------------------------
@@ -214,15 +298,21 @@ async def password_login(session: AsyncSession, *, email: str, password: str) ->
         await _register_failure(session, user)
         return LoginOutcome(error="invalid")
 
-    # Correct password — only now is it safe to say anything about the account's state.
+    # The password was right, so the strikes it took to get here are spent — cleared *before* the
+    # state checks below, not after. Both of those exits raise out of the handler, and `get_session`
+    # rolls the request back on a raise, so a reset placed after them was thrown away: an
+    # unverified account kept its strikes across every correct sign-in and crept toward a lockout
+    # it had not earned. Committed for the same reason `_register_failure` is.
+    if user.failed_login_count or user.locked_until is not None:
+        user.failed_login_count = 0
+        user.locked_until = None
+        await session.commit()
+
+    # Only now is it safe to say anything about the account's state.
     if user.status is UserStatus.disabled:
         return LoginOutcome(error="account_disabled")
     if user.email_verified_at is None:
         return LoginOutcome(error="email_not_verified")
-
-    user.failed_login_count = 0
-    user.locked_until = None
-    await session.flush()
     return LoginOutcome(user_id=user.id)
 
 
@@ -314,6 +404,9 @@ async def reset_password(session: AsyncSession, *, token: str, password: str) ->
 USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,29}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD_LEN = 8
+# scrypt runs over whatever arrives, at 64 MB of memory a call, and both signup and sign-in hash
+# before anything else looks at the body. Nothing legitimate is longer than this.
+MAX_PASSWORD_LEN = 200
 
 
 def slugify(value: str) -> str:
@@ -370,19 +463,34 @@ async def signup_with_password(
     if await username_taken(session, username):
         raise HTTPException(status_code=409, detail="That username is taken")
 
-    _, user = await tenancy_service.signup(
-        session,
-        org_name=company_name.strip(),
-        slug=await _unique_slug(session, company_name),
-        admin_email=email,
-        admin_name=f"{first_name.strip()} {last_name.strip()}".strip(),
-        first_name=first_name.strip(),
-        last_name=last_name.strip(),
-        username=username,
-        avatar_url=avatar_url,
-        password_hash=hash_password(password),
-    )
+    try:
+        _, user = await tenancy_service.signup(
+            session,
+            org_name=company_name.strip(),
+            slug=await _unique_slug(session, company_name),
+            admin_email=email,
+            admin_name=f"{first_name.strip()} {last_name.strip()}".strip(),
+            first_name=first_name.strip(),
+            last_name=last_name.strip(),
+            username=username,
+            avatar_url=avatar_url,
+            password_hash=hash_password(password),
+        )
+    except IntegrityError as exc:
+        # The checks above are a read, so two signups racing on the same address or handle both
+        # pass them; the unique indexes are what actually decide it. Turn the loser's error into
+        # the same 409 the form already knows how to attach to a field, instead of a 500 it can
+        # only render as "try again in a moment".
+        raise _taken(exc) from exc
     return user
+
+
+def _taken(exc: IntegrityError) -> HTTPException:
+    """Which unique index a signup lost to, as the 409 the form renders against that field."""
+    constraint = str(getattr(exc.orig, "__cause__", None) or exc.orig).lower()
+    if "username" in constraint:
+        return HTTPException(status_code=409, detail="That username is taken")
+    return HTTPException(status_code=409, detail="That email is already registered")
 
 
 async def username_taken(
@@ -440,7 +548,10 @@ async def complete_signup_profile(
     if org is not None:
         org.name = company_name.strip()
         org.slug = await _unique_slug(session, company_name)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        raise _taken(exc) from exc  # same race as signup: the unique index has the last word
     return user
 
 
@@ -538,9 +649,10 @@ async def resend_verification(session: AsyncSession, *, email: str) -> None:
 # --- Team invites ------------------------------------------------------------
 #
 # An invite writes a `User` row for someone who has not agreed to anything yet, so the row itself
-# proves nothing. The emailed link is the proof: clicking it is what confirms the address, and
-# until then the account cannot be signed in to and cannot be linked to an OAuth identity (see
-# `connections.provision_user`). Same signed-token scheme as the other account links — no table.
+# proves nothing — proof of the mailbox is what activates it. The emailed link is one such proof;
+# a Google/Microsoft sign-in on that address is the other (`connections.provision_user`). Until
+# one of them happens the account cannot be signed in to with a password. Same signed-token scheme
+# as the other account links — no table.
 
 _INVITE_PREFIX = "invite"
 
@@ -581,6 +693,10 @@ async def accept_invite(session: AsyncSession, *, token: str) -> User | None:
     scanners fetch it before the recipient does, and refusing the second click would strand a
     brand-new teammate. What it never does is *re-activate* — a member who was disabled since
     being invited stays out.
+
+    Not the only way an invite is accepted: an OAuth sign-in on the invited address does the same
+    thing (`connections.provision_user`), because the provider proves the mailbox exactly as
+    clicking the link does.
     """
     fields = _read_link_token(token, _INVITE_PREFIX, field_count=1)
     if fields is None:

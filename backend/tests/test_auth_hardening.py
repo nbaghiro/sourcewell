@@ -14,7 +14,7 @@ from app.models import UserStatus
 from app.services.workspace import auth as auth_service
 from app.services.workspace import connections as connections_service
 from app.services.workspace.connections import provision_user
-from tests.factories import make_org, make_user
+from tests.factories import make_org, make_user, oauth_callback
 from tests.test_signup import payload
 
 _KEY = "8Q0hFTMWShy6mJnPz5A4mUXsPJIHVaFvpsRwqxhLZTk="  # a throwaway Fernet key
@@ -233,7 +233,7 @@ async def test_stale_login_attempts_are_purged(db_session: AsyncSession) -> None
 
     from app.models import LoginAttempt
 
-    old = LoginAttempt(state="ancient", status="pending")
+    old = LoginAttempt(state="ancient")
     db_session.add(old)
     await db_session.flush()
     old.created_at = datetime.now(UTC) - timedelta(days=3)
@@ -271,7 +271,7 @@ async def test_sso_callback_refuses_a_disabled_account(
         return user.id
 
     monkeypatch.setattr(auth_service, "complete_workos_login", _complete)
-    r = await db_client.get("/auth/callback?code=any")
+    r = await oauth_callback(db_client)
     assert "error=account_disabled" in r.headers["location"]
     assert (await db_client.get("/auth/me")).status_code == 401
 
@@ -296,3 +296,154 @@ async def test_sso_does_not_reactivate_a_disabled_user_by_email(db_session: Asyn
     await db_session.refresh(disabled)
     assert disabled.status is UserStatus.disabled
     assert disabled.sso_subject is None
+
+
+# --- the OAuth round-trip's own CSRF nonce ---------------------------------------
+
+
+@pytest.mark.db
+async def test_a_callback_with_no_state_mints_no_session(
+    db_client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Login CSRF: an attacker runs a sign-in of their own, holds the `code`, and navigates the
+    victim's browser to the callback with it. Without the nonce the victim lands in the
+    *attacker's* account and sources every candidate afterwards into the attacker's org."""
+    org = await make_org(db_session, slug="csrf-none")
+    attacker = await make_user(db_session, org=org, email="attacker@evil.com")
+
+    async def _complete(*_a: object, **_k: object) -> str:
+        return attacker.id
+
+    monkeypatch.setattr(auth_service, "complete_workos_login", _complete)
+
+    r = await db_client.get("/auth/callback?code=attacker-code")
+    assert "error=auth_failed" in r.headers["location"]
+    assert (await db_client.get("/auth/me")).status_code == 401
+
+
+@pytest.mark.db
+async def test_a_callback_whose_state_is_not_this_browsers_is_refused(
+    db_client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Knowing *a* nonce isn't enough — it has to be the one this browser was handed."""
+    org = await make_org(db_session, slug="csrf-wrong")
+    attacker = await make_user(db_session, org=org, email="attacker2@evil.com")
+
+    async def _complete(*_a: object, **_k: object) -> str:
+        return attacker.id
+
+    monkeypatch.setattr(auth_service, "complete_workos_login", _complete)
+
+    db_client.cookies.set(auth_service.OAUTH_STATE_COOKIE, auth_service.new_oauth_state())
+    r = await db_client.get(f"/auth/callback?code=any&state={auth_service.new_oauth_state()}")
+    assert "error=auth_failed" in r.headers["location"]
+    assert (await db_client.get("/auth/me")).status_code == 401
+
+
+@pytest.mark.db
+async def test_login_hands_out_the_nonce_it_sends_to_the_provider(
+    db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The value in the authorization URL and the value in the cookie have to be the same one, or
+    the callback can never match them."""
+    seen: dict[str, str | None] = {}
+
+    def _url(provider: str, *, state: str | None = None) -> str:
+        seen["state"] = state
+        return f"https://api.workos.com/authorize?provider={provider}&state={state}"
+
+    monkeypatch.setattr(auth_service, "workos_login_url", _url)
+    r = await db_client.get("/auth/login/google", follow_redirects=False)
+
+    assert seen["state"]
+    assert r.cookies[auth_service.OAUTH_STATE_COOKIE] == seen["state"]
+    assert f"state={seen['state']}" in r.headers["location"]
+
+
+@pytest.mark.db
+async def test_the_nonce_is_spent_by_its_round_trip(
+    db_client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One nonce, one round-trip: the callback clears the cookie whichever way it ends, so the
+    same URL replayed out of history or a proxy log can't mint a second session."""
+    org = await make_org(db_session, slug="csrf-spent")
+    user = await make_user(db_session, org=org, email="mei@spent.com")
+
+    async def _complete(*_a: object, **_k: object) -> str:
+        return user.id
+
+    monkeypatch.setattr(auth_service, "complete_workos_login", _complete)
+
+    state = auth_service.new_oauth_state()
+    db_client.cookies.set(auth_service.OAUTH_STATE_COOKIE, state)
+    url = f"/auth/callback?code=any&state={state}"
+    assert "error=" not in (await db_client.get(url)).headers["location"]
+
+    db_client.cookies.clear()
+    replay = await db_client.get(url)
+    assert "error=auth_failed" in replay.headers["location"]
+
+
+# --- logout has to actually delete the cookie ------------------------------------
+
+
+def test_logout_deletes_the_cookie_with_the_attributes_it_was_set_with(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Starlette's `delete_cookie` defaults to `samesite=lax, secure=False`, and a browser drops
+    a deletion that doesn't fit the context it arrives in. Under COOKIE_SAMESITE=none — the
+    HTTPS-tunnel setup, where the app and this API are genuinely cross-site — logout answered 200
+    and cleared nothing, and the client's navigation to /login walked straight back in."""
+    from fastapi import Response
+
+    monkeypatch.setattr(
+        auth_service,
+        "get_settings",
+        lambda: Settings(session_cookie_password=_KEY, cookie_secure=True, cookie_samesite="none"),
+    )
+    response = Response()
+    auth_service.clear_session_cookie(response)
+    header = response.headers["set-cookie"].lower()
+    assert "samesite=none" in header
+    assert "secure" in header
+    assert "httponly" in header
+
+
+# --- the limiter is not its own reset button -------------------------------------
+
+
+def test_evicting_full_buckets_keeps_live_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`_evict` used to `clear()` everything. The address cooldown keys on a caller-supplied
+    address, so spraying enough of them wiped every live login lockout and mail cooldown too —
+    handing anyone a way to reset the limiter by using it."""
+    limits.reset()
+    monkeypatch.setattr(limits, "_MAX_BUCKETS", 50)
+
+    assert limits._consume("login", "victim", limit=1, window_s=300) == 0
+    assert limits._consume("login", "victim", limit=1, window_s=300) > 0  # spent
+
+    for i in range(500):
+        limits._consume("spray", f"key-{i}", limit=1, window_s=0.001)
+
+    assert len(limits._BUCKETS) <= 50
+    assert limits._consume("login", "victim", limit=1, window_s=300) > 0  # still spent
+
+
+# --- the public development key is not a production key --------------------------
+
+
+def test_the_env_example_session_key_is_refused_outside_local() -> None:
+    """It ships in .env.example so a local run needs no setup, which means it is published. A
+    deployment that kept it has forgeable session cookies and readable provider secrets."""
+    from app.core.config import EXAMPLE_SESSION_COOKIE_PASSWORD
+
+    kept = prod(session_cookie_password=EXAMPLE_SESSION_COOKIE_PASSWORD)
+    problems = kept.production_config_errors()
+    assert any(".env.example" in p for p in problems)
+    assert prod().production_config_errors() == []
+    assert (
+        Settings(
+            environment="local", session_cookie_password=EXAMPLE_SESSION_COOKIE_PASSWORD
+        ).production_config_errors()
+        == []
+    )

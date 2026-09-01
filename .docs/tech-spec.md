@@ -103,7 +103,7 @@ semi-structured data; pgvector column for contact embeddings.
 | **workspace** | sub-unit | organization_id, name, kind(client\|department\|team), settings, brand_voice |
 | **user** | member | organization_id, email, name, status |
 | **membership** | access | user_id, scope(org\|workspace), workspace_id?, role |
-| **connection** | sending seat | organization_id, user_id, provider, external_id, seat_type, status, daily_sent, warmup_stage, token_ref(KMS) |
+| **connection** | sending seat | organization_id, user_id, provider, external_id, seat_type, status, capabilities jsonb |
 | **contact** | the person | workspace_id, name, title, company, location, skills/experience jsonb, linkedin_url, email, email_status, sources jsonb, embedding vector |
 | **company** | employer | workspace_id, name, domain, … |
 | **campaign** | the program | workspace_id, name, status, criteria jsonb, channels, autonomy_level, target_pipeline_size, score_threshold, daily_cap |

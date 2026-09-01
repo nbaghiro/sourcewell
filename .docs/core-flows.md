@@ -53,8 +53,8 @@ preserved on inbound; manual reply really sends; webhook signature + replay/time
    from_email/enrollment_id, not `In-Reply-To` → multi-campaign contacts mis-route on email replies.
 3. **`send_reply` sets `sent_at` before delivery** — an audit failure after a real send loses the record.
 4. **Cross-campaign contact fatigue** — no guard against a contact being messaged by several campaigns.
-5. Minor: per-seat cap undercounts legacy null `account_id`; `warmup_stage`/`daily_sent` columns unused;
-   SMTP Message-ID reused as a Unipile thread id on transport mixing.
+5. Minor: per-seat cap undercounts legacy null `account_id`; SMTP Message-ID reused as a Unipile
+   thread id on transport mixing.
 
 ---
 

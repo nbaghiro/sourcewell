@@ -73,7 +73,7 @@ async def test_seat_connect_binds_the_account_to_the_signed_in_user(
     """A connect attempt (user_id pre-set) attaches the seat instead of provisioning a new user."""
     org = await make_org(db_session, slug="seat-connect")
     user = await make_user(db_session, org=org, email="rec@example.com")
-    db_session.add(LoginAttempt(state="ST-1", status="pending", user_id=user.id))
+    db_session.add(LoginAttempt(state="ST-1", user_id=user.id))
     await db_session.flush()
     users_before = len((await db_session.execute(select(User))).scalars().all())
 
@@ -98,7 +98,7 @@ async def test_notify_ignores_an_attempt_that_names_no_user(
     no user — that was the sign-in half. With sign-in gone, an attempt with no user is either a
     stale row or a forged state, and either way must not mint anyone.
     """
-    db_session.add(LoginAttempt(state="ST-ORPHAN", status="pending"))
+    db_session.add(LoginAttempt(state="ST-ORPHAN"))
     await db_session.flush()
     users_before = len((await db_session.execute(select(User))).scalars().all())
 
@@ -108,10 +108,11 @@ async def test_notify_ignores_an_attempt_that_names_no_user(
     )
 
     assert len((await db_session.execute(select(User))).scalars().all()) == users_before
-    attempt = (
+    # ...and nothing was bound to anyone: no seat, and the orphan attempt is left for the purge.
+    assert (await db_session.execute(select(Connection))).scalars().first() is None
+    assert (
         await db_session.execute(select(LoginAttempt).where(LoginAttempt.state == "ST-ORPHAN"))
-    ).scalar_one()
-    assert attempt.status == "pending"  # untouched
+    ).scalar_one() is not None
 
 
 @pytest.mark.db
@@ -157,9 +158,7 @@ async def test_an_email_wizard_writes_an_email_seat(
     org = await make_org(db_session, slug="seat-email")
     user = await make_user(db_session, org=org, email="rec@example.com")
     db_session.add(
-        LoginAttempt(
-            state="ST-MAIL", status="pending", user_id=user.id, provider=ConnectionProvider.gmail
-        )
+        LoginAttempt(state="ST-MAIL", user_id=user.id, provider=ConnectionProvider.gmail)
     )
     await db_session.flush()
 

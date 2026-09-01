@@ -20,8 +20,9 @@ from fastapi import HTTPException, Request
 
 from app.core.config import Settings, get_settings
 
-# (scope, key) -> (window start, count)
-_BUCKETS: dict[tuple[str, str], tuple[float, int]] = {}
+# (scope, key) -> (window start, count, window length). The window is carried per bucket so
+# `_evict` can tell a spent counter from a live one without knowing which endpoint wrote it.
+_BUCKETS: dict[tuple[str, str], tuple[float, int, float]] = {}
 _MAX_BUCKETS = 10_000  # bounded so a flood of distinct keys can't grow this without limit
 
 
@@ -33,14 +34,38 @@ def reset() -> None:
 def _consume(scope: str, key: str, *, limit: int, window_s: float) -> float:
     """Count one hit. Returns seconds to wait if the limit is spent, else 0."""
     now = time.monotonic()
-    start, count = _BUCKETS.get((scope, key), (now, 0))
+    start, count, _ = _BUCKETS.get((scope, key), (now, 0, window_s))
     if now - start >= window_s:
         start, count = now, 0
     count += 1
     if len(_BUCKETS) >= _MAX_BUCKETS and (scope, key) not in _BUCKETS:
-        _BUCKETS.clear()  # crude, but keeps a spray of unique keys from exhausting memory
-    _BUCKETS[(scope, key)] = (start, count)
+        _evict(now)
+    _BUCKETS[(scope, key)] = (start, count, window_s)
     return 0.0 if count <= limit else start + window_s - now
+
+
+def _evict(now: float) -> None:
+    """Make room without forgetting anything still being enforced.
+
+    This used to `clear()` the whole dict, which handed anyone a reset button for the limiter:
+    `enforce_address_cooldown` keys on a caller-supplied address, so spraying `_MAX_BUCKETS`
+    distinct ones wiped every live login-lockout window and every mail cooldown along with the
+    junk. Spent windows go first; only if those free nothing do live counters get shed, and then
+    by which window *closes* soonest — not by which opened first. Oldest-first is backwards here:
+    the longest-standing counter is the one that has been enforcing the longest (a 15-minute
+    account lockout), while an attacker's spray is always the freshest thing in the map.
+    """
+    for bucket, (start, _, window_s) in list(_BUCKETS.items()):
+        if now - start >= window_s:
+            del _BUCKETS[bucket]
+    if len(_BUCKETS) >= _MAX_BUCKETS:
+
+        def closes_at(bucket: tuple[str, str]) -> float:
+            start, _, window_s = _BUCKETS[bucket]
+            return start + window_s
+
+        for bucket in sorted(_BUCKETS, key=closes_at)[: _MAX_BUCKETS // 10]:
+            del _BUCKETS[bucket]
 
 
 def _client_key(request: Request) -> str:

@@ -278,17 +278,19 @@ class User(IdMixin, TimestampMixin, Base):
 
 
 class LoginAttempt(IdMixin, TimestampMixin, Base):
-    """A pending LinkedIn seat connect (Unipile hosted-auth), started from Settings by a signed-in
-    user. Correlates the server-side notify webhook with the browser redirect via a one-time
-    `state` token; `user_id` is the user the resulting account is bound to.
+    """A pending seat connect (Unipile hosted-auth), started from Settings by a signed-in user.
+
+    Correlates the server-side notify webhook with the browser redirect via a one-time `state`
+    token; `user_id` is the user the resulting account is bound to. The row records only what the
+    notify hop cannot tell us on its own — who started this, and for which provider. It carries no
+    lifecycle of its own: the seat lands on `Connection`, and an abandoned attempt is aged out by
+    `_purge_stale_attempts` rather than marked spent.
     """
 
     __tablename__ = "login_attempt"
 
     state: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | ready
     user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # What the wizard was opened for. The notify hop carries only an account id and the state
     # token, so this row is the only record of *which kind* of seat is coming back — and a Gmail
     # mailbox must not be written as a LinkedIn profile.
@@ -347,9 +349,6 @@ class Connection(IdMixin, TimestampMixin, Base):
         sa_enum(ConnectionStatus), default=ConnectionStatus.ok
     )
     capabilities: Mapped[JsonObject] = mapped_column(JSONB, default=dict)
-    token_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    daily_sent: Mapped[int] = mapped_column(default=0)
-    warmup_stage: Mapped[int] = mapped_column(default=0)
 
 
 class ProviderCredential(IdMixin, TimestampMixin, Base):

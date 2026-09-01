@@ -5,6 +5,11 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# The Fernet key shipped in `.env.example` so a local run works with no setup. It is public — it
+# lives in the repository — so a deployment that kept it has no session security whatsoever: every
+# cookie is forgeable and every sealed provider secret is readable. Refused outside local below.
+EXAMPLE_SESSION_COOKIE_PASSWORD = "cUYdTpasVSgR9RKRn_d2uAB5o-1ZkQ9CSPgjbPXVX6A="
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -179,11 +184,20 @@ class Settings(BaseSettings):
         if self.is_local:
             return []
         problems = []
+        generate = (
+            'python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"'
+        )
         if not self.session_cookie_password:
             problems.append(
                 "SESSION_COOKIE_PASSWORD is unset: session cookies would be unencrypted "
-                "plaintext user ids, and anyone could forge one. Generate with: python -c "
-                '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+                f"plaintext user ids, and anyone could forge one. Generate with: {generate}"
+            )
+        elif self.session_cookie_password == EXAMPLE_SESSION_COOKIE_PASSWORD:
+            problems.append(
+                "SESSION_COOKIE_PASSWORD is still the key from .env.example, which is public in "
+                "the repository: every session cookie would be forgeable and every sealed "
+                f"provider secret readable. Generate your own with: {generate}"
             )
         if not (self.signing_secret or self.session_cookie_password):
             problems.append(

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Organization, User, Workspace
+from app.services.workspace import auth as auth_service
 from app.services.workspace.auth import confirm_verification, slugify, verification_token
 from app.services.workspace.connections import home_org_id
 
@@ -230,3 +231,19 @@ async def test_password_signup_lands_in_a_usable_workspace(
         .all()
     )
     assert [w.name for w in workspaces] == ["Default workspace"]
+
+
+@pytest.mark.db
+async def test_an_avatar_must_actually_be_a_data_url(db_client: AsyncClient) -> None:
+    """`removeprefix("data:")` is a no-op when the prefix is absent, so a bare
+    `image/png;base64,...` satisfied every other line of the validator and was stored as an
+    avatar the browser then resolved as a relative URL."""
+    bare = PNG.removeprefix("data:")
+    assert (await db_client.post("/auth/signup", json=payload(avatar=bare))).status_code == 422
+
+
+@pytest.mark.db
+async def test_a_password_has_a_ceiling_as_well_as_a_floor(db_client: AsyncClient) -> None:
+    """scrypt hashes whatever arrives, at 64 MB a call, before anything else looks at the body."""
+    huge = "x" * (auth_service.MAX_PASSWORD_LEN + 1)
+    assert (await db_client.post("/auth/signup", json=payload(password=huge))).status_code == 422

@@ -34,9 +34,7 @@ export function LoginPage() {
 
   // Until /auth/options answers, assume the OAuth buttons are there — it's the common deployment,
   // and a brief flash of a button that then disappears is worse than one that appears.
-  const google = options?.google ?? true;
-  const microsoft = options?.microsoft ?? true;
-  const anyOauth = google || microsoft;
+  const oauth = options?.oauth ?? true;
 
   async function continueWithEmail() {
     if (!email.trim() || !password) {
@@ -90,29 +88,25 @@ export function LoginPage() {
             </p>
           )}
 
-          {anyOauth && (
+          {oauth && (
             <>
               <div className="flex flex-col gap-2.5">
-                {google && (
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="h-11 w-full justify-center"
-                    onClick={() => login("google")}
-                  >
-                    <GoogleIcon /> Continue with Google
-                  </Button>
-                )}
-                {microsoft && (
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="h-11 w-full justify-center"
-                    onClick={() => login("microsoft")}
-                  >
-                    <MicrosoftIcon /> Continue with Microsoft
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="h-11 w-full justify-center"
+                  onClick={() => login("google")}
+                >
+                  <GoogleIcon /> Continue with Google
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="h-11 w-full justify-center"
+                  onClick={() => login("microsoft")}
+                >
+                  <MicrosoftIcon /> Continue with Microsoft
+                </Button>
               </div>
 
               <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">

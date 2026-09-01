@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Membership, Organization, User, UserStatus, Workspace
 from app.services.workspace import auth as auth_service
 from app.services.workspace.connections import home_org_id, provision_user
-from tests.factories import make_org, make_user
+from tests.factories import make_org, make_user, oauth_callback
 from tests.test_signup import PNG
 
 _PROFILE = {
@@ -103,7 +103,7 @@ async def test_callback_sends_an_unfinished_signup_to_the_form(
     )
     _oauth_callback(monkeypatch, user.id)
 
-    r = await db_client.get("/auth/callback?code=any")
+    r = await oauth_callback(db_client)
     assert r.headers["location"].endswith("/signup")
     # Signed in already — the completion form is posted as an authenticated request.
     me = await db_client.get("/auth/me")
@@ -122,7 +122,7 @@ async def test_callback_sends_a_returning_user_straight_into_the_app(
     await db_session.flush()
     _oauth_callback(monkeypatch, user.id)
 
-    r = await db_client.get("/auth/callback?code=any")
+    r = await oauth_callback(db_client)
     assert not r.headers["location"].endswith("/signup")
     assert (await db_client.get("/auth/me")).json()["profile_complete"] is True
 
@@ -142,7 +142,7 @@ async def test_completing_the_profile_names_the_org_and_finishes_signup(
     org = await db_session.get(Organization, await home_org_id(db_session, user_id=user.id))
     assert org is not None and org.name == "Northwind"  # the placeholder, from the domain
     _oauth_callback(monkeypatch, user.id)
-    await db_client.get("/auth/callback?code=any")
+    await oauth_callback(db_client)
 
     r = await db_client.post("/auth/complete-profile", json=_PROFILE)
     assert r.status_code == 200, r.text
@@ -169,7 +169,7 @@ async def test_the_completion_form_never_moves_the_email(
         db_session, subject="workos_user_06", name="Mei Tanaka", email="mei@northwind.com"
     )
     _oauth_callback(monkeypatch, user.id)
-    await db_client.get("/auth/callback?code=any")
+    await oauth_callback(db_client)
 
     r = await db_client.post(
         "/auth/complete-profile", json={**_PROFILE, "email": "someone.else@evil.com"}
@@ -189,7 +189,7 @@ async def test_completion_runs_once(
         db_session, subject="workos_user_07", name="Mei Tanaka", email="mei@northwind.com"
     )
     _oauth_callback(monkeypatch, user.id)
-    await db_client.get("/auth/callback?code=any")
+    await oauth_callback(db_client)
 
     assert (await db_client.post("/auth/complete-profile", json=_PROFILE)).status_code == 200
     replay = await db_client.post(
@@ -215,7 +215,7 @@ async def test_completion_rejects_a_taken_username(
         db_session, subject="workos_user_08", name="Mei Tanaka", email="mei@northwind.com"
     )
     _oauth_callback(monkeypatch, user.id)
-    await db_client.get("/auth/callback?code=any")
+    await oauth_callback(db_client)
 
     r = await db_client.post("/auth/complete-profile", json=_PROFILE)
     assert r.status_code == 409
@@ -284,7 +284,7 @@ async def test_an_unfinished_signup_cannot_use_the_rest_of_the_api(
         db_session, subject="workos_user_10", name="Mei Tanaka", email="mei@northwind.com"
     )
     _oauth_callback(monkeypatch, user.id)
-    await db_client.get("/auth/callback?code=any")
+    await oauth_callback(db_client)
 
     for path in (
         "/contacts",
@@ -315,7 +315,7 @@ async def test_the_gate_exempts_exactly_the_two_endpoints_that_lift_it(
         db_session, subject="workos_user_11", name="Mei Tanaka", email="mei@northwind.com"
     )
     _oauth_callback(monkeypatch, user.id)
-    await db_client.get("/auth/callback?code=any")
+    await oauth_callback(db_client)
 
     me = await db_client.get("/auth/me")
     assert me.status_code == 200 and me.json()["profile_complete"] is False
@@ -333,3 +333,48 @@ async def test_the_gate_does_not_catch_ordinary_accounts(
     await db_session.flush()
     r = await db_client.get("/auth/me", headers={"X-User-Id": user.id})
     assert r.status_code == 200 and r.json()["profile_complete"] is True
+
+
+# --- the address the provider hands back ------------------------------------
+
+
+@pytest.mark.db
+async def test_a_mixed_case_provider_address_finds_the_account_that_already_exists(
+    db_session: AsyncSession,
+) -> None:
+    """Addresses are stored lowercase and Postgres compares `varchar` case-sensitively, so a
+    provider answering `Mei.Tanaka@...` used to miss the row it belongs to *and* slip past the
+    unique index — a second account and a second, empty org, with the real workspace invisible."""
+    org = await make_org(db_session, slug="case-fold")
+    existing = await make_user(db_session, org=org, email="mei@northwind.com")
+
+    arriving = await provision_user(
+        db_session, subject="workos_case", name="Mei Tanaka", email="MEI@Northwind.com"
+    )
+
+    assert arriving.id == existing.id
+    assert arriving.email == "mei@northwind.com"
+    assert await home_org_id(db_session, user_id=arriving.id) == org.id
+
+
+@pytest.mark.db
+async def test_a_pending_invite_is_accepted_by_signing_in_with_the_provider(
+    db_session: AsyncSession,
+) -> None:
+    """The invited address has two doors, and both prove the same thing: that this person holds
+    the mailbox. Clicking the emailed link proves it; so does Google vouching for the address."""
+    org = await make_org(db_session, slug="invite-oauth")
+    invited = await make_user(db_session, org=org, email="pending@northwind.com")
+    invited.status = UserStatus.invited
+    invited.email_verified_at = None
+    await db_session.flush()
+
+    arriving = await provision_user(
+        db_session, subject="workos_pending", name="Pending Person", email="pending@northwind.com"
+    )
+
+    assert arriving.id == invited.id
+    assert arriving.status is UserStatus.active
+    assert arriving.email_verified_at is not None
+    # ...and no second org was forked off the same address.
+    assert await home_org_id(db_session, user_id=arriving.id) == org.id

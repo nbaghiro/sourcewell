@@ -22,7 +22,7 @@ _DSN = "https://api1.unipile.com:1234"
 @pytest.mark.db
 async def test_session_mint_and_resolve(db_session: AsyncSession) -> None:
     user = await make_user(db_session)
-    sealed = auth.mint_session(user.id)
+    sealed = auth.mint_session_for(user)
     assert await auth._session_user_id(db_session, sealed) == user.id
     assert await auth._session_user_id(db_session, "garbage") is None  # bad cookie → no user
 

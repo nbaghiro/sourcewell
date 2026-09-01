@@ -423,3 +423,31 @@ async def test_sign_in_against_a_corrupted_hash_is_rejected_cleanly(
         "/auth/password", json={"email": "corrupt@acme.com", "password": "whatever"}
     )
     assert r.status_code == 401
+
+
+@pytest.mark.db
+async def test_a_correct_password_clears_its_strikes_even_when_the_account_is_unverified(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The strikes were earned by *wrong* passwords. The unverified and disabled exits raise out
+    of the handler and `get_session` rolls a raising request back, so a reset placed after those
+    checks was thrown away — an unverified account carried its strikes across every correct
+    sign-in and crept toward a lockout it had not earned."""
+    user = await make_user(
+        db_session,
+        org=await make_org(db_session, slug="strikes-unverified"),
+        email="unverified@acme.com",
+    )
+    user.password_hash = hash_password("correct-horse")
+    user.email_verified_at = None
+    user.failed_login_count = 7
+    await db_session.commit()
+
+    r = await db_client.post(
+        "/auth/password", json={"email": "unverified@acme.com", "password": "correct-horse"}
+    )
+    assert r.status_code == 403
+    assert "email_not_verified" in r.text
+
+    await db_session.refresh(user)
+    assert user.failed_login_count == 0
