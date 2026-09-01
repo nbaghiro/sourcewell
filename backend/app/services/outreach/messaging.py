@@ -744,9 +744,7 @@ async def send_conversation_message(
         if organization_id and contact.email and channel == Channel.email
         else None
     )
-    seat = await resolve_channel_seat(
-        session, campaign=campaign, channel=channel, user_id=user_id
-    )
+    seat = await resolve_channel_seat(session, campaign=campaign, channel=channel, user_id=user_id)
     # Built first so the transport can stamp the provider thread id and idempotency key onto it,
     # but only added to the session once the send succeeded: the thread must never show a message
     # that never left.
@@ -1030,8 +1028,6 @@ async def resolve_inbound_enrollment(
         )
         return None
     return candidates[0]
-
-
 
 
 async def list_thread(

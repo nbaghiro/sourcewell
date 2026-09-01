@@ -36,6 +36,24 @@ _RL: dict[str, tuple[float, int]] = {}
 _RL_WINDOW = 60.0
 _RL_LIMIT = 600
 
+# Every header the React app may put on a request. This is a *contract with the client*, not a
+# preference: a browser preflight naming a header that isn't here is rejected outright with
+# `400 Disallowed CORS headers`, which takes the whole app down while the server logs nothing but
+# OPTIONS 400s. `X-Organization-Id` went missing from this list once and did exactly that — the
+# app worked until the first sign-in, then every request died at the preflight.
+#
+# `tests/test_cors.py` reads the client's own header list out of `frontend/src/lib/api/tenant.ts`
+# and fails if this list doesn't cover it, so adding a header on one side can't silently break
+# the other.
+CORS_ALLOW_HEADERS = [
+    "Content-Type",
+    "Authorization",
+    "X-User-Id",
+    "X-Workspace-Id",
+    "X-Organization-Id",
+    "X-Signature",
+]
+
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -49,6 +67,12 @@ def create_app() -> FastAPI:
             f"Refusing to start in environment={settings.environment!r} with insecure "
             f"settings:\n  - {listed}"
         )
+
+    # Not fatal, but the failure it describes is completely silent otherwise: the user confirms
+    # their email, is signed in on one host, and lands on another still logged out.
+    scope_warning = settings.cookie_scope_warning()
+    if scope_warning:
+        logger.warning("config: %s", scope_warning)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -67,13 +91,7 @@ def create_app() -> FastAPI:
         allow_origins=[settings.frontend_url],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=[
-            "Content-Type",
-            "Authorization",
-            "X-User-Id",
-            "X-Workspace-Id",
-            "X-Signature",
-        ],
+        allow_headers=CORS_ALLOW_HEADERS,
     )
 
     @app.middleware("http")

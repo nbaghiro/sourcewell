@@ -175,6 +175,42 @@ class Settings(BaseSettings):
         """
         return self.is_local and not self.auth_enabled
 
+    def cookie_scope_warning(self) -> str | None:
+        """Flag a config where the session cookie can't reach the app that needs it.
+
+        The emailed links — verification, invite — and the OAuth callback all set the session
+        cookie on whatever host the *browser* used to reach the API, which is `API_BASE_URL`, and
+        then redirect to `FRONTEND_URL`. A cookie carries no `Domain`, so it is host-only: point
+        those two at different sites and the user clicks "confirm", gets signed in on one host,
+        lands on another, and is asked to log in again. Nothing errors — the sign-in silently
+        didn't stick.
+
+        A warning rather than a startup refusal: a tunnelled API with a localhost frontend is a
+        legitimate local setup for testing provider webhooks, it just can't complete a cookie
+        flow. Site comparison is the last two labels, which is right for the shapes that matter
+        (`api.acme.com` / `app.acme.com` is one site) and imprecise for multi-part public
+        suffixes — acceptable for a hint that costs nothing to ignore.
+        """
+        from urllib.parse import urlparse
+
+        def site(url: str) -> str:
+            host = (urlparse(url).hostname or "").lower()
+            return ".".join(host.rsplit(".", 2)[-2:]) if host.count(".") >= 1 else host
+
+        api, app = site(self.api_base_url), site(self.frontend_url)
+        if not api or not app or api == app:
+            return None
+        # Explicitly configured for cross-site: the cookie is allowed to ride along.
+        if self.cookie_samesite == "none" and self.cookie_secure:
+            return None
+        return (
+            f"API_BASE_URL ({api}) and FRONTEND_URL ({app}) are different sites, so the session "
+            "cookie set by an emailed verification/invite link or the OAuth callback will not be "
+            "sent by the browser to the app — the user will appear signed out right after "
+            "confirming. Point both at the same host, or set COOKIE_SAMESITE=none with "
+            "COOKIE_SECURE=true."
+        )
+
     def production_config_errors(self) -> list[str]:
         """Security settings that must not keep their development defaults outside local.
 

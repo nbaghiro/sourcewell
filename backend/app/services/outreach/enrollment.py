@@ -256,9 +256,11 @@ async def _send_touchpoint(
             # Carrying that null across the fallback sent the email with an empty Subject header —
             # a poor first impression and a spam signal, on what is the default fallback path.
             if not message.subject:
-                step = sequence[enrollment.current_step] if enrollment.current_step < len(
-                    sequence
-                ) else {}
+                step = (
+                    sequence[enrollment.current_step]
+                    if enrollment.current_step < len(sequence)
+                    else {}
+                )
                 message.subject = write_message(contact, step)[0] or campaign.name
             seat = await resolve_channel_seat(session, campaign=campaign, channel=Channel.email)
         else:
