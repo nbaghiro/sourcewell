@@ -36,7 +36,7 @@ from app.services.outreach import messaging as msg_service
 from app.services.outreach.messaging import (
     PermanentSendError,
     deliver_outbound,
-    ingest_inbound,
+    record_inbound,
     resolve_channel_seat,
 )
 from tests.factories import make_org, make_user, make_workspace
@@ -252,11 +252,11 @@ async def test_email_reply_threads_via_prior_message_id(
 async def test_inbound_dedupe_by_provider_message_id(db_session: AsyncSession) -> None:
     _org, _contact, enr = await _thread(db_session, slug="dedupe")
     now = datetime.now(UTC)
-    first = await ingest_inbound(
-        db_session, from_email="ada@example.com", text="hi", now=now, provider_message_id="evt-1"
+    first = await record_inbound(
+        db_session, enrollment=enr, text="hi", now=now, provider_message_id="evt-1"
     )
-    dup = await ingest_inbound(
-        db_session, from_email="ada@example.com", text="hi", now=now, provider_message_id="evt-1"
+    dup = await record_inbound(
+        db_session, enrollment=enr, text="hi", now=now, provider_message_id="evt-1"
     )
     assert first is not None and dup is None  # the redelivered event is dropped
     inbound = (
@@ -272,9 +272,9 @@ async def test_inbound_dedupe_by_provider_message_id(db_session: AsyncSession) -
 @pytest.mark.db
 async def test_inbound_preserves_linkedin_channel(db_session: AsyncSession) -> None:
     _org, _contact, enr = await _thread(db_session, slug="chan")
-    await ingest_inbound(
+    await record_inbound(
         db_session,
-        from_email="ada@example.com",
+        enrollment=enr,
         text="hi",
         now=datetime.now(UTC),
         channel=Channel.linkedin,
@@ -302,7 +302,7 @@ async def test_hard_bounce_suppresses_and_fails(
     _org, _contact, enr = await _thread(db_session, slug="bounce", email="bad@example.com")
 
     async def boom(*_a: object, **_k: object) -> None:
-        raise PermanentSendError("bad address")
+        raise PermanentSendError("bad address", recipient_rejected=True)
 
     monkeypatch.setattr(enr_service, "deliver_outbound", boom)
     msg = _outbound(enr, Channel.email)
@@ -322,6 +322,41 @@ async def test_hard_bounce_suppresses_and_fails(
         .first()
     )
     assert supp is not None and supp.reason == SuppressionReason.bounced
+
+
+@pytest.mark.db
+async def test_a_broken_seat_does_not_suppress_the_candidate(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only the *address* being rejected is a bounce.
+
+    A dead seat, an unconfigured account or an InMail from a seat with no credits are all hard
+    failures, but they are ours — suppressing the candidate over one permanently do-not-contacts
+    them org-wide, and nothing in the thread can undo it.
+    """
+    _org, _contact, enr = await _thread(db_session, slug="seat-fail", email="fine@example.com")
+
+    async def boom(*_a: object, **_k: object) -> None:
+        raise PermanentSendError("email seat needs reauthentication")
+
+    monkeypatch.setattr(enr_service, "deliver_outbound", boom)
+    msg = _outbound(enr, Channel.email)
+    db_session.add(msg)
+    await db_session.flush()
+
+    await enr_service.tick(db_session, enrollment=enr, now=datetime.now(UTC))
+
+    assert msg.status == MessageStatus.failed  # still a hard failure, still no retry
+    supp = (
+        (
+            await db_session.execute(
+                select(Suppression).where(Suppression.email == "fine@example.com")
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert supp is None
 
 
 @pytest.mark.db

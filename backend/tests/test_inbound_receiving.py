@@ -222,25 +222,6 @@ async def test_worker_gives_up_on_a_reply_that_keeps_failing(
     assert (await worker.run_replies_due(db_session, now=datetime.now(UTC)))["routed"] == 0
 
 
-@pytest.mark.db
-async def test_synchronous_ingest_records_and_routes_in_one_call(db_session: AsyncSession) -> None:
-    """`ingest_inbound` is the seam for callers that need the intent back immediately: unlike the
-    provider webhooks it classifies inline and marks the message routed on the spot."""
-    enr = await _thread(db_session, slug="rx-inapp", chat_id="CHAT-7")
-    result = await msg_service.ingest_inbound(
-        db_session,
-        from_email="",
-        enrollment_id=enr.id,
-        text="Yes, I'm interested — tell me more!",
-        now=datetime.now(UTC),
-    )
-    assert result is not None
-    message, intent = result
-    assert intent == "interested"
-    assert message.processed_at is not None
-    assert enr.state == EnrollmentState.handed_off
-
-
 # --- the shapes Unipile actually sends -----------------------------------------
 
 # Verbatim from a live GOOGLE_OAUTH account: an email reply names its sender in `from_attendee`,

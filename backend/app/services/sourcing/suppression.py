@@ -1,5 +1,7 @@
 """Suppression list (org do-not-contact): logic and signed unsubscribe tokens."""
 
+import time
+
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -118,8 +120,16 @@ async def remove(session: AsyncSession, *, organization_id: str, email: str) -> 
     return bool(rows)
 
 
-def unsubscribe_token(organization_id: str, email: str) -> str:
-    return sign(f"{organization_id}|{normalize(email)}")
+# How long an unsubscribe link stays valid. Deliberately long: people unsubscribe from mail they
+# received months ago, and a link that has quietly stopped working is worse than no link at all —
+# it strands someone who is actively trying to opt out. The bound exists so a leaked token isn't
+# good forever, and so "invalid or expired" is a true statement rather than a guess.
+UNSUBSCRIBE_TTL_SECONDS = 365 * 24 * 60 * 60
+
+
+def unsubscribe_token(organization_id: str, email: str, *, issued_at: float | None = None) -> str:
+    stamp = int(issued_at if issued_at is not None else time.time())
+    return sign(f"{organization_id}|{normalize(email)}|{stamp}")
 
 
 def unsubscribe_url(organization_id: str, email: str) -> str:
@@ -127,9 +137,26 @@ def unsubscribe_url(organization_id: str, email: str) -> str:
     return f"{base}/unsubscribe?token={unsubscribe_token(organization_id, email)}"
 
 
-def parse_unsubscribe(token: str) -> tuple[str, str] | None:
+def parse_unsubscribe(token: str, *, now: float | None = None) -> tuple[str, str] | None:
+    """`(organization_id, email)` from a signed opt-out token, or None if it doesn't hold up.
+
+    Tokens minted before the issue time was added carry two fields instead of three. Those are
+    already sitting in real inboxes, so they keep working: breaking a live unsubscribe link to
+    tidy up a format is exactly the failure this endpoint exists to prevent.
+    """
     payload = verify(token)
-    if not payload or "|" not in payload:
+    if not payload:
         return None
-    org_id, email = payload.split("|", 1)
+    parts = payload.split("|")
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    if len(parts) != 3:
+        return None
+    org_id, email, stamp = parts
+    try:
+        issued = float(stamp)
+    except ValueError:
+        return None
+    if (now if now is not None else time.time()) - issued > UNSUBSCRIBE_TTL_SECONDS:
+        return None
     return org_id, email

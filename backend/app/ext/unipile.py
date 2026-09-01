@@ -344,10 +344,6 @@ def unipile_connection() -> UnipileConnection | None:
     return UnipileConnection(s.unipile_api_key, s.unipile_dsn)
 
 
-class UnipileError(RuntimeError):
-    """A Unipile call failed. Raised (never swallowed) so a send is never reported as delivered."""
-
-
 class UnipileChannel:
     """ChannelProvider role — send + reply on a channel (linkedin | email) from a seat.
 
@@ -355,8 +351,9 @@ class UnipileChannel:
     `POST /chats/{id}/messages` (reply); `attendees_ids` is the recipient's provider id, resolved
     from their public identifier. Email is `POST /emails`.
 
-    Every method raises `UnipileError` when the provider rejects the call — the send layer turns
-    that into a retry rather than marking an undelivered message as sent.
+    Hard and soft failures are kept apart by `_permanent`: a 4xx comes back as None/False for
+    the caller to fail outright, while a 429 or 5xx raises out of httpx so the send layer retries.
+    Nothing here reports an undelivered message as sent.
     """
 
     def __init__(self, channel: str, api_key: str, dsn: str) -> None:

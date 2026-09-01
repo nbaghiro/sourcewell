@@ -111,11 +111,24 @@ async def remove_suppression(email: str, ctx: ContextDep, session: SessionDep) -
     return RemovedOut(status="removed", email=email)
 
 
-@router.get("/unsubscribe", response_class=HTMLResponse)
-async def unsubscribe(
-    token: str, session: Annotated[AsyncSession, Depends(get_session)]
-) -> HTMLResponse:
-    """Public, signed unsubscribe link target (no auth)."""
+_PAGE_STYLE = (
+    "body{font-family:system-ui;background:#f3f1ea;color:#122019;display:grid;"
+    "place-items:center;height:100vh;margin:0}div{text-align:center;max-width:30rem}"
+    "button{font:inherit;background:#122019;color:#f3f1ea;border:0;border-radius:4px;"
+    "padding:.7rem 1.4rem;cursor:pointer;margin-top:1rem}"
+)
+
+
+def _page(title: str, heading: str, body_html: str) -> HTMLResponse:
+    return HTMLResponse(
+        f"<!doctype html><html><head><meta charset='utf-8'><title>{title}</title>"
+        f"<style>{_PAGE_STYLE}</style></head><body><div><h1>{heading}</h1>"
+        f"{body_html}</div></body></html>"
+    )
+
+
+async def _apply_unsubscribe(session: AsyncSession, token: str) -> str:
+    """Suppress the address a signed token names and close its live threads; returns the address."""
     parsed = parse_unsubscribe(token)
     if parsed is None:
         raise HTTPException(status_code=400, detail="invalid or expired link")
@@ -128,10 +141,44 @@ async def unsubscribe(
     # a reply — and so the next touchpoint stops being scheduled at all rather than being
     # attempted and refused.
     await close_for_opt_out(session, organization_id=org_id, email=email, now=datetime.now(UTC))
-    return HTMLResponse(
-        "<!doctype html><html><head><meta charset='utf-8'><title>Unsubscribed</title>"
-        "<style>body{font-family:system-ui;background:#f3f1ea;color:#122019;display:grid;"
-        "place-items:center;height:100vh;margin:0}div{text-align:center;max-width:30rem}</style>"
-        "</head><body><div><h1>You're unsubscribed</h1>"
-        f"<p>{email} won't receive further messages from this sender.</p></div></body></html>"
+    return email
+
+
+@router.get("/unsubscribe", response_class=HTMLResponse)
+async def unsubscribe_page(token: str) -> HTMLResponse:
+    """The confirmation page a recipient lands on. Reading it changes nothing.
+
+    This used to opt the recipient out on load. A GET that mutates is fine until something
+    fetches it without being asked — and mail security does exactly that: Outlook SafeLinks,
+    Gmail's proxy and every link scanner in between follow the URLs in a message to check them.
+    Candidates were being unsubscribed by a scanner they never saw, from mail they may never have
+    opened. Now the opt-out needs the POST below, which only a person clicking can send.
+    """
+    if parse_unsubscribe(token) is None:
+        raise HTTPException(status_code=400, detail="invalid or expired link")
+    return _page(
+        "Unsubscribe",
+        "Unsubscribe?",
+        "<p>You won't receive further messages from this sender.</p>"
+        f'<form method="post" action="/unsubscribe?token={token}">'
+        '<button type="submit">Unsubscribe me</button></form>',
+    )
+
+
+@router.post("/unsubscribe", response_class=HTMLResponse)
+async def unsubscribe(
+    token: str, session: Annotated[AsyncSession, Depends(get_session)]
+) -> HTMLResponse:
+    """Public, signed unsubscribe target (no auth) — the confirmation form, and one-click.
+
+    Outbound mail carries `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058), which
+    tells the recipient's mail client it may POST this URL directly. Until this route existed that
+    header was a promise nothing kept: the client's POST got a 405 and the unsubscribe button in
+    Gmail and Outlook simply failed.
+    """
+    email = await _apply_unsubscribe(session, token)
+    return _page(
+        "Unsubscribed",
+        "You're unsubscribed",
+        f"<p>{email} won't receive further messages from this sender.</p>",
     )

@@ -106,14 +106,18 @@ async def test_inbound_webhook_threads_by_sender_email(db_session: AsyncSession)
     db_session.add(enr)
     await db_session.flush()
 
-    result = await msg_service.ingest_inbound(
+    now = datetime.now(UTC)
+    resolved = await msg_service.resolve_inbound_enrollment(
         db_session,
         from_email="LEE@example.com",  # case-insensitive match
-        text="Yes, I'm interested — tell me more!",
-        now=datetime.now(UTC),
     )
-    assert result is not None
-    message, intent = result
+    assert resolved is not None and resolved.id == enr.id
+    message = await msg_service.record_inbound(
+        db_session, enrollment=resolved, text="Yes, I'm interested — tell me more!", now=now
+    )
+    assert message is not None and message.enrollment_id == enr.id
+    intent = await msg_service.route_inbound(
+        db_session, enrollment=resolved, message=message, now=now
+    )
     assert intent == "interested"
-    assert message.enrollment_id == enr.id
     assert enr.state == EnrollmentState.handed_off

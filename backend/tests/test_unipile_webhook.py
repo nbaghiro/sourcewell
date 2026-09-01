@@ -1,5 +1,7 @@
 """The public Unipile inbound receiver — replies → handle_reply + account lifecycle."""
 
+from datetime import UTC, datetime
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -199,3 +201,100 @@ async def test_a_colleagues_broken_seat_is_not_your_problem(db_session: AsyncSes
 
     feed = await notifications_service.build_feed(db_session, workspace_id=ws.id, user=mine)
     assert [i for i in feed.items if i.type == "seat_needs_reauth"] == []
+
+
+@pytest.mark.db
+async def test_a_stale_signed_event_is_refused(
+    db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The email receiver rejected a stale timestamp; this one — which carries the production
+    traffic, and accepts a bearer token from the query string — had no replay window at all."""
+    _with_secret(monkeypatch)
+    stale = datetime.now(UTC).timestamp() - messaging_api._WEBHOOK_MAX_SKEW_SECONDS - 60
+    resp = await db_client.post(
+        f"/webhooks/unipile?token={_SECRET}",
+        json={"event": "message_received", "ts": stale, "message": {"text": "hi"}},
+    )
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "stale webhook"
+
+
+@pytest.mark.db
+async def test_a_disconnect_flips_every_seat_holding_that_account(
+    db_client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`upsert_seat` keys on (user, provider), so two people can hold the same provider account.
+    Flipping an arbitrary one left the other advertising itself as healthy and failing every send
+    it was picked for."""
+    _with_secret(monkeypatch)
+    org = await make_org(db_session, slug="wh-multi")
+    one, two = await make_user(db_session), await make_user(db_session)
+    seats = [
+        await upsert_seat(
+            db_session,
+            organization_id=org.id,
+            user_id=u.id,
+            provider=ConnectionProvider.linkedin,
+            account_id="acct-shared",
+        )
+        for u in (one, two)
+    ]
+    await db_session.commit()
+
+    resp = await db_client.post(
+        f"/webhooks/unipile?token={_SECRET}",
+        json={"event": "credentials", "account_id": "acct-shared"},
+    )
+    assert resp.json()["status"] == "account_updated"
+
+    for seat in seats:
+        await db_session.refresh(seat)
+        assert seat.status is ConnectionStatus.needs_reauth
+
+
+@pytest.mark.db
+async def test_a_message_reporting_an_error_is_not_a_seat_disconnect(
+    db_client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The old test was a substring match for "error" against whichever of event/type/status came
+    first — far too broad for a field that also carries per-message delivery status. A message
+    event reporting an error flipped the seat to needs-reauth and was itself dropped."""
+    _with_secret(monkeypatch)
+    enr = await _enrollment_with_chat(db_session, slug="wh-errormsg", chat_id="CHAT-ERR")
+    seat = await upsert_seat(
+        db_session,
+        organization_id=(await make_org(db_session, slug="wh-errorseat")).id,
+        user_id=(await make_user(db_session)).id,
+        provider=ConnectionProvider.linkedin,
+        account_id="acct-1",
+    )
+    await db_session.commit()
+
+    resp = await db_client.post(
+        f"/webhooks/unipile?token={_SECRET}",
+        json={
+            "event": "message_received",
+            "status": "error",  # a delivery status, not an account lifecycle event
+            "account_id": "acct-1",
+            "chat_id": "CHAT-ERR",
+            "message": {"text": "actually yes, let's talk"},
+        },
+    )
+    assert resp.json()["status"] == "queued"  # recorded as the reply it is
+
+    await db_session.refresh(seat)
+    assert seat.status is ConnectionStatus.ok  # and the seat was left alone
+
+    inbound = (
+        (
+            await db_session.execute(
+                select(Message).where(
+                    Message.enrollment_id == enr.id,
+                    Message.direction == MessageDirection.inbound,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [m.body for m in inbound] == ["actually yes, let's talk"]

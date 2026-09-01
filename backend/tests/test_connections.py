@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -13,10 +14,12 @@ from app.models import (
     Channel,
     ConnectionProvider,
     ConnectionStatus,
+    Membership,
     MembershipRole,
     User,
     UserStatus,
 )
+from app.services.outreach import enrollment as enr_service
 from app.services.outreach.messaging import linkedin_transport_ready, resolve_channel_seat
 from app.services.workspace.connections import (
     home_org_id,
@@ -163,3 +166,88 @@ async def test_an_unlinked_seat_cannot_be_sent_from(
     seat = await resolve_channel_seat(db_session, campaign=campaign, channel=Channel.linkedin)
     assert seat is not None and not seat.external_id
     assert not linkedin_transport_ready(seat)
+
+
+@pytest.mark.db
+async def test_a_seats_daily_cap_can_be_set(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`capabilities.daily_cap` is what `enrollment._seat_cap_reached` enforces and `display_name`
+    is what Settings shows instead of the raw provider account id — but nothing outside the demo
+    seeder could write either, so the per-seat cap could never actually be turned on."""
+    signup = await db_client.post(
+        "/organizations",
+        json={
+            "org_name": "Caps",
+            "slug": "seat-caps",
+            "admin_email": "admin@seat-caps.com",
+            "admin_name": "Admin",
+        },
+    )
+    uid = signup.json()["admin_user_id"]
+    h = {"X-User-Id": uid}
+    org_id = (
+        (
+            await db_session.execute(
+                select(Membership.organization_id).where(Membership.user_id == uid)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert org_id is not None
+    seat = await upsert_seat(
+        db_session,
+        organization_id=org_id,
+        user_id=uid,
+        provider=ConnectionProvider.linkedin,
+        account_id="ACCT-CAP",
+    )
+    await db_session.commit()
+
+    resp = await db_client.patch(
+        f"/settings/connections/{seat.id}",
+        json={"daily_cap": 25, "display_name": "Team LinkedIn"},
+        headers=h,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["display_name"] == "Team LinkedIn"
+
+    await db_session.refresh(seat)
+    assert seat.capabilities["daily_cap"] == 25
+
+    # ...and it is the value the governor reads.
+    now = datetime.now(UTC)
+    assert await enr_service._seat_cap_reached(db_session, seat=seat, now=now) is False
+
+
+@pytest.mark.db
+async def test_another_orgs_seat_cannot_be_edited(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    theirs = await make_org(db_session, slug="caps-theirs")
+    user = await make_user(db_session, org=theirs)
+    seat = await upsert_seat(
+        db_session,
+        organization_id=theirs.id,
+        user_id=user.id,
+        provider=ConnectionProvider.linkedin,
+        account_id="ACCT-THEIRS",
+    )
+    signup = await db_client.post(
+        "/organizations",
+        json={
+            "org_name": "Ours",
+            "slug": "caps-ours",
+            "admin_email": "admin@caps-ours.com",
+            "admin_name": "Admin",
+        },
+    )
+    await db_session.commit()
+
+    resp = await db_client.patch(
+        f"/settings/connections/{seat.id}",
+        json={"daily_cap": 1},
+        headers={"X-User-Id": signup.json()["admin_user_id"]},
+    )
+    assert resp.status_code == 404

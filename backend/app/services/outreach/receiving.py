@@ -32,6 +32,7 @@ from app.models import (
     SpaceGrant,
     Workspace,
 )
+from app.services.insights import audit
 from app.services.outreach.messaging import record_inbound
 
 # LinkedIn DMs, connected-mailbox replies, and seat credential/disconnect events.
@@ -383,6 +384,69 @@ async def record_provider_event(
     return "duplicate" if message is None else "queued"
 
 
+# --- Account lifecycle --------------------------------------------------------
+
+# Unipile's `account_status` event names. Matched exactly, against an allow-list.
+#
+# This used to be a substring test for "credential", "disconnect" or "error" against whichever of
+# `event`/`type`/`status` came first — and `error` is far too broad for a field that also carries
+# per-message delivery status. A message event reporting an error would be read as a seat
+# disconnect: the seat flipped to needs-reauth and the candidate's message was dropped.
+_ACCOUNT_EVENTS = frozenset(
+    {
+        "credentials",
+        "account_credentials",
+        "creation_fail",
+        "disconnected",
+        "account_disconnected",
+        "permissions",
+        "sync_error",
+        "error",
+    }
+)
+
+
+async def record_account_event(
+    session: AsyncSession, *, payload: JsonObject, now: datetime
+) -> str | None:
+    """Handle a seat credential/disconnect event. Returns the outcome, or None if this isn't one.
+
+    None means "not an account event" — the caller should go on to try it as a message. An event
+    carrying a message body is never treated as an account event, whatever its type says.
+    """
+    account_id = payload_str(payload, "account_id", "account")
+    event = (payload_str(payload, "event", "type", "status") or "").strip().lower()
+    if not account_id or event not in _ACCOUNT_EVENTS or text_of(payload):
+        return None
+
+    # Every connection holding this account, not just one. `upsert_seat` keys on (user, provider),
+    # so two people can have connected the same provider account; flipping an arbitrary one left
+    # the other advertising itself as healthy and failing every send it was picked for.
+    seats = (
+        (await session.execute(select(Connection).where(Connection.external_id == account_id)))
+        .scalars()
+        .all()
+    )
+    for seat in seats:
+        if seat.status is ConnectionStatus.needs_reauth:
+            continue
+        seat.status = ConnectionStatus.needs_reauth
+        await session.flush()
+        # The seat owner sees this in their notification feed; the audit trail is what tells an
+        # admin *when* a channel went quiet, which is otherwise invisible after the fact.
+        await audit.record(
+            session,
+            org_id=seat.organization_id,
+            workspace_id=None,
+            actor_user_id=seat.user_id,
+            action="connection.needs_reauth",
+            summary=f"{seat.provider.value} seat disconnected at the provider",
+            target_type="connection",
+            target_id=seat.id,
+        )
+    return "account_updated"
+
+
 # --- Backfill: catching what the webhook never delivered ----------------------
 #
 # Webhooks are the fast path, not a guarantee. A subscription that lapsed, a deployment whose URL
@@ -419,19 +483,26 @@ async def sweep_inbound(session: AsyncSession, *, now: datetime) -> dict[str, in
         account_id = seat.external_id
         if not account_id:
             continue
-        items = await conn.list_messages(account_id=account_id, since=since)
-        if items is None:
-            # Not "nothing arrived" — we could not tell. Loud, because a sweep that quietly reads
-            # nothing looks exactly like a sweep that found nothing to recover.
+        # One seat's failure must not abort the sweep. The sweep shares the worker's session, so
+        # an exception escaping here used to unwind the whole loop iteration — including the rows
+        # recording messages that had already gone out on the wire.
+        try:
+            items = await conn.list_messages(account_id=account_id, since=since)
+            if items is None:
+                # Not "nothing arrived" — we could not tell. Loud, because a sweep that quietly
+                # reads nothing looks exactly like a sweep that found nothing to recover.
+                unreadable += 1
+                logger.warning("inbound sweep: could not read messages for account %s", account_id)
+                continue
+            swept += 1
+            for item in items:
+                payload = dict(item)
+                payload.setdefault("account_id", account_id)
+                if await record_provider_event(session, payload=payload, now=now) == "queued":
+                    recovered += 1
+        except Exception:
             unreadable += 1
-            logger.warning("inbound sweep: could not read messages for account %s", account_id)
-            continue
-        swept += 1
-        for item in items:
-            payload = dict(item)
-            payload.setdefault("account_id", account_id)
-            if await record_provider_event(session, payload=payload, now=now) == "queued":
-                recovered += 1
+            logger.exception("inbound sweep: failed for account %s", account_id)
     if recovered:
         logger.info("inbound sweep: recovered %s message(s) the webhook never delivered", recovered)
     return {"swept": swept, "recovered": recovered, "unreadable": unreadable}

@@ -6,6 +6,7 @@ from Settings. These pin that it stays that way.
 
 import json
 import re
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -14,7 +15,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.ext.unipile import UnipileConnection
 from app.models import Connection, ConnectionProvider, LoginAttempt, SeatType, User
 from app.services.workspace import connections as connections_service
@@ -202,3 +203,55 @@ def test_seat_tier_is_read_from_the_profile_not_assumed(
     """It was hardcoded to `recruiter`, so every free account was labelled a Recruiter seat — and
     the tier is what decides whether InMail is possible at all."""
     assert connections_service.seat_type_from_profile(profile) == expected
+
+
+@pytest.mark.db
+async def test_a_connect_attempt_is_spent_once(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The row used to be left in place after a successful connect and only aged out when somebody
+    happened to start a new wizard — so a replayed notify could rebind the seat to a different
+    account indefinitely."""
+    org = await make_org(db_session, slug="seat-once")
+    user = await make_user(db_session, org=org, email="once@example.com")
+    db_session.add(LoginAttempt(state="ST-ONCE", user_id=user.id))
+    await db_session.flush()
+    monkeypatch.setattr(connections_service, "unipile_connection", lambda: None)
+
+    await connections_service.complete_seat_connect(
+        db_session, state="ST-ONCE", account_id="ACCT-FIRST"
+    )
+    assert (
+        await db_session.execute(select(LoginAttempt).where(LoginAttempt.state == "ST-ONCE"))
+    ).scalar_one_or_none() is None
+
+    # A replay of the same notify finds nothing to act on.
+    await connections_service.complete_seat_connect(
+        db_session, state="ST-ONCE", account_id="ACCT-ATTACKER"
+    )
+    seat = await user_seat(db_session, user_id=user.id, provider=_LINKEDIN)
+    assert seat is not None and seat.external_id == "ACCT-FIRST"
+
+
+@pytest.mark.db
+async def test_an_expired_connect_attempt_is_refused(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`login_attempt_ttl_minutes` was configured but never actually checked at redemption."""
+    org = await make_org(db_session, slug="seat-expired")
+    user = await make_user(db_session, org=org, email="expired@example.com")
+    ttl = get_settings().login_attempt_ttl_minutes
+    db_session.add(
+        LoginAttempt(
+            state="ST-OLD",
+            user_id=user.id,
+            created_at=datetime.now(UTC) - timedelta(minutes=ttl + 5),
+        )
+    )
+    await db_session.flush()
+    monkeypatch.setattr(connections_service, "unipile_connection", lambda: None)
+
+    await connections_service.complete_seat_connect(
+        db_session, state="ST-OLD", account_id="ACCT-LATE"
+    )
+    assert await user_seat(db_session, user_id=user.id, provider=_LINKEDIN) is None

@@ -8,7 +8,7 @@ import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 
 from app.agents.prompts import resolve_labels
@@ -289,6 +289,39 @@ async def seat_connect_notify(request: Request, session: SessionDep) -> dict[str
     if isinstance(account_id, str) and isinstance(state, str):
         await connections_service.complete_seat_connect(session, state=state, account_id=account_id)
     return {"status": "ok"}
+
+
+class ConnectionPatch(BaseModel):
+    """What a seat's owner (or an org admin) can set on it."""
+
+    # Shown instead of the raw provider account id in Settings.
+    display_name: str | None = None
+    # Most sends this account may make in a UTC day. 0 clears it (no per-seat limit).
+    daily_cap: int | None = Field(default=None, ge=0, le=10_000)
+
+
+@router.patch("/connections/{connection_id}", response_model=ConnectionOut)
+async def update_connection(
+    connection_id: str, body: ConnectionPatch, ctx: ContextDep, session: SessionDep
+) -> ConnectionOut:
+    """Set a seat's display name and its per-day send limit.
+
+    `capabilities.daily_cap` is what `enrollment._seat_cap_reached` enforces, and `display_name`
+    is what Settings shows in place of the provider's account id — but nothing outside the demo
+    seeder could write either, so the per-seat cap documented in the flow notes could never
+    actually be turned on.
+    """
+    conn = await _owned_connection(session, ctx.org_id, connection_id)
+    caps = dict(conn.capabilities or {})
+    if body.display_name is not None:
+        caps["display_name"] = body.display_name.strip() or None
+    if body.daily_cap is not None:
+        caps["daily_cap"] = body.daily_cap
+    # JSONB is replaced, not mutated in place, or SQLAlchemy won't see the change.
+    conn.capabilities = {k: v for k, v in caps.items() if v is not None}
+    await session.flush()
+    user = await session.get(User, conn.user_id)
+    return _dump_connection(conn, user.email if user else "")
 
 
 @router.post("/connections/{connection_id}/disconnect", response_model=StatusIdOut)

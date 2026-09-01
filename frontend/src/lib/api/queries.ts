@@ -46,6 +46,7 @@ const k = {
   inbox: (ws: string | null) => ["inbox", ws] as const,
   conversation: (ws: string | null, id: string) => ["conversation", ws, id] as const,
   convChannels: (ws: string | null, id: string) => ["convChannels", ws, id] as const,
+  convSummary: (ws: string | null, id: string) => ["convSummary", ws, id] as const,
   dashboard: (ws: string | null) => ["dashboard", ws] as const,
   analytics: (ws: string | null) => ["analytics", ws] as const,
   notifications: (ws: string | null) => ["notifications", ws] as const,
@@ -357,6 +358,24 @@ export function useConversationChannels(id: string | null) {
     queryFn: async () =>
       unwrap(
         await client.GET("/inbox/{enrollment_id}/channels", {
+          params: { path: { enrollment_id: id! } },
+        }),
+      ),
+  });
+}
+
+/** One-line summary of where the conversation stands (Claude-backed when configured).
+ *
+ * The rail used to render a hardcoded copy of the deterministic fallback, so the endpoint — and
+ * the LLM behind it — had no caller at all, and the two wordings could drift apart unnoticed. */
+export function useConversationSummary(id: string | null) {
+  const ws = useWorkspaceId();
+  return useQuery({
+    queryKey: k.convSummary(ws, id ?? ""),
+    enabled: !!ws && !!id,
+    queryFn: async () =>
+      unwrap(
+        await client.GET("/inbox/{enrollment_id}/summary", {
           params: { path: { enrollment_id: id! } },
         }),
       ),
@@ -883,7 +902,7 @@ export function useSearch(q: string) {
 const CAMPAIGN_KEYS = ["campaign", "campaigns", "campaignFunnel"];
 
 function invalidateInbox(qc: ReturnType<typeof useQueryClient>) {
-  const keys = ["inbox", "conversation", "convChannels", "notifications", "dashboard", "analytics", "audit"];
+  const keys = ["inbox", "conversation", "convChannels", "convSummary", "notifications", "dashboard", "analytics", "audit"];
   for (const key of [...keys, ...CAMPAIGN_KEYS]) {
     qc.invalidateQueries({ queryKey: [key] });
   }

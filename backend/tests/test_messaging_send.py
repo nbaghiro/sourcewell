@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 import respx
+from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ from app.models import (
     Contact,
     Enrollment,
     EnrollmentState,
+    Membership,
     Message,
     MessageDirection,
     MessageStatus,
@@ -34,7 +36,7 @@ from app.models import (
     Workspace,
 )
 from app.services.outreach import enrollment as enr_service
-from app.services.outreach.messaging import channel_availability
+from app.services.outreach.messaging import channel_availability, send_conversation_message
 from app.services.workspace.connections import upsert_seat
 from tests.factories import make_org, make_workspace, make_workspace_member
 
@@ -814,3 +816,254 @@ async def test_a_contact_from_another_workspace_is_not_reachable(
 
     r = await db_client.post(f"/contacts/{enr_b.contact_id}/conversation", headers=h_a)
     assert r.status_code == 404
+
+
+@pytest.mark.db
+async def test_a_direct_conversation_can_actually_be_sent_on(db_client: AsyncClient) -> None:
+    """The bug: `open_direct_conversation` makes an enrollment with no campaign, but the composer's
+    two endpoints both ended their campaign lookup with a 404 — so every thread opened by "Message"
+    on a contact could be read and never replied to."""
+    h, _ = await _api_thread(db_client, "direct-send")
+    made = await db_client.post(
+        "/contacts/import",
+        json={"contacts": [{"full_name": "Nina Ray", "email": "nina-direct@x.com"}]},
+        headers=h,
+    )
+    contact_id = made.json()["contacts"][0]["id"]
+    eid = (await db_client.post(f"/contacts/{contact_id}/conversation", headers=h)).json()[
+        "enrollment_id"
+    ]
+
+    channels = await db_client.get(f"/inbox/{eid}/channels", headers=h)
+    assert channels.status_code == 200, channels.text
+    assert channels.json()["default"] == "email"
+    # No campaign means no seat to designate, so LinkedIn has no transport to offer.
+    by_channel = {o["channel"]: o for o in channels.json()["options"]}
+    assert by_channel["email"]["available"] is True
+
+    sent = await db_client.post(f"/inbox/{eid}/reply", json={"text": "hi there"}, headers=h)
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["body"] == "hi there"
+
+    thread = (await db_client.get(f"/inbox/{eid}", headers=h)).json()
+    assert [m["body"] for m in thread["messages"]] == ["hi there"]
+    assert thread["campaign"]["id"] is None
+
+
+@pytest.mark.db
+async def test_a_campaign_cannot_send_from_another_orgs_seat(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`seat_id` came straight off the request body and `resolve_channel_seat` loads it by primary
+    key alone — so a campaign could name any connection in the database and send from it: another
+    customer's LinkedIn profile or mailbox, spending their InMail credits."""
+    h_a, _ = await _api_thread(db_client, "idor-a")
+    h_b, _ = await _api_thread(db_client, "idor-b")
+    uid_b = h_b["X-User-Id"]
+    org_b = (
+        (
+            await db_session.execute(
+                select(Membership.organization_id).where(Membership.user_id == uid_b)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert org_b is not None
+    victim = await upsert_seat(
+        db_session,
+        organization_id=org_b,
+        user_id=uid_b,
+        provider=ConnectionProvider.linkedin,
+        account_id="ACCT-VICTIM",
+        seat_type=SeatType.recruiter,
+    )
+    await db_session.commit()
+
+    made = await db_client.post(
+        "/campaigns",
+        json={"name": "Borrowed", "criteria": {}, "sequence": [], "seat_id": victim.id},
+        headers=h_a,
+    )
+    assert made.status_code == 404, made.text
+
+    mine = await db_client.post(
+        "/campaigns", json={"name": "Mine", "criteria": {}, "sequence": []}, headers=h_a
+    )
+    patched = await db_client.patch(
+        f"/campaigns/{mine.json()['id']}", json={"seat_id": victim.id}, headers=h_a
+    )
+    assert patched.status_code == 404, patched.text
+    stored = await db_session.get(Campaign, mine.json()["id"])
+    assert stored is not None
+    await db_session.refresh(stored)
+    assert stored.seat_id is None
+
+
+@pytest.mark.db
+async def test_from_email_is_restricted_to_a_domain_the_team_uses(db_client: AsyncClient) -> None:
+    """It lands verbatim in the `From` header on the SMTP path, and nothing checked it — so any
+    member could send mail claiming to be any address, another customer's included."""
+    h, _ = await _api_thread(db_client, "from-domain")
+    spoofed = await db_client.post(
+        "/campaigns",
+        json={"name": "Spoof", "criteria": {}, "sequence": [], "from_email": "ceo@bigcorp.com"},
+        headers=h,
+    )
+    assert spoofed.status_code == 422, spoofed.text
+
+    malformed = await db_client.post(
+        "/campaigns",
+        json={"name": "Bad", "criteria": {}, "sequence": [], "from_email": "not-an-address"},
+        headers=h,
+    )
+    assert malformed.status_code == 422
+
+    # The admin signed up as admin@from-domain.com, so that domain is theirs to send from.
+    ok = await db_client.post(
+        "/campaigns",
+        json={
+            "name": "Fine",
+            "criteria": {},
+            "sequence": [],
+            "from_email": "recruiting@from-domain.com",
+        },
+        headers=h,
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["from_email"] == "recruiting@from-domain.com"
+
+
+@pytest.mark.db
+async def test_an_email_with_no_seat_never_borrows_the_linkedin_account(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`unipile_account_id` is the deployment's connected *LinkedIn* account. Using it as the
+    fallback for email too meant an org with no mailbox posted to /emails with a LinkedIn account
+    id, the provider 4xx'd, and the candidate's valid address was suppressed as a bounce."""
+    configured = Settings(
+        unipile_api_key="key",
+        unipile_dsn=_DSN,
+        unipile_account_id="LINKEDIN-ACCT",
+        email_dry_run=True,
+        linkedin_dry_run=False,
+    )
+    monkeypatch.setattr("app.services.outreach.messaging.get_settings", lambda: configured)
+    monkeypatch.setattr("app.services.outreach.enrollment.get_settings", lambda: configured)
+    monkeypatch.setattr("app.ext.unipile.get_settings", lambda: configured)
+
+    _org, ws, contact, campaign = await _fixture(db_session, "email-noseat")
+    campaign.sequence = [{"channel": "email", "delay_days": 0, "subject": "S", "body": "hi"}]
+    campaign.autonomy_level = AutonomyLevel.full
+    await db_session.flush()
+
+    with respx.mock:
+        emails = respx.post(f"{_DSN}/api/v1/emails")
+        enr = Enrollment(
+            workspace_id=ws.id,
+            campaign_id=campaign.id,
+            contact_id=contact.id,
+            state=EnrollmentState.active,
+            next_run_at=datetime.now(UTC),
+        )
+        db_session.add(enr)
+        await db_session.flush()
+        await enr_service.tick(db_session, enrollment=enr, now=datetime.now(UTC))
+        await enr_service.tick(db_session, enrollment=enr, now=datetime.now(UTC))
+        assert not emails.called  # falls through to SMTP instead
+
+    msg = (
+        (await db_session.execute(select(Message).where(Message.enrollment_id == enr.id)))
+        .scalars()
+        .first()
+    )
+    assert msg is not None and msg.status is MessageStatus.sent
+    supp = (
+        (await db_session.execute(select(Suppression).where(Suppression.email == contact.email)))
+        .scalars()
+        .first()
+    )
+    assert supp is None, "a valid address was suppressed over a missing seat"
+
+
+@pytest.mark.db
+async def test_the_linkedin_to_email_fallback_carries_a_subject(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A LinkedIn step is drafted with no subject, because LinkedIn has no subject line. Carrying
+    that null across the fallback sent the email with an empty Subject header."""
+    live = Settings(linkedin_dry_run=False, email_dry_run=True)
+    monkeypatch.setattr("app.services.outreach.enrollment.get_settings", lambda: live)
+    monkeypatch.setattr("app.services.outreach.messaging.get_settings", lambda: live)
+
+    _org, ws, contact, campaign = await _fixture(db_session, "li-fallback", seat=False)
+    campaign.sequence = [
+        {"channel": "linkedin", "delay_days": 0, "subject": "", "body": "hi {first_name}"}
+    ]
+    campaign.autonomy_level = AutonomyLevel.full
+    await db_session.flush()
+
+    enr = Enrollment(
+        workspace_id=ws.id,
+        campaign_id=campaign.id,
+        contact_id=contact.id,
+        state=EnrollmentState.active,
+        next_run_at=datetime.now(UTC),
+    )
+    db_session.add(enr)
+    await db_session.flush()
+    await enr_service.tick(db_session, enrollment=enr, now=datetime.now(UTC))
+    await enr_service.tick(db_session, enrollment=enr, now=datetime.now(UTC))
+
+    msg = (
+        (await db_session.execute(select(Message).where(Message.enrollment_id == enr.id)))
+        .scalars()
+        .first()
+    )
+    assert msg is not None
+    assert msg.channel is Channel.email  # no LinkedIn transport, so it fell back
+    assert msg.subject, "fell back to email with an empty subject line"
+
+
+@pytest.mark.db
+async def test_an_opted_out_contact_is_unreachable_on_linkedin_too(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Suppression is keyed on an address, but it records that this *person* asked not to be
+    contacted — including via the agent's own `opt_out` tool. Gating the check on `channel ==
+    email` let the composer and the agent keep messaging them on LinkedIn, while the sequence's
+    own touchpoints (which check unconditionally) correctly refused."""
+    _unipile(monkeypatch)
+    org, ws, contact, campaign = await _fixture(db_session, "supp-li")
+    db_session.add(
+        Suppression(
+            organization_id=org.id,
+            email=contact.email,
+            reason=SuppressionReason.opted_out,
+        )
+    )
+    enr = Enrollment(
+        workspace_id=ws.id,
+        campaign_id=campaign.id,
+        contact_id=contact.id,
+        state=EnrollmentState.awaiting_reply,
+    )
+    db_session.add(enr)
+    await db_session.flush()
+
+    with pytest.raises(HTTPException) as caught:
+        await send_conversation_message(
+            db_session,
+            workspace_id=ws.id,
+            enrollment=enr,
+            campaign=campaign,
+            contact=contact,
+            channel=Channel.linkedin,
+            subject=None,
+            body="one more thing",
+            sender="rec@x.com",
+            organization_id=org.id,
+            now=datetime.now(UTC),
+        )
+    assert caught.value.status_code == 409
+    assert "opted out" in str(caught.value.detail)

@@ -3,12 +3,11 @@
 import hmac
 import json
 from datetime import UTC, datetime
-from hashlib import sha256
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.context import ContextDep, SessionDep
@@ -19,22 +18,17 @@ from app.core.db import get_session
 from app.core.logging import logger
 from app.core.types import JsonObject
 from app.models import (
-    ORG_WIDE_ROLES,
     Campaign,
     Channel,
-    Connection,
-    ConnectionStatus,
     Contact,
     Enrollment,
     EnrollmentState,
-    Membership,
     Message,
     MessageDirection,
     MessageStatus,
-    SpaceGrant,
-    Workspace,
 )
 from app.services.insights import audit
+from app.services.outreach import receiving
 from app.services.outreach.enrollment import tick
 from app.services.outreach.messaging import (
     approve_message,
@@ -48,7 +42,6 @@ from app.services.outreach.messaging import (
     send_conversation_message,
     summarize_thread,
 )
-from app.services.outreach.receiving import strip_quoted_reply
 
 router = APIRouter(tags=["messaging"])
 
@@ -288,33 +281,90 @@ async def edit_message(
     return dump_message(message)
 
 
-@router.get("/inbox", response_model=list[InboxItemOut])
-async def inbox(ctx: ContextDep, session: SessionDep) -> list[InboxItemOut]:
-    ws = require_workspace(ctx)
-    rows = await session.execute(
-        select(Message).where(Message.workspace_id == ws).order_by(Message.created_at)
-    )
-    by_enrollment: dict[str, list[Message]] = {}
-    for m in rows.scalars().all():
-        by_enrollment.setdefault(m.enrollment_id, []).append(m)
+# How many threads one page of the inbox carries.
+_INBOX_PAGE = 100
 
-    # Batch-load each thread's enrollment + contact in one query (was an N+1 of 2 gets per thread).
-    enr_contact: dict[str, tuple[Enrollment, Contact | None]] = {}
-    if by_enrollment:
-        joined = await session.execute(
-            select(Enrollment, Contact)
-            .outerjoin(Contact, Enrollment.contact_id == Contact.id)
-            .where(Enrollment.id.in_(by_enrollment.keys()))
+
+@router.get("/inbox", response_model=list[InboxItemOut])
+async def inbox(
+    ctx: ContextDep,
+    session: SessionDep,
+    limit: int = Query(_INBOX_PAGE, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> list[InboxItemOut]:
+    """One row per thread, newest first.
+
+    The per-thread aggregates are computed in the database. This used to select *every* message
+    row in the workspace with no limit and group them in Python, keeping only the last of each
+    thread plus a count — so rendering ten rows pulled a year of message bodies into memory.
+    """
+    ws = require_workspace(ctx)
+    # Rank each thread's messages by recency so the newest and the oldest can be picked out
+    # without carrying the ones in between.
+    newest = func.row_number().over(
+        partition_by=Message.enrollment_id, order_by=Message.created_at.desc()
+    )
+    oldest = func.row_number().over(
+        partition_by=Message.enrollment_id, order_by=Message.created_at.asc()
+    )
+    ranked = (
+        select(
+            Message.id.label("message_id"),
+            Message.enrollment_id.label("enrollment_id"),
+            Message.channel.label("channel"),
+            newest.label("newest"),
+            oldest.label("oldest"),
+            # Windowed over the whole thread, before the outer query narrows to its two ends.
+            func.count().over(partition_by=Message.enrollment_id).label("message_count"),
+            func.max(Message.created_at).over(partition_by=Message.enrollment_id).label("last_at"),
         )
-        for enr, c in joined.tuples().all():
-            enr_contact[enr.id] = (enr, c)
+        .where(Message.workspace_id == ws)
+        .subquery()
+    )
+    # Only a thread's two ends survive: the newest message (what the row previews) and the oldest
+    # (the channel the outreach started on). A one-message thread is both, and collapses to it.
+    threads = (
+        select(
+            ranked.c.enrollment_id,
+            func.max(ranked.c.message_count).label("message_count"),
+            func.max(ranked.c.last_at).label("last_at"),
+            func.max(case((ranked.c.newest == 1, ranked.c.message_id))).label("last_message_id"),
+            func.max(case((ranked.c.oldest == 1, ranked.c.channel))).label("first_channel"),
+        )
+        .where(or_(ranked.c.newest == 1, ranked.c.oldest == 1))
+        .group_by(ranked.c.enrollment_id)
+        .order_by(func.max(ranked.c.last_at).desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = (await session.execute(threads)).tuples().all()
+    if not rows:
+        return []
+
+    last_ids = [r.last_message_id for r in rows]
+    messages = {
+        m.id: m
+        for m in (await session.execute(select(Message).where(Message.id.in_(last_ids))))
+        .scalars()
+        .all()
+    }
+    enr_contact: dict[str, tuple[Enrollment, Contact | None]] = {}
+    joined = await session.execute(
+        select(Enrollment, Contact)
+        .outerjoin(Contact, Enrollment.contact_id == Contact.id)
+        .where(Enrollment.id.in_([r.enrollment_id for r in rows]))
+    )
+    for enr, c in joined.tuples().all():
+        enr_contact[enr.id] = (enr, c)
 
     items: list[InboxItemOut] = []
-    for enrollment_id, messages in by_enrollment.items():
-        pair = enr_contact.get(enrollment_id)
+    for row in rows:
+        last = messages.get(row.last_message_id)
+        if last is None:
+            continue
+        pair = enr_contact.get(row.enrollment_id)
         enrollment = pair[0] if pair else None
         contact = pair[1] if pair else None
-        last = messages[-1]
         has_unread = last.direction == MessageDirection.inbound and (
             enrollment is None
             or enrollment.last_read_at is None
@@ -322,7 +372,7 @@ async def inbox(ctx: ContextDep, session: SessionDep) -> list[InboxItemOut]:
         )
         items.append(
             InboxItemOut(
-                enrollment_id=enrollment_id,
+                enrollment_id=row.enrollment_id,
                 contact_name=contact.full_name if contact else None,
                 contact_title=contact.title if contact else None,
                 contact_company=contact.company if contact else None,
@@ -330,14 +380,13 @@ async def inbox(ctx: ContextDep, session: SessionDep) -> list[InboxItemOut]:
                 state=enrollment.state if enrollment else None,
                 outcome=enrollment.outcome if enrollment else None,
                 reply_pending=bool(enrollment and enrollment.reply_pending),
-                channel=messages[0].channel,  # the channel the outreach started on
-                message_count=len(messages),
+                channel=row.first_channel,  # the channel the outreach started on
+                message_count=int(row.message_count),
                 unread=has_unread,
                 last_at=last.created_at.isoformat() if last.created_at else None,
                 last_message=dump_message(last),
             )
         )
-    items.sort(key=lambda it: it.last_at or "", reverse=True)
     return items
 
 
@@ -413,7 +462,11 @@ async def conversation(enrollment_id: str, ctx: ContextDep, session: SessionDep)
 async def conversation_channels(
     enrollment_id: str, ctx: ContextDep, session: SessionDep
 ) -> ChannelsOut:
-    """Which channels this conversation can be sent on, and which one the composer preselects."""
+    """Which channels this conversation can be sent on, and which one the composer preselects.
+
+    A direct conversation has no campaign behind it, so the seat is resolved from the caller
+    instead. Requiring one here 404'd every thread opened by "Message" on a contact.
+    """
     ws = require_workspace(ctx)
     enrollment = await _owned_enrollment(session, ws, enrollment_id)
     contact = await session.get(Contact, enrollment.contact_id)
@@ -422,11 +475,15 @@ async def conversation_channels(
     campaign = (
         await session.get(Campaign, enrollment.campaign_id) if enrollment.campaign_id else None
     )
-    if campaign is None:
-        raise HTTPException(status_code=404, detail="campaign not found")
-    options = await channel_availability(session, campaign=campaign, contact=contact)
+    options = await channel_availability(
+        session, campaign=campaign, contact=contact, user_id=ctx.user_id
+    )
     default = await resolve_channel(
-        session, campaign=campaign, enrollment_id=enrollment_id, contact=contact
+        session,
+        campaign=campaign,
+        enrollment_id=enrollment_id,
+        contact=contact,
+        user_id=ctx.user_id,
     )
     return ChannelsOut(
         default=default.value,
@@ -448,6 +505,8 @@ async def send_reply(
     `channel` picks the transport; omitted, the thread's existing channel is used. The message is
     delivered before it is recorded, so a failure surfaces as an error rather than a phantom
     "sent" bubble in the thread.
+
+    Works on a direct conversation too (no campaign): the seat then comes from the sender.
     """
     ws = require_workspace(ctx)
     enrollment = await _owned_enrollment(session, ws, enrollment_id)
@@ -457,10 +516,12 @@ async def send_reply(
     campaign = (
         await session.get(Campaign, enrollment.campaign_id) if enrollment.campaign_id else None
     )
-    if campaign is None:
-        raise HTTPException(status_code=404, detail="campaign not found")
     channel = body.channel or await resolve_channel(
-        session, campaign=campaign, enrollment_id=enrollment_id, contact=contact
+        session,
+        campaign=campaign,
+        enrollment_id=enrollment_id,
+        contact=contact,
+        user_id=ctx.user_id,
     )
     # Sending supersedes any AI-suggested draft in this thread — consume it so it doesn't linger.
     await session.execute(
@@ -477,11 +538,16 @@ async def send_reply(
         channel=channel,
         subject=body.subject if channel == Channel.email else None,
         body=body.text,
-        sender=campaign.from_email or get_settings().default_from_email,
+        sender=(campaign.from_email if campaign else None) or get_settings().default_from_email,
         organization_id=ctx.org_id,
         now=datetime.now(UTC),
         origin="ai" if body.origin == "ai" else "human",
+        user_id=ctx.user_id,
     )
+    # The message is on the wire. Make the row recording it durable before doing anything else:
+    # the audit write below, or the request's own commit, failing after a successful send used to
+    # lose the thread's only trace of a message the candidate had already received.
+    await session.commit()
     await audit.record(
         session,
         org_id=ctx.org_id,
@@ -542,6 +608,29 @@ class InboundWebhookOut(BaseModel):
     intent: str | None
 
 
+def _parsed_payload(raw: bytes) -> JsonObject:
+    """The webhook body as a JSON object — 400 on anything that isn't parseable JSON."""
+    try:
+        parsed: object = json.loads(raw or b"{}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="invalid JSON") from None
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _reject_stale(payload: JsonObject) -> None:
+    """Refuse a webhook whose own timestamp is outside the replay window.
+
+    The timestamp is inside the signed body, so it can't be forged. Applied to both receivers: the
+    Unipile one carries the production traffic and also accepts a bearer token from the query
+    string, and its only replay defence was the `provider_message_id` dedupe — which returns None,
+    and therefore records unconditionally, for any event with neither an id nor a timestamp.
+    """
+    stamp = payload.get("ts") or payload.get("timestamp")
+    if isinstance(stamp, int | float) and not isinstance(stamp, bool):
+        if abs(datetime.now(UTC).timestamp() - float(stamp)) > _WEBHOOK_MAX_SKEW_SECONDS:
+            raise HTTPException(status_code=401, detail="stale webhook")
+
+
 @router.post("/webhooks/inbound", response_model=InboundWebhookOut)
 async def inbound_webhook(
     request: Request, session: Annotated[AsyncSession, Depends(get_session)]
@@ -558,22 +647,12 @@ async def inbound_webhook(
     raw = await request.body()
     if not verify_hmac(raw, request.headers.get("X-Signature"), secret=secret):
         raise HTTPException(status_code=401, detail="invalid signature")
-    try:
-        parsed: object = json.loads(raw or b"{}")
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="invalid JSON") from None
-    payload: JsonObject = parsed if isinstance(parsed, dict) else {}
+    payload = _parsed_payload(raw)
+    _reject_stale(payload)
 
     def _str(key: str) -> str | None:
         value = payload.get(key)
         return value if isinstance(value, str) else None
-
-    # Replay guard: a signed payload with a stale timestamp is rejected (the `ts` is inside the
-    # HMAC, so it can't be forged); exact resends are also dropped by provider_message_id dedupe.
-    ts = payload.get("ts") or payload.get("timestamp")
-    if isinstance(ts, int | float) and not isinstance(ts, bool):
-        if abs(datetime.now(UTC).timestamp() - float(ts)) > _WEBHOOK_MAX_SKEW_SECONDS:
-            raise HTTPException(status_code=401, detail="stale webhook")
 
     text = _str("text") or _str("body") or ""
     enrollment = await resolve_inbound_enrollment(
@@ -588,7 +667,9 @@ async def inbound_webhook(
         enrollment=enrollment,
         text=text,
         now=datetime.now(UTC),
-        provider_message_id=_idempotency_key(payload, thread_id=_str("thread_id"), text=text),
+        provider_message_id=receiving.idempotency_key(
+            payload, thread_id=_str("thread_id"), text=text
+        ),
     )
     if message is None:
         return InboundWebhookOut(status="duplicate", intent=None)
@@ -596,175 +677,6 @@ async def inbound_webhook(
 
 
 # --- Unipile inbound (LinkedIn + email replies, account lifecycle) -----------
-
-
-def _is_own_message(payload: JsonObject) -> bool:
-    """Did this seat send the message the provider is telling us about?
-
-    Unipile pushes *every* message in a chat, including the ones we sent — so without this the
-    receiver records our own outreach as the candidate's reply: a fabricated inbound bubble, a
-    sequence stuck waiting on a reply that already "arrived", and at full autonomy an agent
-    answering its own message. `is_sender` is the provider's own flag for it.
-    """
-    for source in (payload.get("message"), payload):
-        if not isinstance(source, dict):
-            continue
-        flag = source.get("is_sender")
-        if isinstance(flag, bool):
-            return flag
-        if isinstance(flag, int):
-            return flag == 1
-        if isinstance(flag, str) and flag.strip().lower() in {"true", "1"}:
-            return True
-    return False
-
-
-def _idempotency_key(payload: JsonObject, *, thread_id: str | None, text: str) -> str | None:
-    """A stable id for this inbound event, so a redelivery is recognised and dropped.
-
-    Prefer the provider's own message id. When there isn't one, fall back to a digest of the
-    event's identifying parts *including the provider timestamp* — a redelivery hashes the same,
-    while a candidate genuinely sending "ok" twice does not (different timestamps). With neither
-    an id nor a timestamp the digest can't separate those two cases, so we return None and record
-    unconditionally: a rare duplicate bubble beats silently dropping a real reply.
-    """
-    message_id = _payload_str(payload.get("message"), "id", "message_id") or _payload_str(
-        payload, "message_id", "id"
-    )
-    if message_id:
-        return message_id
-    stamp = _payload_str(payload.get("message"), "timestamp", "date", "created_at") or _payload_str(
-        payload, "timestamp", "date", "created_at"
-    )
-    if not stamp:
-        return None
-    digest = sha256("\x00".join([thread_id or "", stamp, text]).encode()).hexdigest()
-    return f"sha256:{digest}"
-
-
-def _payload_str(obj: object, *keys: str) -> str | None:
-    """First non-empty string value among `keys` of a dict-ish payload, else None."""
-    if not isinstance(obj, dict):
-        return None
-    for key in keys:
-        value = obj.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return None
-
-
-async def _seat_workspace_ids(session: AsyncSession, account_id: str | None) -> list[str] | None:
-    """Workspaces the seat that received this event can send from, or None when it's unknown.
-
-    Mirrors the access rules in `api/context.py`: the seat's owner reaches every workspace in an
-    organization where they are org_admin or compliance, plus the ones an explicit grant names.
-    `None` means we couldn't identify the seat at all — the caller then has to fall back to a
-    weaker rule rather than a wrong one.
-    """
-    if not account_id:
-        return None
-    org_wide = (
-        select(Membership.organization_id)
-        .join(Connection, Connection.user_id == Membership.user_id)
-        .where(Connection.external_id == account_id, Membership.role.in_(ORG_WIDE_ROLES))
-    )
-    granted = (
-        select(SpaceGrant.workspace_id)
-        .join(Connection, Connection.user_id == SpaceGrant.user_id)
-        .where(Connection.external_id == account_id)
-    )
-    rows = (
-        await session.execute(
-            select(Workspace.id).where(
-                or_(Workspace.organization_id.in_(org_wide), Workspace.id.in_(granted))
-            )
-        )
-    ).scalars()
-    return list(dict.fromkeys(rows)) or None
-
-
-async def _resolve_enrollment(
-    session: AsyncSession,
-    *,
-    external_id: str | None,
-    sender_email: str | None,
-    account_id: str | None = None,
-) -> tuple[Enrollment, Channel] | None:
-    """Map a Unipile event to (enrollment, channel): the chat we sent on, else the sender address.
-
-    The channel comes from the outbound message the thread id matched, so a LinkedIn reply is
-    recorded as LinkedIn rather than defaulting to email.
-
-    Both lookups are scoped to the workspaces of the seat that received the event. Without that
-    scope the address fallback spans every tenant, and two customers working the same candidate
-    cross over — one of them silently receiving the other's reply.
-    """
-    scope = await _seat_workspace_ids(session, account_id)
-    if external_id:
-        stmt = select(Message).where(Message.external_id == external_id)
-        if scope is not None:
-            stmt = stmt.where(Message.workspace_id.in_(scope))
-        msg = (
-            (await session.execute(stmt.order_by(Message.created_at.desc()).limit(1)))
-            .scalars()
-            .first()
-        )
-        if msg is not None:
-            enrollment = await session.get(Enrollment, msg.enrollment_id)
-            if enrollment is not None:
-                return enrollment, msg.channel
-    if sender_email:
-        by_sender = (
-            select(Enrollment)
-            .join(Contact, Enrollment.contact_id == Contact.id)
-            .where(func.lower(Contact.email) == sender_email.strip().lower())
-        )
-        if scope is not None:
-            by_sender = by_sender.where(Enrollment.workspace_id.in_(scope))
-        candidates = list(
-            (await session.execute(by_sender.order_by(Enrollment.created_at.desc())))
-            .scalars()
-            .all()
-        )
-        enrollment = _unambiguous(candidates, sender_email)
-        if enrollment is not None:
-            # No thread id to read a channel off: this arrived at the email receiver.
-            return enrollment, Channel.email
-    return None
-
-
-def _unambiguous(candidates: list[Enrollment], sender_email: str) -> Enrollment | None:
-    """The newest candidate — unless they straddle workspaces, in which case there is no answer.
-
-    Guessing across a tenant boundary is the one outcome worse than dropping the reply: it shows
-    one customer's candidate reply inside another's inbox. Ambiguity here means the event carried
-    no seat we could scope by, so we log it loudly instead of picking.
-    """
-    if not candidates:
-        return None
-    workspaces = {e.workspace_id for e in candidates}
-    if len(workspaces) > 1:
-        logger.warning(
-            "inbound: %d enrollments across %d workspaces match sender %s — dropping, "
-            "no seat to disambiguate",
-            len(candidates),
-            len(workspaces),
-            sender_email,
-        )
-        return None
-    return candidates[0]
-
-
-def _drop(why: str, payload: JsonObject) -> InboundWebhookOut:
-    """Log an inbound event we couldn't place, and report it as ignored.
-
-    A dropped reply is otherwise completely silent — the provider gets its 200 and the recruiter
-    never learns the candidate wrote back. The payload's *keys* go in the log, not its contents:
-    enough to see that a field we expected is named something else, without copying message
-    bodies or addresses into the logs.
-    """
-    logger.warning("inbound: dropping an event — %s; payload keys=%s", why, sorted(payload))
-    return InboundWebhookOut(status="ignored", intent=None)
 
 
 @router.post("/webhooks/unipile", response_model=InboundWebhookOut)
@@ -777,11 +689,16 @@ async def unipile_webhook(
     token via the `X-Unipile-Token` header (or `?token=` for providers that can only template the
     URL).
 
+    Everything past authentication is `services/outreach/receiving`. This handler used to carry a
+    second, byte-identical copy of that module's payload readers, thread resolution and tenant
+    scoping, plus its own inline reimplementation of `record_provider_event` — while the backfill
+    sweep called the real one. Two copies of the receiver is how the webhook and the sweep start
+    disagreeing about which replies belong to whom.
+
     A reply is only *recorded* here — classification and the Outreach agent run on the worker
     (`run_replies_due`). Unipile gets a fast ack, so it never times out and retries us into
     answering the same candidate twice; the `provider_message_id` guard catches redeliveries that
     happen anyway.
-
     """
     secret = get_settings().unipile_webhook_secret
     if not secret:
@@ -795,87 +712,15 @@ async def unipile_webhook(
         token = request.headers.get("X-Unipile-Token") or request.query_params.get("token") or ""
         if not hmac.compare_digest(token, secret):
             raise HTTPException(status_code=401, detail="invalid token")
-    try:
-        parsed: object = json.loads(raw or b"{}")
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="invalid JSON") from None
-    payload: JsonObject = parsed if isinstance(parsed, dict) else {}
+        # The token rides in a URL that proxies and CDNs log. Nothing is wrong with the request,
+        # but a deployment leaking its receiver URL should be able to see that this path is live.
+        logger.debug("unipile webhook: authenticated by shared token, not signature")
+    payload = _parsed_payload(raw)
+    _reject_stale(payload)
     now = datetime.now(UTC)
 
-    event = (_payload_str(payload, "event", "type", "status") or "").lower()
-    account_id = _payload_str(payload, "account_id", "account")
-
-    # Account lifecycle: a credentials / disconnect event flips the seat to needs-reauth.
-    if account_id and ("credential" in event or "disconnect" in event or "error" in event):
-        seat = (
-            (
-                await session.execute(
-                    select(Connection).where(Connection.external_id == account_id).limit(1)
-                )
-            )
-            .scalars()
-            .first()
-        )
-        if seat is not None and seat.status is not ConnectionStatus.needs_reauth:
-            seat.status = ConnectionStatus.needs_reauth
-            await session.flush()
-            # The seat owner sees this in their notification feed; the audit trail is what tells
-            # an admin *when* a channel went quiet, which is otherwise invisible after the fact.
-            await audit.record(
-                session,
-                org_id=seat.organization_id,
-                workspace_id=None,
-                actor_user_id=seat.user_id,
-                action="connection.needs_reauth",
-                summary=f"{seat.provider.value} seat disconnected at the provider",
-                target_type="connection",
-                target_id=seat.id,
-            )
-        return InboundWebhookOut(status="account_updated", intent=None)
-
-    # Inbound message: text + the chat/thread id (LinkedIn) or sender (email).
-    # `body_plain` first — an email carries both, and `body` is the HTML part: recording that puts
-    # markup on the thread and feeds tags to the reply classifier.
-    text = (
-        _payload_str(payload.get("message"), "text", "body")
-        or _payload_str(payload, "body_plain")
-        or _payload_str(payload, "text", "body", "message")
-    )
-    chat_id = _payload_str(payload, "chat_id", "chat", "thread_id")
-    # Unipile names the sender differently per channel: an email carries `from_attendee`
-    # (`{display_name, identifier}`), a chat message a `sender`. Reading only the chat shape meant
-    # every email reply resolved to nobody and was dropped — with a 200 back to the provider, so
-    # it looked delivered from both ends.
-    sender_email = (
-        _payload_str(payload.get("from_attendee"), "identifier", "email")
-        or _payload_str(payload.get("sender"), "email", "identifier")
-        or _payload_str(payload, "from", "from_email")
-    )
-    if not text:
-        return _drop("no text in the event", payload)
-    if _is_own_message(payload):
-        # Our own outbound, echoed back by the provider. Recording it would invent a reply.
-        return InboundWebhookOut(status="own_message", intent=None)
-    resolved = await _resolve_enrollment(
-        session, external_id=chat_id, sender_email=sender_email, account_id=account_id
-    )
-    if resolved is None:
-        return _drop(f"no thread matched (chat_id={chat_id!r}, sender={sender_email!r})", payload)
-    # The channel comes from `_resolve_enrollment`, which reads it off the outbound message the
-    # thread id matched (and falls back to email for an address match) — always a real Channel,
-    # so the old `matched_channel or payload_channel` fallback could never fire.
-    enrollment, matched_channel = resolved
-    message = await record_inbound(
-        session,
-        enrollment=enrollment,
-        # Email only: a LinkedIn DM has no quoted history, and a chat message that happens to
-        # start a line with ">" would be truncated for nothing.
-        text=strip_quoted_reply(text) if matched_channel is Channel.email else text,
-        now=now,
-        channel=matched_channel,
-        provider_message_id=_idempotency_key(payload, thread_id=chat_id, text=text),
-        external_id=chat_id,
-    )
-    if message is None:
-        return InboundWebhookOut(status="duplicate", intent=None)
-    return InboundWebhookOut(status="queued", intent=None)
+    account = await receiving.record_account_event(session, payload=payload, now=now)
+    if account is not None:
+        return InboundWebhookOut(status=account, intent=None)
+    outcome = await receiving.record_provider_event(session, payload=payload, now=now)
+    return InboundWebhookOut(status=outcome, intent=None)

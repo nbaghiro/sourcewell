@@ -27,33 +27,48 @@ build backlog. Anchors are `file:line`-ish; the engine is **self-clocking** (no 
   provider thread id → `Message.external_id`; classifies hard (`PermanentSendError`) vs transient
   (`TransientSendError`); no-ops only under `settings.linkedin_dry_run`/`email_dry_run` (typed config,
   read from `EMAIL_DRY_RUN`/`LINKEDIN_DRY_RUN` env).
-- **Inbound** `POST /webhooks/unipile` (api/messaging.py): HMAC signature or shared token → account
-  events flip `Connection.needs_reauth`; message events extract text/thread-id/sender/`provider_message_id`,
-  infer channel, **dedupe** (`already_ingested` + partial-unique index on `provider_message_id` →
-  race-safe), resolve enrollment (by `external_id`, else sender email), `handle_reply`. Outreach agent
-  (`agents/outreach.py`) picks reply/hand_off/opt_out; deterministic fallback classifies intent.
+- **Inbound** `POST /webhooks/unipile` (api/messaging.py) authenticates (HMAC signature or shared
+  token, plus a timestamp replay window) and then *only dispatches* — everything past that is
+  `services/outreach/receiving`, the same module the backfill sweep calls, so the two can't drift:
+  `record_account_event` (an allow-list of `account_status` names → flip every `Connection` holding
+  that account to needs-reauth) else `record_provider_event` (extract text/thread-id/sender, resolve
+  the enrollment scoped to the seat's workspaces, **dedupe** via `already_ingested` + the partial-
+  unique index on `(workspace_id, provider_message_id)` → race-safe). The worker routes it: Outreach
+  agent (`agents/outreach.py`) picks reply/hand_off/opt_out, deterministic fallback classifies intent
+  — and a *direct* thread (no campaign) always takes the deterministic path.
 - **Manual reply** `POST /inbox/{id}/reply`: consumes pending draft, actually transmits via
-  `deliver_outbound(reply=True)` (502 + rollback on failure), origin `ai|human`.
+  `deliver_outbound(reply=True)` (502 + rollback on failure), origin `ai|human`, then commits before
+  the audit write so a real send can't be rolled back. Works on a direct conversation too, where the
+  seat is resolved from the sender rather than a campaign.
 - **Billing**: usage derived (`services/billing/credits.py`): emails×1 + inmails×2 + sourced×1 vs plan
   allowance (free 200 / pro 5k / premium 25k), over Stripe window or calendar month. Plan change via
   real Stripe (checkout/portal/webhook) or self-serve `POST /billing/plan` (demo path).
 
 ### Current state (post-remediation — all shipped)
-Per-campaign seat ownership; send through the real `UnipileChannel`; `external_id` captured; cold LinkedIn = real InMail;
-idempotency key on send + reply; hard/soft error split; hard-bounce → suppress; per-seat daily cap;
-LinkedIn→email fallback (default on); inbound dedupe via partial-unique index + savepoint; channel
-preserved on inbound; manual reply really sends; webhook signature + replay/timestamp guard;
-`*_DRY_RUN` promoted to typed `Settings`. Message carries `origin`, `idempotency_key`,
-`provider_message_id`. Schema is one squashed baseline migration (`60a4aaede531`).
+Per-campaign seat ownership, **validated against the caller's org** (`seat_id` off the request body
+used to let a campaign send from any connection in the database); send through the real
+`UnipileChannel`; `external_id` captured; cold LinkedIn = real InMail; idempotency key on send +
+reply; hard/soft error split, and only a *recipient* rejection (`PermanentSendError.recipient_rejected`)
+suppresses an address — a dead seat or a missing account never does; per-seat daily cap, settable via
+`PATCH /settings/connections/{id}`; LinkedIn→email fallback (default on, and it renders a subject
+rather than sending a blank one); the `unipile_account_id` env fallback is LinkedIn-only, so an org
+with no mailbox falls through to SMTP instead of posting to `/emails` with a LinkedIn account; inbound
+dedupe via partial-unique index + savepoint; channel preserved on inbound; manual reply really sends;
+webhook signature + replay/timestamp guard on **both** receivers; `*_DRY_RUN` promoted to typed
+`Settings`. Message carries `origin`, `idempotency_key`, `provider_message_id`. Agent auto-sends go
+through `governor.can_send_now` (a human in the composer doesn't); suppression is checked on every
+channel, not just email. One-click unsubscribe is a real `POST /unsubscribe` (the GET is a
+confirmation page, so link scanners can't opt anyone out) and its token expires. The worker commits
+per stage, and `pending_inbound` claims rows `FOR UPDATE SKIP LOCKED` so two workers can't answer the
+same candidate twice. Schema is one squashed baseline migration (`60a4aaede531`).
 
 ### Backlog (Tier-2, not yet built)
-1. **Synchronous webhook handler** runs LLM + send before responding → Unipile timeout → retries.
-   Fix: background the handler (`BackgroundTasks`/queue), return 202 immediately.
-2. **Email inbound threading via `external_id` not wired** — `/webhooks/inbound` keys on
+1. **Email inbound threading via `external_id` not wired** — `/webhooks/inbound` keys on
    from_email/enrollment_id, not `In-Reply-To` → multi-campaign contacts mis-route on email replies.
-3. **`send_reply` sets `sent_at` before delivery** — an audit failure after a real send loses the record.
-4. **Cross-campaign contact fatigue** — no guard against a contact being messaged by several campaigns.
-5. Minor: per-seat cap undercounts legacy null `account_id`; SMTP Message-ID reused as a Unipile
+2. **Cross-campaign contact fatigue** — no guard against a contact being messaged by several campaigns.
+3. **`from_email` is domain-checked, not verified** — it must match a domain an org member signs in
+   with, which stops cross-tenant spoofing but isn't SPF/DKIM domain verification.
+4. Minor: per-seat cap undercounts legacy null `account_id`; SMTP Message-ID reused as a Unipile
    thread id on transport mixing.
 
 ---

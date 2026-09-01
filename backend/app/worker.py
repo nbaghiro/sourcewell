@@ -213,11 +213,21 @@ async def _loop() -> None:
         try:
             async with SessionLocal() as session:
                 now = datetime.now(UTC)
+                # Every stage commits before the next one runs. `run_due` puts real messages on
+                # the wire, and one commit spanning all four stages meant a later failure — an
+                # unreadable seat in the sweep, or the commit itself — rolled back the rows saying
+                # those messages were sent, including `sent_at`, `external_id` and the
+                # idempotency key. The next tick then redrafted and resent them under a *new* key,
+                # so provider-side dedupe couldn't catch it either.
+                #
                 # Replies first: a candidate waiting on an answer outranks the next touchpoint,
                 # and routing one can end the sequence outright (hand-off / opt-out).
                 replies = await run_replies_due(session, now=now)
+                await session.commit()
                 sent = await run_due(session, now=now)
+                await session.commit()
                 sourced = await run_source_due(session, now=now)
+                await session.commit()
                 # Periodically make sure the wire is still connected, and pick up anything that
                 # came in while it wasn't. A lapsed subscription is silent by nature: without
                 # this, replies simply stop arriving and nothing says so.
@@ -225,7 +235,7 @@ async def _loop() -> None:
                     last_sweep = monotonic()
                     await ensure_inbound_webhooks_quietly()
                     await sweep_inbound(session, now=now)
-                await session.commit()
+                    await session.commit()
             errors = 0
             if replies["routed"] or sent["processed"] or sourced["sourced"]:
                 logger.info(

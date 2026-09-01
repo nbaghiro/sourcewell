@@ -20,6 +20,7 @@ import {
   useApprovals,
   useConversation,
   useConversationChannels,
+  useConversationSummary,
   useDraftReply,
   useEditMessage,
   useHandoff,
@@ -72,6 +73,8 @@ const stateRank = (s: string) => {
 const stateLabel = (s: string) => STATE_MAP[s]?.label ?? s.replace(/_/g, " ");
 
 // ---------- helpers ----------
+/** Shown until `GET /inbox/{id}/summary` answers — the same wording as the server's
+ *  deterministic fallback, so the rail never flashes empty. */
 function summaryFor(state: string) {
   switch (state) {
     case "handed_off":
@@ -274,6 +277,7 @@ export function InboxPage() {
   // draft renders in-thread as a recommended bubble to approve.
   const { data: conv } = useConversation(selected);
   const { data: channelData } = useConversationChannels(selected);
+  const { data: summaryData } = useConversationSummary(selected);
   const aiDraft = () => selected && draftAI.mutate(selected, { onSuccess: (r) => setDraft(r.text) });
 
   // Keep a sensible selection: when the current row isn't in view, pick the first visible one.
@@ -435,7 +439,7 @@ export function InboxPage() {
                 onAiDraft={aiDraft}
                 aiDrafting={draftAI.isPending}
               />
-              <ContextRail conv={conv} onHandoff={handoff} onOptOut={optOut} busy={busy} />
+              <ContextRail conv={conv} summary={summaryData?.summary} onHandoff={handoff} onOptOut={optOut} busy={busy} />
             </>
           )}
         </div>
@@ -692,8 +696,14 @@ function RecommendedBubble({
   async function approve() {
     try {
       if (dirty) await editMessage.mutateAsync({ messageId: msg.id, subject, body });
-      await approveMessage.mutateAsync(msg.id);
-      toast.success(`Sent to ${contactName}`);
+      // Approving isn't always sending: the governor can defer the message to the next sending
+      // window or hold it at the daily cap, and the endpoint returns the status it really has.
+      // Reporting "Sent" for all of them told the recruiter a message had gone out when it was
+      // queued for the morning.
+      const result = await approveMessage.mutateAsync(msg.id);
+      if (result.status === "sent") toast.success(`Sent to ${contactName}`);
+      else if (result.status === "failed") toast.error(`Couldn't send to ${contactName}`);
+      else toast.success("Queued — it'll send in your next sending window");
       // Stay on the thread — the invalidated conversation refetches and the draft
       // re-renders as a normal sent message.
     } catch {
@@ -788,11 +798,13 @@ function Bubble({
 
 function ContextRail({
   conv,
+  summary,
   onHandoff,
   onOptOut,
   busy,
 }: {
   conv: Conversation;
+  summary?: string;
   onHandoff: () => void;
   onOptOut: () => void;
   busy: boolean;
@@ -893,7 +905,7 @@ function ContextRail({
         <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-strong)]">
           <Sparkles className="size-3.5" /> Summary
         </div>
-        <p className="mt-1 text-sm leading-relaxed text-foreground">{summaryFor(conv.enrollment.state)}</p>
+        <p className="mt-1 text-sm leading-relaxed text-foreground">{summary ?? summaryFor(conv.enrollment.state)}</p>
       </div>
 
       <div className="mt-auto space-y-2">

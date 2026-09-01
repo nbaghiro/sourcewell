@@ -1,5 +1,6 @@
 """Campaigns HTTP layer: routes, request/response schemas, serializers."""
 
+import re
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -15,9 +16,12 @@ from app.models import (
     AutonomyLevel,
     Campaign,
     CampaignStatus,
+    Connection,
     Contact,
     Enrollment,
     EnrollmentState,
+    Membership,
+    User,
 )
 from app.services.insights import audit
 from app.services.outreach.campaigns import (
@@ -30,6 +34,60 @@ from app.services.sourcing.scoring import evaluate_llm
 from app.targeting import FIT_THRESHOLD, Targeting, evaluate
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
+
+
+async def _validated_from_email(session: SessionDep, ctx: ContextDep, address: str) -> str:
+    """The campaign's From address, once we've confirmed the caller may send as it.
+
+    This lands verbatim in the `From` header on the SMTP path, and nothing checked either its
+    shape or its domain — so any workspace member could send mail claiming to be any address at
+    all, including one belonging to another customer.
+
+    The domain has to be one an organization member already signs in with. There is no
+    domain-verification flow to lean on yet, and that is the strongest claim available today: a
+    tenant can use `recruiting@` on their own domain, and cannot use anybody else's.
+    """
+    value = address.strip()
+    if not _EMAIL_RE.match(value):
+        raise HTTPException(status_code=422, detail="from_email must be a valid email address")
+    domain = value.rsplit("@", 1)[1].lower()
+    rows = (
+        (
+            await session.execute(
+                select(User.email)
+                .join(Membership, Membership.user_id == User.id)
+                .where(Membership.organization_id == ctx.org_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    allowed = {e.rsplit("@", 1)[-1].lower() for e in rows if e and "@" in e}
+    if domain not in allowed:
+        raise HTTPException(
+            status_code=422,
+            detail=f"you can only send from a domain your team uses — {domain} isn't one of them",
+        )
+    return value
+
+
+async def _owned_seat(session: SessionDep, ctx: ContextDep, seat_id: str) -> str:
+    """The seat id, once we've confirmed it belongs to the caller's organization.
+
+    `seat_id` names the connected account a campaign sends from, and `resolve_channel_seat` loads
+    it by primary key alone — it validates the seat's provider and health, never its tenant. So
+    without this check a campaign could name *any* `Connection` row in the database and send from
+    it: another customer's LinkedIn profile or mailbox, spending their InMail credits and
+    receiving the candidate's reply. 404 rather than 403, so the endpoint doesn't confirm that an
+    id belongs to somebody else.
+    """
+    seat = await session.get(Connection, seat_id)
+    if seat is None or seat.organization_id != ctx.org_id:
+        raise HTTPException(status_code=404, detail="seat not found")
+    return seat.id
 
 
 # --- Schemas -----------------------------------------------------------------
@@ -180,9 +238,11 @@ async def create_campaign_endpoint(
         authored_by=body.authored_by,
         objective=body.objective,
         seed_contact_ids=body.seed_contact_ids,
-        from_email=body.from_email,
+        from_email=await _validated_from_email(session, ctx, body.from_email)
+        if body.from_email
+        else None,
         created_by_user_id=ctx.user_id,
-        seat_id=body.seat_id,
+        seat_id=await _owned_seat(session, ctx, body.seat_id) if body.seat_id else None,
         use_inmail=body.use_inmail,
     )
     await audit.record(
@@ -279,11 +339,11 @@ async def update_campaign(
     if body.objective is not None:
         campaign.objective = body.objective
     if body.from_email is not None:
-        campaign.from_email = body.from_email
+        campaign.from_email = await _validated_from_email(session, ctx, body.from_email)
     if body.status is not None:
         campaign.status = body.status
     if body.seat_id is not None:
-        campaign.seat_id = body.seat_id
+        campaign.seat_id = await _owned_seat(session, ctx, body.seat_id)
     await session.flush()
     return dump(campaign)
 

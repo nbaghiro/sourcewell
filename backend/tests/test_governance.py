@@ -1,11 +1,13 @@
 """Safety gates: suppression blocks sends, transient failures retry, daily caps enforce."""
 
+import time
 from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.crypto import sign
 from app.models import (
     AutonomyLevel,
     Campaign,
@@ -266,7 +268,12 @@ async def test_clicking_unsubscribe_also_ends_the_conversation(
     await db_session.flush()
 
     token = suppression.unsubscribe_token(org.id, "lee@example.com")
-    r = await db_client.get(f"/unsubscribe?token={token}")
+    # A link scanner following the URL must not opt anyone out — only the POST does.
+    assert (await db_client.get(f"/unsubscribe?token={token}")).status_code == 200
+    await db_session.refresh(enr)
+    assert enr.state == EnrollmentState.awaiting_reply
+
+    r = await db_client.post(f"/unsubscribe?token={token}")
     assert r.status_code == 200
 
     await db_session.refresh(enr)
@@ -303,7 +310,43 @@ async def test_unsubscribing_leaves_other_tenants_alone(
     await db_session.flush()
 
     token = suppression.unsubscribe_token(ours.id, "lee@example.com")
-    assert (await db_client.get(f"/unsubscribe?token={token}")).status_code == 200
+    assert (await db_client.post(f"/unsubscribe?token={token}")).status_code == 200
 
     await db_session.refresh(enr)
     assert enr.state == EnrollmentState.awaiting_reply  # untouched
+
+
+@pytest.mark.db
+async def test_a_link_scanner_cannot_unsubscribe_anyone(
+    db_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Mail security follows every URL in a message. When the GET opted people out, SafeLinks and
+    Gmail's proxy were unsubscribing candidates from mail they had not even opened."""
+    org = await make_org(db_session, slug="opt-scanner")
+    token = suppression.unsubscribe_token(org.id, "scanned@example.com")
+
+    assert (await db_client.get(f"/unsubscribe?token={token}")).status_code == 200
+    assert not await suppression.is_suppressed(
+        db_session, organization_id=org.id, email="scanned@example.com", workspace_id=None
+    )
+
+    # One-click (RFC 8058) is a POST — the header we set on outbound mail promises this works.
+    assert (await db_client.post(f"/unsubscribe?token={token}")).status_code == 200
+    assert await suppression.is_suppressed(
+        db_session, organization_id=org.id, email="scanned@example.com", workspace_id=None
+    )
+
+
+@pytest.mark.db
+async def test_an_expired_unsubscribe_token_is_refused(db_client: AsyncClient) -> None:
+    """ "Invalid or expired" was only ever half true — nothing expired."""
+    stale = time.time() - suppression.UNSUBSCRIBE_TTL_SECONDS - 60
+    token = suppression.unsubscribe_token("org-x", "old@example.com", issued_at=stale)
+    assert (await db_client.post(f"/unsubscribe?token={token}")).status_code == 400
+
+
+def test_unsubscribe_links_minted_before_the_timestamp_still_work() -> None:
+    """Those links are sitting in real inboxes; breaking them to tidy up a format is exactly the
+    failure the endpoint exists to prevent."""
+    legacy = sign("org-y|legacy@example.com")
+    assert suppression.parse_unsubscribe(legacy) == ("org-y", "legacy@example.com")

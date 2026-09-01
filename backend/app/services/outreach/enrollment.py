@@ -46,6 +46,7 @@ from app.services.outreach.messaging import (
     draft_message,
     linkedin_transport_ready,
     resolve_channel_seat,
+    write_message,
 )
 from app.services.sourcing import suppression
 
@@ -188,6 +189,10 @@ async def _draft_touchpoint(
             message.idempotency_key = new_id()
         enrollment.state = EnrollmentState.scheduled
         enrollment.next_run_at = now
+        # When this is expected to go out. The column and the "Scheduled — sends <date>" entry on
+        # the contact timeline both already existed, but only the demo seeder ever wrote it, so
+        # outside the seeded workspace a queued touchpoint never showed a send time.
+        message.scheduled_at = now
     else:
         enrollment.state = EnrollmentState.awaiting_approval
         enrollment.next_run_at = None
@@ -247,6 +252,14 @@ async def _send_touchpoint(
     ):
         if contact.email:
             message.channel = Channel.email
+            # A LinkedIn step is drafted with no subject, because LinkedIn has no subject line.
+            # Carrying that null across the fallback sent the email with an empty Subject header —
+            # a poor first impression and a spam signal, on what is the default fallback path.
+            if not message.subject:
+                step = sequence[enrollment.current_step] if enrollment.current_step < len(
+                    sequence
+                ) else {}
+                message.subject = write_message(contact, step)[0] or campaign.name
             seat = await resolve_channel_seat(session, campaign=campaign, channel=Channel.email)
         else:
             message.status = MessageStatus.failed
@@ -286,11 +299,13 @@ async def _send_touchpoint(
         )
         message.status = MessageStatus.sent
         message.sent_at = now
-    except PermanentSendError:
-        # Hard failure (bad address / dead seat): fail + advance, no retry. Only suppress the email
-        # when it was the *email* channel that bounced — a LinkedIn failure isn't an email bounce.
+    except PermanentSendError as exc:
+        # Hard failure (bad address / dead seat): fail + advance, no retry. Suppress only when the
+        # *address* was rejected on the *email* channel — a LinkedIn failure isn't an email bounce,
+        # and neither is an unreauthed seat or an unconfigured account. Those are our problem, and
+        # burning the candidate's address over one is not recoverable from the thread.
         message.status = MessageStatus.failed
-        if org_id and contact.email and message.channel == Channel.email:
+        if org_id and contact.email and message.channel == Channel.email and exc.recipient_rejected:
             await suppression.suppress(
                 session,
                 organization_id=org_id,

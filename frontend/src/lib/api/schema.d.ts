@@ -1128,7 +1128,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Inbox */
+        /**
+         * Inbox
+         * @description One row per thread, newest first.
+         *
+         *     The per-thread aggregates are computed in the database. This used to select *every* message
+         *     row in the workspace with no limit and group them in Python, keeping only the last of each
+         *     thread plus a count — so rendering ten rows pulled a year of message bodies into memory.
+         */
         get: operations["inbox_inbox_get"];
         put?: never;
         post?: never;
@@ -1168,6 +1175,9 @@ export interface paths {
         /**
          * Conversation Channels
          * @description Which channels this conversation can be sent on, and which one the composer preselects.
+         *
+         *     A direct conversation has no campaign behind it, so the seat is resolved from the caller
+         *     instead. Requiring one here 404'd every thread opened by "Message" on a contact.
          */
         get: operations["conversation_channels_inbox__enrollment_id__channels_get"];
         put?: never;
@@ -1231,6 +1241,8 @@ export interface paths {
          *     `channel` picks the transport; omitted, the thread's existing channel is used. The message is
          *     delivered before it is recorded, so a failure surfaces as an error rather than a phantom
          *     "sent" bubble in the thread.
+         *
+         *     Works on a direct conversation too (no campaign): the seat then comes from the sender.
          */
         post: operations["send_reply_inbox__enrollment_id__reply_post"];
         delete?: never;
@@ -1555,6 +1567,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/connections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Connection
+         * @description Set a seat's display name and its per-day send limit.
+         *
+         *     `capabilities.daily_cap` is what `enrollment._seat_cap_reached` enforces, and `display_name`
+         *     is what Settings shows in place of the provider's account id — but nothing outside the demo
+         *     seeder could write either, so the per-seat cap documented in the flow notes could never
+         *     actually be turned on.
+         */
+        patch: operations["update_connection_settings_connections__connection_id__patch"];
+        trace?: never;
+    };
     "/settings/connections/{connection_id}/disconnect": {
         parameters: {
             query?: never;
@@ -1836,12 +1873,27 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Unsubscribe
-         * @description Public, signed unsubscribe link target (no auth).
+         * Unsubscribe Page
+         * @description The confirmation page a recipient lands on. Reading it changes nothing.
+         *
+         *     This used to opt the recipient out on load. A GET that mutates is fine until something
+         *     fetches it without being asked — and mail security does exactly that: Outlook SafeLinks,
+         *     Gmail's proxy and every link scanner in between follow the URLs in a message to check them.
+         *     Candidates were being unsubscribed by a scanner they never saw, from mail they may never have
+         *     opened. Now the opt-out needs the POST below, which only a person clicking can send.
          */
-        get: operations["unsubscribe_unsubscribe_get"];
+        get: operations["unsubscribe_page_unsubscribe_get"];
         put?: never;
-        post?: never;
+        /**
+         * Unsubscribe
+         * @description Public, signed unsubscribe target (no auth) — the confirmation form, and one-click.
+         *
+         *     Outbound mail carries `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058), which
+         *     tells the recipient's mail client it may POST this URL directly. Until this route existed that
+         *     header was a promise nothing kept: the client's POST got a 405 and the unsubscribe button in
+         *     Gmail and Outlook simply failed.
+         */
+        post: operations["unsubscribe_unsubscribe_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1925,6 +1977,12 @@ export interface paths {
          *     Prefers an HMAC signature (`X-Unipile-Signature`) over the raw body; falls back to a shared
          *     token via the `X-Unipile-Token` header (or `?token=` for providers that can only template the
          *     URL).
+         *
+         *     Everything past authentication is `services/outreach/receiving`. This handler used to carry a
+         *     second, byte-identical copy of that module's payload readers, thread resolution and tenant
+         *     scoping, plus its own inline reimplementation of `record_provider_event` — while the backfill
+         *     sweep called the real one. Two copies of the receiver is how the webhook and the sweep start
+         *     disagreeing about which replies belong to whom.
          *
          *     A reply is only *recorded* here — classification and the Outreach agent run on the worker
          *     (`run_replies_due`). Unipile gets a fast ack, so it never times out and retries us into
@@ -2475,6 +2533,16 @@ export interface components {
             status: components["schemas"]["ConnectionStatus"];
             /** User Email */
             user_email: string;
+        };
+        /**
+         * ConnectionPatch
+         * @description What a seat's owner (or an org admin) can set on it.
+         */
+        ConnectionPatch: {
+            /** Daily Cap */
+            daily_cap?: number | null;
+            /** Display Name */
+            display_name?: string | null;
         };
         /**
          * ConnectionProvider
@@ -5903,7 +5971,10 @@ export interface operations {
     };
     inbox_inbox_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5917,6 +5988,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxItemOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6548,6 +6628,41 @@ export interface operations {
             };
         };
     };
+    update_connection_settings_connections__connection_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     disconnect_settings_connections__connection_id__disconnect_post: {
         parameters: {
             query?: never;
@@ -7056,7 +7171,38 @@ export interface operations {
             };
         };
     };
-    unsubscribe_unsubscribe_get: {
+    unsubscribe_page_unsubscribe_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsubscribe_unsubscribe_post: {
         parameters: {
             query: {
                 token: string;

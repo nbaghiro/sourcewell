@@ -102,6 +102,10 @@ async def credit_status(
                 .where(
                     Workspace.organization_id == organization_id,
                     Enrollment.created_at >= start,
+                    # Campaign enrollments only. A direct conversation is also an `Enrollment`,
+                    # so without this, clicking "Message" on a contact charged a sourcing credit
+                    # for a candidate nobody sourced.
+                    Enrollment.campaign_id.is_not(None),
                 )
             )
         ).scalar_one()

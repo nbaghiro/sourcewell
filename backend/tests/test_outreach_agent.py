@@ -19,6 +19,7 @@ from app.models import (
     MessageDirection,
     MessageStatus,
     Organization,
+    Workspace,
 )
 from app.services.outreach import messaging
 from app.services.sourcing.suppression import is_suppressed
@@ -179,3 +180,71 @@ async def test_handle_reply_deterministic_fallback(
         )
     )
     assert inbound.scalars().all()  # the reply was ingested
+
+
+@pytest.mark.db
+async def test_a_reply_on_a_direct_thread_takes_the_deterministic_path(
+    db_session: AsyncSession,
+) -> None:
+    """A direct conversation has no campaign — no sequence to steer, no autonomy level gating the
+    `reply` tool. Entering the agent anyway raised out of `run_conversation`, so every reply on a
+    direct thread was retried three times and then abandoned unclassified."""
+    org, enr, _contact = await _thread(db_session, slug="oa-direct")
+    enr.campaign_id = None  # a direct thread
+    enr.state = EnrollmentState.awaiting_reply
+    await db_session.flush()
+    message = await _inbound(db_session, enr, "Yes, I'm interested — let's talk!")
+
+    # An LLM is available, and is deliberately not consulted.
+    llm = FakeLLM([text_turn("should not be reached")])
+    result = await handle_reply(
+        db_session,
+        enrollment=enr,
+        message=message,
+        now=datetime.now(UTC),
+        organization_id=org.id,
+        llm=llm,
+    )
+    assert result == "deterministic"
+    assert enr.state == EnrollmentState.handed_off  # classified, not abandoned
+    assert message.processed_at is not None
+
+
+@pytest.mark.db
+async def test_an_auto_send_outside_the_sending_window_is_queued_instead(
+    db_session: AsyncSession,
+) -> None:
+    """`send_conversation_message` is shared with the human composer and deliberately doesn't gate,
+    so the agent has to. Without this the agent sent at 3am and past the configured daily cap."""
+    org, enr, _contact = await _thread(db_session, slug="oa-window", autonomy=AutonomyLevel.full)
+    ws = await db_session.get(Workspace, enr.workspace_id)
+    assert ws is not None
+    # A window that cannot contain `now`, whatever hour the suite runs at.
+    ws.settings = {"sending_window_enabled": True, "send_window_start": 0, "send_window_end": 0}
+    await db_session.flush()
+
+    llm = FakeLLM([tool_turn("reply", {"text": "Here's more on the role."}), text_turn("Done.")])
+    await run_conversation(
+        db_session,
+        llm=llm,
+        enrollment=enr,
+        message=await _inbound(db_session, enr, "Tell me more?"),
+        organization_id=org.id,
+        now=datetime.now(UTC),
+    )
+
+    assert enr.state == EnrollmentState.awaiting_approval  # parked for a human, not sent
+    drafts = (
+        (
+            await db_session.execute(
+                select(Message).where(
+                    Message.enrollment_id == enr.id, Message.status == MessageStatus.draft
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [d.body for d in drafts] == ["Here's more on the role."]
+    assert drafts[0].subject and drafts[0].subject.startswith("Re:")  # not the bare "Re:"
+    assert drafts[0].subject != "Re:"

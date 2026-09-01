@@ -102,9 +102,18 @@ async def search_people(
             logger.warning("search: provider %s failed (%s)", exc.provider, exc)
             failures.append(ProviderFailure(provider=exc.provider, message=str(exc)))
             continue
-        except Exception as exc:  # an adapter bug must not take the other providers down
+        except Exception:  # an adapter bug must not take the other providers down
+            # A fixed string, never `str(exc)`. `ProviderError` messages go through `_why()`,
+            # which deliberately truncates and refuses to echo a response body; an unexpected
+            # exception has had no such care taken over it and can carry the provider URL and its
+            # query string — account ids included — straight into an API response. The detail is
+            # in the log line above, where it belongs.
             logger.exception("search: provider %s raised", provider.key)
-            failures.append(ProviderFailure(provider=provider.key, message=str(exc) or "failed"))
+            failures.append(
+                ProviderFailure(
+                    provider=provider.key, message="this provider is temporarily unavailable"
+                )
+            )
             continue
         for hit in page.hits:
             dk = dedupe_key(hit)

@@ -112,3 +112,43 @@ def test_credit_status_over_and_pct() -> None:
         emails=0, linkedin_dms=0, inmails=0, sourced=0, used=50, allowance=200, period_start=now
     )
     assert ok.over is False and ok.pct == 25
+
+
+@pytest.mark.db
+async def test_a_direct_conversation_is_not_a_sourced_candidate(db_session: AsyncSession) -> None:
+    """`sourced` counts enrollments, and a direct conversation is also an `Enrollment` — so
+    clicking "Message" on a contact charged a sourcing credit for a candidate nobody sourced.
+    The same null-campaign guard was added to analytics and the dashboard; this was missed."""
+    org = await make_org(db_session, slug="credits-direct")
+    ws = await make_workspace(db_session, org=org)
+    campaign = Campaign(workspace_id=ws.id, name="C", criteria={}, sequence=[])
+    contacts = [
+        Contact(workspace_id=ws.id, full_name=f"C{i}", skills=[], tags=[]) for i in range(2)
+    ]
+    db_session.add_all([campaign, *contacts])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            # One real sourced candidate...
+            Enrollment(
+                workspace_id=ws.id,
+                campaign_id=campaign.id,
+                contact_id=contacts[0].id,
+                state=EnrollmentState.active,
+            ),
+            # ...and one thread opened by hand, which is not a sourcing event.
+            Enrollment(
+                workspace_id=ws.id,
+                campaign_id=None,
+                contact_id=contacts[1].id,
+                state=EnrollmentState.active,
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    status = await credit_status(
+        db_session, organization_id=org.id, plan="pro", now=datetime.now(UTC)
+    )
+    assert status.sourced == 1
+    assert status.used == CREDIT_WEIGHTS["sourced"]

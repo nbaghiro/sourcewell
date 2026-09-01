@@ -278,11 +278,22 @@ async def complete_seat_connect(session: AsyncSession, *, state: str, account_id
 
     The provider comes off the attempt, not the payload — the wizard was pinned to it, so it is
     what actually got connected. Only LinkedIn has a tier to read; a mailbox is simply `email`.
+
+    The attempt is single-use, and its TTL is enforced *here*. Previously the row was left in
+    place after a successful connect and only aged out when somebody happened to start a new
+    wizard — so a replayed notify could rebind that user's seat to a different account
+    indefinitely, and the configured one-hour expiry wasn't actually enforced anywhere.
     """
     attempt = (
         await session.execute(select(LoginAttempt).where(LoginAttempt.state == state))
     ).scalar_one_or_none()
     if attempt is None or attempt.user_id is None:
+        return
+    ttl = timedelta(minutes=get_settings().login_attempt_ttl_minutes)
+    if attempt.created_at is not None and datetime.now(UTC) - attempt.created_at > ttl:
+        await session.delete(attempt)
+        await session.flush()
+        logger.warning("unipile: ignoring a seat-connect notify for an expired attempt")
         return
     user = await session.get(User, attempt.user_id)
     if user is None:
@@ -305,6 +316,9 @@ async def complete_seat_connect(session: AsyncSession, *, state: str, account_id
         account_id=account_id,
         seat_type=seat_type,
     )
+    # Spent: one wizard round-trip, one binding. Deleted in the same transaction as the upsert, so
+    # a replay of this notify finds nothing to act on.
+    await session.delete(attempt)
     await session.flush()
     # A brand-new deployment can take its first seat before it has ever booted with Unipile
     # configured; re-assert the subscription here so that seat's replies are heard from the start.

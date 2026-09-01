@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.prompts import compose_system
 from app.core import policy
+from app.core.config import get_settings
 from app.core.runtime import AgentLLM, AgentResult, Tool, default_llm, run_agent
 from app.core.types import JsonList, JsonObject
 from app.models import (
@@ -31,14 +32,13 @@ from app.models import (
     MessageStatus,
     SuppressionReason,
 )
+from app.services.outreach import governor
 from app.services.outreach.messaging import (
     resolve_channel,
     route_inbound,
     send_conversation_message,
 )
 from app.services.sourcing import suppression
-
-_DEFAULT_SENDER = "recruiter@sourcewell.dev"
 
 
 @dataclass
@@ -49,6 +49,32 @@ class ConversationContext:
     contact: Contact
     organization_id: str
     now: datetime
+
+
+async def _reply_subject(ctx: ConversationContext) -> str:
+    """The subject an email reply should carry: `Re:` on the thread's own subject.
+
+    Both reply paths used to pass the literal string `"Re:"`, so the candidate received an email
+    whose entire subject line was two characters, unrelated to the thread it answered.
+    """
+    last = (
+        (
+            await ctx.session.execute(
+                select(Message.subject)
+                .where(
+                    Message.enrollment_id == ctx.enrollment.id,
+                    Message.subject.is_not(None),
+                    Message.subject != "",
+                )
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    subject = (last or ctx.campaign.name).strip()
+    return subject if subject.lower().startswith("re:") else f"Re: {subject}"
 
 
 def _str(data: JsonObject, key: str) -> str | None:
@@ -83,6 +109,8 @@ def conversation_tools(ctx: ConversationContext) -> list[Tool]:
             contact=ctx.contact,
         )
 
+        subject = await _reply_subject(ctx) if channel == Channel.email else None
+
         async def queue_for_approval() -> None:
             """Park the reply as a draft in the approval queue instead of sending it."""
             ctx.session.add(
@@ -92,7 +120,7 @@ def conversation_tools(ctx: ConversationContext) -> list[Tool]:
                     direction=MessageDirection.outbound,
                     channel=channel,
                     status=MessageStatus.draft,
-                    subject="Re:" if channel == Channel.email else None,
+                    subject=subject,
                     body=text,
                     origin="ai",
                 )
@@ -103,6 +131,16 @@ def conversation_tools(ctx: ConversationContext) -> list[Tool]:
         if ctx.campaign.autonomy_level != AutonomyLevel.full:
             await queue_for_approval()
             return {"replied": True, "sent": False}
+        # An automated send goes through the governor; a human typing in the composer does not.
+        # `send_conversation_message` is the shared path and deliberately doesn't gate, so the
+        # check belongs here — without it the agent sent at 3am and past the configured daily cap,
+        # which is the whole thing the sending window and the cap exist to stop.
+        allowed, _retry_at = await governor.can_send_now(
+            ctx.session, campaign=ctx.campaign, channel=channel, now=ctx.now
+        )
+        if not allowed:
+            await queue_for_approval()
+            return {"replied": True, "sent": False, "error": "outside the sending window"}
         try:
             await send_conversation_message(
                 ctx.session,
@@ -111,9 +149,12 @@ def conversation_tools(ctx: ConversationContext) -> list[Tool]:
                 campaign=ctx.campaign,
                 contact=ctx.contact,
                 channel=channel,
-                subject="Re:" if channel == Channel.email else None,
+                subject=subject,
                 body=text,
-                sender=ctx.campaign.from_email or _DEFAULT_SENDER,
+                # The deployment's configured sender, not a hardcoded sourcewell.dev address —
+                # otherwise an operator who sets DEFAULT_FROM_EMAIL still finds agent replies
+                # going out as somebody else.
+                sender=ctx.campaign.from_email or get_settings().default_from_email,
                 organization_id=ctx.organization_id,
                 now=ctx.now,
             )
@@ -186,8 +227,6 @@ async def run_conversation(
     message: Message,
     organization_id: str,
     now: datetime,
-    channel: Channel = Channel.email,
-    provider_message_id: str | None = None,
 ) -> AgentResult:
     """Run one bounded Outreach conversation over an already-recorded inbound reply.
 
@@ -237,16 +276,20 @@ async def handle_reply(
     now: datetime,
     organization_id: str,
     llm: AgentLLM | None = None,
-    channel: Channel = Channel.email,
-    provider_message_id: str | None = None,
 ) -> str:
     """Route a recorded inbound reply: the Outreach agent when an LLM is available, else the
     deterministic classify-and-transition path.
 
     Marks the message routed either way, so the worker's sweep won't pick it up again.
+
+    A *direct* conversation always takes the deterministic path. It has no campaign — no sequence
+    for the agent to steer, no autonomy level gating its `reply` tool, and no policy to read a
+    vertical from. Entering the agent anyway raised `ValueError` out of `run_conversation`, so
+    every reply on a direct thread was retried three times and then abandoned unclassified: the
+    message sat on the thread, but nothing transitioned and an opt-out never suppressed anyone.
     """
     client = llm if llm is not None else default_llm()
-    if client is None:
+    if client is None or enrollment.campaign_id is None:
         await route_inbound(session, enrollment=enrollment, message=message, now=now)
         return "deterministic"
     await run_conversation(
@@ -256,8 +299,6 @@ async def handle_reply(
         message=message,
         organization_id=organization_id,
         now=now,
-        channel=channel,
-        provider_message_id=provider_message_id,
     )
     message.processed_at = now
     await session.flush()

@@ -51,7 +51,18 @@ from app.services.sourcing import suppression
 
 
 class PermanentSendError(Exception):
-    """A hard send failure (bad recipient, dead/unreauthed seat) — suppress + fail, don't retry."""
+    """A hard send failure (bad recipient, dead/unreauthed seat) — fail without retrying.
+
+    `recipient_rejected` says whether the *address* was the problem, and it is the only thing that
+    may put an address on the suppression list. Most hard failures are ours, not theirs — an
+    unreauthed seat, no connected account, an InMail from a seat with no credits — and treating
+    those as bounces permanently do-not-contacts a perfectly good candidate over a configuration
+    mistake, org-wide and with no way to undo it from the thread.
+    """
+
+    def __init__(self, message: str, *, recipient_rejected: bool = False) -> None:
+        super().__init__(message)
+        self.recipient_rejected = recipient_rejected
 
 
 class TransientSendError(Exception):
@@ -66,26 +77,36 @@ def _providers_for(channel: Channel) -> list[ConnectionProvider]:
 
 
 async def resolve_channel_seat(
-    session: AsyncSession, *, campaign: Campaign, channel: Channel
+    session: AsyncSession,
+    *,
+    campaign: Campaign | None,
+    channel: Channel,
+    user_id: str | None = None,
 ) -> Connection | None:
-    """The seat this campaign sends from on `channel`: its designated seat, else the creator's.
+    """The seat to send from on `channel`: the campaign's designated seat, else a person's own.
 
-    Returns None when neither resolves — the caller must fail visibly rather than borrow an
-    unrelated colleague's mailbox. An unhealthy seat is never returned.
+    `campaign` is None for a *direct* conversation — a recruiter messaging someone one-to-one,
+    with no sequence behind it. There is no designated seat to read then, so the fallback owner is
+    `user_id`: the person doing the sending. For a campaign it is the creator, which is what keeps
+    a campaign from borrowing a colleague's mailbox.
+
+    Returns None when neither resolves — the caller must fail visibly rather than send from an
+    unrelated account. An unhealthy seat is never returned.
     """
     providers = _providers_for(channel)
-    if campaign.seat_id is not None:
+    if campaign is not None and campaign.seat_id is not None:
         seat = await session.get(Connection, campaign.seat_id)
         if seat is not None and seat.status == ConnectionStatus.ok and seat.provider in providers:
             return seat
-    if campaign.created_by_user_id is None:
+    owner_id = campaign.created_by_user_id if campaign is not None else user_id
+    if owner_id is None:
         return None
     return (
         (
             await session.execute(
                 select(Connection)
                 .where(
-                    Connection.user_id == campaign.created_by_user_id,
+                    Connection.user_id == owner_id,
                     Connection.provider.in_(providers),
                     Connection.status == ConnectionStatus.ok,
                 )
@@ -207,7 +228,15 @@ async def deliver_outbound(
         raise PermanentSendError(f"contact has no {channel.value} address")
 
     s = get_settings()
-    account_id = (seat.external_id if seat else None) or s.unipile_account_id or None
+    # `unipile_account_id` is the deployment's connected *LinkedIn* account, so it is only a
+    # fallback for LinkedIn. Applying it to email too meant an org with no mailbox connected
+    # posted to the provider's /emails with a LinkedIn account id: the provider answered 4xx, the
+    # send was classified as a hard failure, and the recipient's perfectly good address was
+    # suppressed as a bounce. With no email seat there is simply no provider account — email
+    # falls through to the SMTP path below, which is what it is there for.
+    account_id = (seat.external_id if seat else None) or (
+        s.unipile_account_id or None if channel == Channel.linkedin else None
+    )
     message.account_id = account_id
     if not message.idempotency_key:
         message.idempotency_key = new_id()
@@ -260,7 +289,9 @@ async def deliver_outbound(
                     idempotency_key=message.idempotency_key,
                 )
                 if chat_id is None:
-                    raise PermanentSendError("LinkedIn recipient unreachable")
+                    raise PermanentSendError(
+                        "LinkedIn recipient unreachable", recipient_rejected=True
+                    )
                 message.external_id = chat_id
         except PermanentSendError:
             raise
@@ -297,7 +328,9 @@ async def deliver_outbound(
                     # None means the provider *refused* it — a transient failure raises out of
                     # `_permanent` instead. An accepted send with no id to thread on comes back as
                     # "", which is not a failure: the mail left, we just can't chain a reply to it.
-                    raise PermanentSendError("the email provider rejected this message")
+                    raise PermanentSendError(
+                        "the email provider rejected this message", recipient_rejected=True
+                    )
                 message.external_id = mid or None
         except PermanentSendError:
             raise
@@ -581,17 +614,25 @@ class ChannelAvailability:
 
 
 async def channel_availability(
-    session: AsyncSession, *, campaign: Campaign, contact: Contact
+    session: AsyncSession,
+    *,
+    campaign: Campaign | None,
+    contact: Contact,
+    user_id: str | None = None,
 ) -> list[ChannelAvailability]:
     """Which channels can reach this contact — what the composer offers as a send option.
 
-    A channel needs a destination on the contact; LinkedIn additionally needs a seat the campaign
-    can actually send from (there is no fallback transport for it the way SMTP backs email). The
-    two LinkedIn reasons are kept apart because they need different fixes: a missing profile is a
-    data problem, a missing seat is a setup one.
+    A channel needs a destination on the contact; LinkedIn additionally needs a seat we can
+    actually send from (there is no fallback transport for it the way SMTP backs email). The two
+    LinkedIn reasons are kept apart because they need different fixes: a missing profile is a data
+    problem, a missing seat is a setup one.
+
+    `campaign` is None on a direct conversation; the seat then comes from `user_id`.
     """
     email_ok = bool(contact.email)
-    seat = await resolve_channel_seat(session, campaign=campaign, channel=Channel.linkedin)
+    seat = await resolve_channel_seat(
+        session, campaign=campaign, channel=Channel.linkedin, user_id=user_id
+    )
     if not contact.linkedin_url:
         li_reason: str | None = "no LinkedIn profile on this contact"
     elif not linkedin_transport_ready(seat):
@@ -615,7 +656,12 @@ async def channel_availability(
 
 
 async def resolve_channel(
-    session: AsyncSession, *, campaign: Campaign, enrollment_id: str, contact: Contact
+    session: AsyncSession,
+    *,
+    campaign: Campaign | None,
+    enrollment_id: str,
+    contact: Contact,
+    user_id: str | None = None,
 ) -> Channel:
     """The channel a reply defaults to: the one the thread is already on, if it still works.
 
@@ -624,7 +670,9 @@ async def resolve_channel(
     """
     options = {
         opt.channel: opt
-        for opt in await channel_availability(session, campaign=campaign, contact=contact)
+        for opt in await channel_availability(
+            session, campaign=campaign, contact=contact, user_id=user_id
+        )
     }
     last = (
         (
@@ -651,7 +699,7 @@ async def send_conversation_message(
     *,
     workspace_id: str,
     enrollment: Enrollment,
-    campaign: Campaign,
+    campaign: Campaign | None,
     contact: Contact,
     channel: Channel,
     subject: str | None,
@@ -660,6 +708,7 @@ async def send_conversation_message(
     organization_id: str | None,
     now: datetime,
     origin: str = "human",
+    user_id: str | None = None,
 ) -> Message:
     """Deliver one outbound message in a live conversation, then record it on the thread.
 
@@ -667,27 +716,37 @@ async def send_conversation_message(
     enrollment state machine). Delivery happens first: a `Message` is only written as `sent` once
     the provider accepted it, so the thread never shows a message that never left.
 
-    LinkedIn sends inherit the campaign's InMail setting, so a manual reply and a touchpoint on
-    the same campaign go out the same way.
+    `campaign` is None on a direct conversation — no sequence, no InMail setting to inherit, and
+    the seat comes from `user_id` (the person sending) instead of the campaign's creator.
+
+    LinkedIn sends otherwise inherit the campaign's InMail setting, so a manual reply and a
+    touchpoint on the same campaign go out the same way.
     """
     text = body.strip()
     if not text:
         raise HTTPException(status_code=422, detail="message body is empty")
-    if channel == Channel.email and organization_id and contact.email:
+    # Checked on every channel, not just email. Suppression is keyed on an address, but it records
+    # that this *person* asked not to be contacted — including via the agent's own `opt_out` tool.
+    # Gating it on `channel == email` let the composer and the agent keep messaging an opted-out
+    # candidate on LinkedIn, while the sequence's own touchpoints (which check unconditionally)
+    # correctly refused. One of the two was wrong; this is the one that was.
+    if organization_id and contact.email:
         if await suppression.is_suppressed(
             session,
             organization_id=organization_id,
             email=contact.email,
             workspace_id=workspace_id,
         ):
-            raise HTTPException(status_code=409, detail="this contact has opted out of email")
+            raise HTTPException(status_code=409, detail="this contact has opted out")
 
     unsub = (
         suppression.unsubscribe_url(organization_id, contact.email)
         if organization_id and contact.email and channel == Channel.email
         else None
     )
-    seat = await resolve_channel_seat(session, campaign=campaign, channel=channel)
+    seat = await resolve_channel_seat(
+        session, campaign=campaign, channel=channel, user_id=user_id
+    )
     # Built first so the transport can stamp the provider thread id and idempotency key onto it,
     # but only added to the session once the send succeeded: the thread must never show a message
     # that never left.
@@ -714,7 +773,8 @@ async def send_conversation_message(
             sender=sender,
             unsubscribe_url=unsub,
             reply=True,
-            inmail=campaign.use_inmail,
+            # A direct conversation has no campaign to opt in, so it is never an InMail.
+            inmail=bool(campaign is not None and campaign.use_inmail),
         )
     except PermanentSendError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -723,6 +783,10 @@ async def send_conversation_message(
 
     session.add(message)
     enrollment.reply_pending = False
+    # Flushed, not committed: this runs inside a savepoint on the worker's agent path, and the
+    # transaction boundary is the caller's to own. The HTTP caller commits immediately after this
+    # returns — see `api/messaging.send_reply` — so a failure in the audit write that follows
+    # can't discard the record of a message the candidate has already received.
     await session.flush()
     return message
 
@@ -878,7 +942,13 @@ async def record_inbound(
 
 
 async def pending_inbound(session: AsyncSession, *, limit: int = 50) -> list[Message]:
-    """Inbound messages a provider webhook parked for the worker to route, oldest first."""
+    """Inbound messages a provider webhook parked for the worker to route, oldest first.
+
+    Claimed with `FOR UPDATE SKIP LOCKED`, like the other two due-queries in the worker. Without
+    it two worker processes polling the same 10-second window both picked up the same reply and
+    both ran the Outreach agent on it — which at full autonomy is a second real message to the
+    candidate, the exact failure the record/route split exists to prevent.
+    """
     rows = await session.execute(
         select(Message)
         .where(
@@ -887,6 +957,7 @@ async def pending_inbound(session: AsyncSession, *, limit: int = 50) -> list[Mes
         )
         .order_by(Message.created_at)
         .limit(limit)
+        .with_for_update(skip_locked=True)
     )
     return list(rows.scalars().all())
 
@@ -961,42 +1032,6 @@ async def resolve_inbound_enrollment(
     return candidates[0]
 
 
-async def ingest_inbound(
-    session: AsyncSession,
-    *,
-    from_email: str,
-    text: str,
-    now: datetime,
-    enrollment_id: str | None = None,
-    channel: Channel = Channel.email,
-    provider_message_id: str | None = None,
-) -> tuple[Message, str] | None:
-    """System inbound, recorded *and* routed in one call — the synchronous service entry point.
-
-    The provider webhooks don't use this: they record and let the worker route, so a provider retry
-    can never run the agent twice. This is the seam for callers that want the intent back
-    immediately. Threading goes through `resolve_inbound_enrollment`, which refuses to pick when an
-    address spans two workspaces; the dedupe check then happens inside `record_inbound`, where the
-    workspace is known, and a redelivery comes back as None.
-    """
-    enrollment = await resolve_inbound_enrollment(
-        session, from_email=from_email, enrollment_id=enrollment_id
-    )
-    if enrollment is None:
-        return None
-    message = await record_inbound(
-        session,
-        enrollment=enrollment,
-        text=text,
-        now=now,
-        channel=channel,
-        provider_message_id=provider_message_id,
-        routed=True,
-    )
-    if message is None:
-        return None  # a redelivery of an event we've already handled
-    intent = await route_inbound(session, enrollment=enrollment, message=message, now=now)
-    return message, intent
 
 
 async def list_thread(
