@@ -5,6 +5,7 @@ configured (platform or BYO) the provider set is empty and search returns no res
 """
 
 from collections import Counter
+from collections.abc import Sequence
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -12,9 +13,11 @@ from pydantic import BaseModel, Field
 from app.api.context import ContextDep, SessionDep
 from app.api.guards import require_workspace
 from app.core import llm
-from app.ext.base import PersonHit
+from app.ext.base import PersonHit, SourceProvider
 from app.ext.registry import build_providers_for_org
+from app.models import ConnectionProvider
 from app.services.sourcing import discovery, usage
+from app.services.workspace.connections import user_seat
 from app.targeting import Targeting
 
 router = APIRouter(prefix="/people", tags=["people"])
@@ -38,8 +41,28 @@ async def list_providers(ctx: ContextDep, session: SessionDep) -> list[ProviderO
             enrich=p.capabilities.enrich,
             verify_email=p.capabilities.verify_email,
         )
-        for p in await build_providers_for_org(session, ctx.org_id)
+        for p in await _providers(session, ctx)
     ]
+
+
+async def _providers(
+    session: SessionDep, ctx: ContextDep, *, selection: list[str] | None = None
+) -> Sequence[SourceProvider]:
+    """The provider set for this caller, acting as *their* connected LinkedIn seat.
+
+    LinkedIn search runs as a member, so it needs an account to search from. That used to come
+    only from `UNIPILE_ACCOUNT_ID`, which meant search was dead for everyone until a deployment
+    set one global account — and the error told you to connect a seat in Settings, which did
+    nothing, because nothing on this path ever read a `Connection`. Their own seat, never a
+    colleague's: it is that person's LinkedIn account and their rate limits being spent.
+    """
+    seat = await user_seat(session, user_id=ctx.user_id, provider=ConnectionProvider.linkedin)
+    return await build_providers_for_org(
+        session,
+        ctx.org_id,
+        selection=selection,
+        linkedin_account_id=seat.external_id if seat else None,
+    )
 
 
 class PeopleSearchIn(Targeting):
@@ -66,7 +89,7 @@ async def search_people(
     body: PeopleSearchIn, ctx: ContextDep, session: SessionDep
 ) -> PeopleSearchOut:
     require_workspace(ctx)
-    providers = await build_providers_for_org(session, ctx.org_id)
+    providers = await _providers(session, ctx)
     if body.providers:
         providers = [p for p in providers if p.key in body.providers]
     outcome = await discovery.search_people(providers, body, limit=body.limit)
@@ -135,7 +158,7 @@ class ImportOut(BaseModel):
 @router.post("/import", response_model=ImportOut)
 async def import_people(body: ImportIn, ctx: ContextDep, session: SessionDep) -> ImportOut:
     ws = require_workspace(ctx)
-    providers = await build_providers_for_org(session, ctx.org_id)
+    providers = await _providers(session, ctx)
     hits = await discovery.verify_hits(providers, body.hits)
     created = await discovery.import_hits(session, workspace_id=ws, hits=hits)
     for provider_key, n in Counter(c.source for c in created).items():
@@ -179,7 +202,7 @@ class EnrichOut(BaseModel):
 @router.post("/enrich", response_model=EnrichOut)
 async def enrich_person(body: EnrichIn, ctx: ContextDep, session: SessionDep) -> EnrichOut:
     require_workspace(ctx)
-    providers = await build_providers_for_org(session, ctx.org_id)
+    providers = await _providers(session, ctx)
     hit = await discovery.enrich_ref(
         providers,
         email=body.email,

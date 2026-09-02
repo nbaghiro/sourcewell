@@ -38,12 +38,17 @@ PROVIDER_CATALOG: list[ProviderSpec] = [
     ProviderSpec("linkedin", "LinkedIn search (Unipile)", False, "https://www.unipile.com/"),
 ]
 
-# provider key -> adapter factory (only providers with an adapter are constructed)
-_FACTORIES: dict[str, Callable[[str], SourceProvider]] = {
-    "pdl": lambda key: PDLProvider(key),
-    "apollo": lambda key: ApolloProvider(key),
-    "hunter": lambda key: HunterProvider(key),
-    "linkedin": lambda key: UnipileProvider(key),
+# provider key -> adapter factory, as `(api_key, account_id) -> provider`.
+#
+# The second argument is the *connected seat* to act as. Only LinkedIn has one: its search runs as
+# a member, through somebody's actual account, so which account is not a detail — it decides whose
+# network is searched and whose rate limits are spent. The licensed data providers (PDL, Apollo,
+# Hunter) are keyed per organization and ignore it.
+_FACTORIES: dict[str, Callable[[str, str | None], SourceProvider]] = {
+    "pdl": lambda key, _account: PDLProvider(key),
+    "apollo": lambda key, _account: ApolloProvider(key),
+    "hunter": lambda key, _account: HunterProvider(key),
+    "linkedin": lambda key, account: UnipileProvider(key, account),
 }
 
 
@@ -76,14 +81,16 @@ def _apply_selection(
 def build_one(provider_key: str, api_key: str) -> SourceProvider | None:
     """Construct a single provider from a key (for credential verification)."""
     factory = _FACTORIES.get(provider_key)
-    return factory(api_key) if factory else None
+    return factory(api_key, None) if factory else None
 
 
 def build_providers(settings: Settings | None = None) -> Sequence[SourceProvider]:
-    """Platform-key only (no org context)."""
+    """Platform-key only (no org context, and so no seat — LinkedIn falls back to env)."""
     settings = settings or get_settings()
     platform = _platform_keys(settings)
-    return [factory(platform[key]) for key, factory in _FACTORIES.items() if platform.get(key)]
+    return [
+        factory(platform[key], None) for key, factory in _FACTORIES.items() if platform.get(key)
+    ]
 
 
 async def build_providers_for_org(
@@ -92,11 +99,19 @@ async def build_providers_for_org(
     settings: Settings | None = None,
     *,
     selection: list[str] | None = None,
+    linkedin_account_id: str | None = None,
 ) -> Sequence[SourceProvider]:
     """BYO org credentials first, then platform keys.
 
     `selection` (an ordered list of provider keys from a workspace's settings) filters + orders the
     result; an empty / non-matching selection falls back to all.
+
+    `linkedin_account_id` is the connected seat LinkedIn search should act as — the caller's own
+    seat for an interactive search, the campaign's for a sourcing pass. The caller resolves it,
+    because who the right seat is depends on the context and the rules live in the service layer.
+    Passing None leaves `UNIPILE_ACCOUNT_ID` as the fallback, which is a single-tenant convenience:
+    it means every organization searches through whichever account the deployment configured, so a
+    real multi-tenant deployment should leave that env var unset and rely on seats.
     """
     settings = settings or get_settings()
     rows = (
@@ -118,5 +133,5 @@ async def build_providers_for_org(
         sealed = byo.get(key)
         api_key = unseal(sealed) if sealed else platform.get(key)
         if api_key:
-            providers.append(factory(api_key))
+            providers.append(factory(api_key, linkedin_account_id))
     return _apply_selection(providers, selection)

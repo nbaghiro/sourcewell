@@ -10,6 +10,7 @@ its first user before anything else has run). Idempotent, and fail-soft: a provi
 must never break a sign-in or stop the API from booting.
 """
 
+import re
 from datetime import datetime, timedelta
 from hashlib import sha256
 
@@ -112,6 +113,31 @@ _QUOTE_BREAKS = (
 )
 
 
+# The header a mail client writes above the message it is quoting: "On <date>, <who> wrote:".
+# Matched against up to `_ATTRIBUTION_LINES` joined lines, because clients hard-wrap it — Gmail
+# routinely puts the address on one line and the trailing "wrote:" on the next, which is why
+# looking at a single line missed it. The trailing punctuation is optional: some clients emit
+# "wrote:" and some "wrote:." once the quote below has been stripped by an intermediary.
+_ATTRIBUTION = re.compile(r"^On\b.{0,400}?\bwrote\s*:\s*[.;]?\s*$", re.IGNORECASE | re.DOTALL)
+_ATTRIBUTION_LINES = 3
+
+
+def _attribution_span(lines: list[str], start: int) -> int:
+    """How many lines from `start` form a quote attribution header, or 0 if they don't.
+
+    Requires an address in the header as well as the "On … wrote:" shape. That is what keeps a
+    real sentence — "On Monday I wrote:" followed by actual content — from being read as quoting
+    and silently eating the rest of the reply.
+    """
+    for span in range(1, _ATTRIBUTION_LINES + 1):
+        if start + span > len(lines):
+            break
+        joined = " ".join(line.strip() for line in lines[start : start + span]).strip()
+        if "@" in joined and _ATTRIBUTION.match(joined):
+            return span
+    return 0
+
+
 def strip_quoted_reply(text: str) -> str:
     """Just the part of an email reply the person actually wrote.
 
@@ -121,16 +147,25 @@ def strip_quoted_reply(text: str) -> str:
     saying "lets try it out" was classified `opted_out`, because the quote below it contained
     "Not interested? Unsubscribe:".
 
-    Deliberately conservative: it cuts at the first quote marker and drops the attribution line
-    above it only when that line carries an address (`On …, x@y.com wrote:`). A line that merely
-    ends in a colon — "Here's my question:" — is left alone, because eating real content is a far
-    worse failure than leaving a stray line of quoting.
+    Cuts at whichever comes first: a `>` quote line, a client's forwarded/original-message rule,
+    or the "On … wrote:" attribution that introduces them. The attribution is a cut point in its
+    own right, not merely a line to tidy up above a `>` block — a reply can arrive carrying the
+    header with no quoted body under it at all (an intermediary having dropped it), and keying
+    only off `>` left that dangling on the thread, sender address and all.
+
+    Still deliberately conservative: an attribution has to carry an address, so a line that merely
+    ends in a colon — "Here's my question:" — is left alone. Eating real content is a far worse
+    failure than leaving a stray line of quoting.
     """
     lines = text.replace("\r\n", "\n").split("\n")
     cut = None
     for i, line in enumerate(lines):
         stripped = line.strip()
-        if stripped.startswith(">") or stripped.lower().startswith(_QUOTE_BREAKS):
+        if (
+            stripped.startswith(">")
+            or stripped.lower().startswith(_QUOTE_BREAKS)
+            or _attribution_span(lines, i)
+        ):
             cut = i
             break
     if cut is None:
@@ -139,11 +174,6 @@ def strip_quoted_reply(text: str) -> str:
     kept = lines[:cut]
     while kept and not kept[-1].strip():
         kept.pop()
-    # "On 31 Aug 2026, at 15:14, someone@example.com wrote:" belongs to the quote, not the reply.
-    if kept and kept[-1].rstrip().endswith(":") and "@" in kept[-1]:
-        kept.pop()
-        while kept and not kept[-1].strip():
-            kept.pop()
 
     body = "\n".join(kept).strip()
     # A reply that is *only* a quote (or that we misread) keeps its original text: a noisy message
@@ -378,6 +408,7 @@ async def record_provider_event(
         text=strip_quoted_reply(text) if matched_channel is Channel.email else text,
         now=now,
         channel=matched_channel,
+        subject=payload_str(payload, "subject"),
         provider_message_id=idempotency_key(payload, thread_id=chat_id, text=text),
         external_id=chat_id,
     )

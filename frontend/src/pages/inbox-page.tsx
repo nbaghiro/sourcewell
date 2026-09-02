@@ -37,6 +37,28 @@ import {
 import { apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
+/** Whether the inbox should show its "no messages yet" placeholder instead of the thread grid.
+ *
+ *  Exported and pure so the rule can be pinned in a test: the bug it encodes is invisible to
+ *  type-checking and only reproduces on a workspace with no messages at all.
+ *
+ *  The list is built from *messages*, so a conversation opened with "Message" has no row until
+ *  something is sent. On an empty workspace that made `rows` empty, replaced the whole grid, and
+ *  left the thread pane nowhere to render — you'd click Message and land on "No messages yet"
+ *  with no way to reach the person. A targeted thread therefore keeps the grid mounted, unless
+ *  its id doesn't resolve, in which case the placeholder is right after all.
+ */
+export function showsEmptyState(opts: {
+  loading: boolean;
+  rowCount: number;
+  selected: string | null;
+  conversationMissing: boolean;
+}): boolean {
+  if (opts.loading) return false;
+  if (opts.rowCount > 0) return false;
+  return !opts.selected || opts.conversationMissing;
+}
+
 /** One row in the unified message list — either an inbound conversation or an outbound draft. */
 interface Row {
   kind: "conversation" | "approval";
@@ -275,7 +297,7 @@ export function InboxPage() {
   const selectedRow = rows.find((r) => r.enrollmentId === selected) ?? null;
   // One thread view for both kinds: approvals load the same conversation, where the queued
   // draft renders in-thread as a recommended bubble to approve.
-  const { data: conv } = useConversation(selected);
+  const { data: conv, isError: convMissing } = useConversation(selected);
   const { data: channelData } = useConversationChannels(selected);
   const { data: summaryData } = useConversationSummary(selected);
   const aiDraft = () => selected && draftAI.mutate(selected, { onSuccess: (r) => setDraft(r.text) });
@@ -355,7 +377,12 @@ export function InboxPage() {
         ))}
       </div>
 
-      {!loading && rows.length === 0 ? (
+      {showsEmptyState({
+        loading,
+        rowCount: rows.length,
+        selected,
+        conversationMissing: convMissing,
+      }) ? (
         <EmptyState icon={Inbox} title="No messages yet" description="Replies and drafts to approve appear here." />
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-[300px_1fr] overflow-hidden rounded-xl border border-border bg-card shadow-sm xl:grid-cols-[300px_1fr_300px]">
@@ -413,6 +440,15 @@ export function InboxPage() {
                       </div>
                     </button>
                   ))}
+              {/* A conversation with nothing sent yet has no row here, so without this the column
+                  is a blank panel next to the thread you just opened. */}
+              {!loading && visible.length === 0 && (
+                <p className="px-4 py-6 text-xs leading-relaxed text-muted-foreground">
+                  {query
+                    ? "No conversations match that search."
+                    : "No conversations yet. Send your first message and it'll appear here."}
+                </p>
+              )}
             </div>
           </div>
 
@@ -856,7 +892,8 @@ function ContextRail({
         <div className="mb-1.5 font-mono text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
           Fit score
         </div>
-        <ScoreBar value={conv.enrollment.score} />
+        {/* A direct conversation has no campaign, so no criteria, so no fit to report. */}
+        <ScoreBar value={conv.enrollment.score} unscored={!conv.campaign.id} />
       </div>
 
       <div>

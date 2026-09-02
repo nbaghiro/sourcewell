@@ -896,6 +896,7 @@ async def record_inbound(
     text: str,
     now: datetime,
     channel: Channel = Channel.email,
+    subject: str | None = None,
     provider_message_id: str | None = None,
     external_id: str | None = None,
     routed: bool = False,
@@ -920,6 +921,8 @@ async def record_inbound(
         direction=MessageDirection.inbound,
         channel=channel,
         status=MessageStatus.received,
+        # Email only — a LinkedIn DM has no subject line to carry.
+        subject=(subject or None) if channel == Channel.email else None,
         body=text,
         created_at=now,
         external_id=external_id,

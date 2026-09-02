@@ -16,7 +16,8 @@ from app.core.runtime import AgentLLM, AgentResult, Tool, run_agent
 from app.core.types import JsonList, JsonObject
 from app.ext.base import PersonHit, SourceProvider
 from app.ext.registry import build_providers_for_org
-from app.models import AgentRole, Campaign, Contact
+from app.models import AgentRole, Campaign, Channel, Contact
+from app.services.outreach.messaging import resolve_channel_seat
 from app.services.sourcing import usage
 from app.services.sourcing.contacts import list_contacts
 from app.services.sourcing.discovery import enrich_ref, import_hits, search_people
@@ -201,13 +202,25 @@ async def _seed_resemblance(session: AsyncSession, campaign: Campaign) -> str:
     return f"\nFind people resembling these examples: {', '.join(names)}." if names else ""
 
 
+async def _campaign_linkedin_account(session: AsyncSession, campaign: Campaign) -> str | None:
+    """The Unipile account a campaign's LinkedIn search runs as; None falls back to the env."""
+    seat = await resolve_channel_seat(session, campaign=campaign, channel=Channel.linkedin)
+    return seat.external_id if seat else None
+
+
 async def run_sourcing(
     session: AsyncSession, *, llm: AgentLLM, campaign: Campaign, organization_id: str
 ) -> AgentResult:
     """Run one sourcing pass for an active campaign."""
     resolved = await policy.for_campaign(session, campaign=campaign)
     providers = await build_providers_for_org(
-        session, organization_id, selection=resolved.get_str_list("providers") or None
+        session,
+        organization_id,
+        selection=resolved.get_str_list("providers") or None,
+        # A sourcing pass has no caller, so the seat is the campaign's — the same rule the send
+        # path uses (`resolve_channel_seat`): its designated seat, else its creator's, never an
+        # unrelated colleague's LinkedIn account.
+        linkedin_account_id=await _campaign_linkedin_account(session, campaign),
     )
     targeting = as_targeting(campaign.criteria)
     ctx = SourcingContext(
@@ -244,7 +257,13 @@ async def deterministic_source(
     """LLM-free sourcing fallback: search providers, import, and rank into proposed enrollments."""
     resolved = await policy.for_campaign(session, campaign=campaign)
     providers = await build_providers_for_org(
-        session, organization_id, selection=resolved.get_str_list("providers") or None
+        session,
+        organization_id,
+        selection=resolved.get_str_list("providers") or None,
+        # A sourcing pass has no caller, so the seat is the campaign's — the same rule the send
+        # path uses (`resolve_channel_seat`): its designated seat, else its creator's, never an
+        # unrelated colleague's LinkedIn account.
+        linkedin_account_id=await _campaign_linkedin_account(session, campaign),
     )
     targeting = as_targeting(campaign.criteria)
     hits = (await search_people(providers, targeting, limit=25, use_cache=False)).hits

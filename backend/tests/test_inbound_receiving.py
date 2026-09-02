@@ -304,7 +304,29 @@ async def test_an_unplaceable_event_is_reported_not_swallowed(
             "Yes please.\n\n-----Original Message-----\nFrom: Raul\nSent: Monday\n",
             "Yes please.",
         ),
+        (
+            # Verbatim from a live Gmail reply. Two things broke here: the attribution is
+            # hard-wrapped, so the address is on one line and "wrote:" on the next, and the quoted
+            # body never arrived — leaving the header with no ">" block under it to key off. The
+            # sender's own address was left dangling on the thread.
+            "gmail, wrapped attribution and no quoted body",
+            "Yes, let's do it right now!\n\n"
+            "On Wed, Sep 2, 2026 at 1:51 PM rauljan7@gmail.com <rauljan7@gmail.com>\n"
+            "wrote:.",
+            "Yes, let's do it right now!",
+        ),
+        (
+            "apple mail, attribution with nothing quoted under it",
+            "Sure.\n\nOn 2 Sep 2026, at 09:00, Someone <s@x.io> wrote:",
+            "Sure.",
+        ),
         ("no quote at all", "What's the salary range?", "What's the salary range?"),
+        (
+            # Must not eat real content: no address, so it is a sentence, not an attribution.
+            "a sentence that opens like an attribution",
+            "On Monday I wrote:\nthe brief you asked for, attached.",
+            "On Monday I wrote:\nthe brief you asked for, attached.",
+        ),
         (
             # Must not eat real content.
             "a colon that isn't an attribution",

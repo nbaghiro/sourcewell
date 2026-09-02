@@ -344,6 +344,10 @@ export function useConversation(id: string | null) {
   return useQuery({
     queryKey: k.conversation(ws, id ?? ""),
     enabled: !!ws && !!id,
+    // The thread you are looking at was the only view here that never polled: the inbox list
+    // refreshes every 25s, so a candidate's reply showed up in the list while the open
+    // conversation stayed frozen until you clicked away and back.
+    refetchInterval: 20_000,
     queryFn: async () =>
       unwrap(await client.GET("/inbox/{enrollment_id}", { params: { path: { enrollment_id: id! } } })),
   });
@@ -396,6 +400,7 @@ export function useOpenConversation() {
 
 export function useSendReply() {
   const qc = useQueryClient();
+  const ws = useWorkspaceId();
   return useMutation({
     mutationFn: async (vars: {
       id: string;
@@ -415,7 +420,24 @@ export function useSendReply() {
           },
         }),
       ),
-    onSuccess: () => invalidateInbox(qc),
+    // Put the sent message on the thread from the response, rather than waiting on a refetch to
+    // bring it back. The composer is the one place a round trip is felt: you press Send and stare
+    // at the message not being there. It also removes the thread's dependence on invalidation
+    // landing — `useConversation` is the only view here without a `refetchInterval`, so a missed
+    // one is permanent in the thread while the list quietly self-heals on its next poll.
+    onSuccess: (message, vars) => {
+      qc.setQueryData(k.conversation(ws, vars.id), (old?: Conversation) =>
+        old
+          ? {
+              ...old,
+              // Sending consumes any AI-suggested draft server-side; drop it here too so the
+              // suggestion bubble doesn't linger beside the message that replaced it.
+              messages: [...old.messages.filter((m) => m.status !== "draft"), message],
+            }
+          : old,
+      );
+      invalidateInbox(qc);
+    },
   });
 }
 

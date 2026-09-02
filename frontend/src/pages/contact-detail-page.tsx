@@ -185,17 +185,22 @@ export function ContactDetailPage() {
                     <p className="text-sm text-muted-foreground">Not in any campaign yet.</p>
                   )}
                   {c.enrollments.map((e) => (
+                    // A direct conversation has no campaign: it links to its own thread rather
+                    // than to `/campaigns/null`, names itself, and reports no fit score — there
+                    // are no criteria behind it to have scored against.
                     <Link
                       key={e.id}
-                      to={`/campaigns/${e.campaign_id}`}
+                      to={e.campaign_id ? `/campaigns/${e.campaign_id}` : `/inbox?enrollment=${e.id}`}
                       className="block rounded-lg border border-border p-3 transition-colors hover:border-primary/40 hover:bg-secondary/30"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-foreground">{e.campaign_name}</span>
+                        <span className="truncate text-sm font-semibold text-foreground">
+                          {e.campaign_name || "Direct message"}
+                        </span>
                         <StateBadge state={e.state} replyPending={e.reply_pending} />
                       </div>
                       <div className="mt-2">
-                        <ScoreBar value={e.score} />
+                        <ScoreBar value={e.score} unscored={!e.campaign_id} />
                       </div>
                     </Link>
                   ))}
